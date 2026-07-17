@@ -31,20 +31,26 @@ Open **http://localhost:3000** and sign in as the seeded superadmin:
 
 **Roles & confidentiality (enforced server-side):**
 
-- **Superadmin** (Vladimir) — provisions users, assigns who assesses whom, sees all
-  analysis. *Only superadmins can see ratings — assessments are confidential.*
-- **Assessor** — has one lens (Self / Manager / APEX Panel) and a list of assigned AMs.
-  Sees **only their own** assessment tasks: never other evaluators' scores, and never
-  the required levels (hidden during rating to avoid anchoring bias, per the project brief).
+- **Superadmin** (Vladimir) — provisions users, sees individual results and other
+  people's ratings, manages access.
+- **Assessor** — has one lens (Self / Manager / APEX Panel). Builds their own task
+  list by **typing a name** on My Assessments (admin can still pre-assign). Sees
+  **only their own** assessment tasks: never other evaluators' scores, and never the
+  required levels (hidden during rating to avoid anchoring bias, per the project brief).
+- **Everyone signed in** can see the aggregated dashboard (KPIs, zone map, training
+  focus, capability × zone heat map). Individual-level analysis (per-person pages,
+  zone AM×capability views, evidence notes) stays superadmin-only.
 
 **Flow:**
 
-1. Vladimir creates users in **Users & Access** (lens + assigned AMs) and shares credentials.
+1. Vladimir creates users in **Users & Access** (role + lens) and shares credentials.
+   Evaluators pick who they assess themselves — one evaluator per AM per lens.
 2. Evaluators sign in → guided wizard: one capability at a time with its behavioural
    anchors inline, keyboard shortcuts (1/2/3, arrows), notes/evidence, autosave, then
    review & submit (submission locks the assessment; superadmin can reopen).
 3. HR/superadmin reads the results:
-   - **Dashboard** — completion KPIs, *recommended training focus*, and the
+   - **Dashboard** — completion KPIs, the interactive **zone performance map**
+     (pan/zoom, click a zone to focus), *recommended training focus*, and the
      capability × zone heat map (avg APEX Panel score vs required level).
    - **Zone views** — AM × capability heat map per region (track-aware requirements).
    - **Individuals** — Self vs Manager vs Panel side by side, gap to required level,

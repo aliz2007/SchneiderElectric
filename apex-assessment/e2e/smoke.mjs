@@ -97,15 +97,25 @@ try {
   ok("assessor lands on My Assessments");
 
   await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".kpi-value");
+  ok("assessor can view the shared dashboard");
+
+  await page.goto(`${BASE}/analysis/individuals`);
   await page.waitForURL("**/rate");
-  ok("assessor blocked from /analysis (redirected)");
+  ok("assessor blocked from individual results (redirected)");
 
   await page.goto(`${BASE}/rate`);
   const cards = await page.locator(".am-card").count();
   cards === 1 ? ok("assessor sees exactly 1 assigned AM") : fail("assignment scoping", `${cards} cards`);
 
-  // ---- 8. rating wizard (all 22 pre-rated by demo → opens on review; edit one) ----
-  await page.locator(".am-card a.btn").click();
+  // self-service: add anyone to your list by typing their name
+  await page.fill(".assign-input", "Basim");
+  await page.locator(".assign-opt").first().click();
+  await page.waitForFunction(() => document.querySelectorAll(".am-card").length === 2);
+  ok("self-assigned an AM by typing a name");
+
+  // ---- 8. rating wizard (AM02 reopened above; all 22 pre-rated by demo → review; edit one) ----
+  await page.locator('.am-card:has-text("Mohamed Marzouk") a.btn').click();
   await page.waitForSelector(".review-list");
   ok("wizard opens on review screen for fully-rated draft");
   await page.locator('.review-row button:has-text("Edit")').first().click();

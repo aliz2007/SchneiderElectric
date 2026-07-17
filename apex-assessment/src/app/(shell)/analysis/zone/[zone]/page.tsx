@@ -60,10 +60,10 @@ export default async function ZonePage({ params }: { params: Promise<{ zone: str
           </table>
         </div>
         <div className="legend">
-          <span><span className="sw" style={{ background: "#c9f5d3" }} />At / above required</span>
-          <span><span className="sw" style={{ background: "#ffd9ad" }} />Below required</span>
-          <span><span className="sw" style={{ background: "#ffccc6" }} />2+ levels below</span>
-          <span><span className="sw" style={{ background: "#eef1f6" }} />No data / not applicable to track</span>
+          <span><span className="sw" style={{ background: "#3dcd58" }} />At / above required</span>
+          <span><span className="sw" style={{ background: "#fb923c" }} />Below required</span>
+          <span><span className="sw" style={{ background: "#f4564a" }} />2+ levels below</span>
+          <span><span className="sw" style={{ background: "#3a465e" }} />No data / not applicable to track</span>
         </div>
       </div>
     </div>
@@ -103,7 +103,7 @@ function ZoneClusterRows({
                 </td>
               );
             })}
-            <td className="cell hm-na" style={{ background: "#e9edf2", color: "var(--ink-2)" }}>
+            <td className="cell hm-na" style={{ background: "rgba(255,255,255,0.09)", color: "var(--ink)" }}>
               {vals.length === 0 ? "—" : fmt(vals.reduce((a, b) => a + b, 0) / vals.length)}
             </td>
           </tr>

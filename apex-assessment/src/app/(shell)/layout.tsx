@@ -7,14 +7,17 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   const user = await requireUser();
 
   const rateItems: NavItem[] = user.lens ? [{ href: "/rate", label: "My Assessments", ico: "✎" }] : [];
-  const adminItems: NavItem[] =
-    user.role === "superadmin"
+  // the aggregated dashboard is open to everyone; individual results & access
+  // management stay superadmin-only
+  const adminItems: NavItem[] = [
+    { href: "/analysis", label: "Dashboard", ico: "▦" },
+    ...(user.role === "superadmin"
       ? [
-          { href: "/analysis", label: "Dashboard", ico: "▦" },
           { href: "/analysis/individuals", label: "Individuals", ico: "☰" },
           { href: "/admin/users", label: "Users & Access", ico: "⚙" },
         ]
-      : [];
+      : []),
+  ];
 
   const initials = user.displayName
     .split(/\s+/)
@@ -37,7 +40,9 @@ export default async function ShellLayout({ children }: { children: React.ReactN
           </div>
         </div>
         <nav className="nav">
-          {adminItems.length > 0 && <div className="nav-section">Analysis & Admin</div>}
+          {adminItems.length > 0 && (
+            <div className="nav-section">{user.role === "superadmin" ? "Analysis & Admin" : "Analysis"}</div>
+          )}
           <NavLinks items={adminItems} />
           {rateItems.length > 0 && <div className="nav-section">Assessment</div>}
           <NavLinks items={rateItems} />

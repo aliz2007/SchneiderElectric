@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { assignedAMs, getAssessment, ratedCount, listCapabilities } from "@/lib/queries";
+import { assignedAMs, getAssessment, listAMs, ratedCount, listCapabilities } from "@/lib/queries";
 import { LENS_LABELS } from "@/lib/seed-data";
+import AddAssessment from "./add-assessment";
+import { selfUnassignAction } from "./actions";
 
 export default async function RatePage({
   searchParams,
@@ -28,6 +30,15 @@ export default async function RatePage({
   }
 
   const ams = assignedAMs(user.id);
+  const assignedIds = new Set(ams.map((am) => am.id));
+  const options = listAMs().map((am) => ({
+    id: am.id,
+    code: am.code,
+    name: am.name,
+    account: am.account,
+    zone: am.zone,
+    assigned: assignedIds.has(am.id),
+  }));
 
   return (
     <div>
@@ -42,9 +53,13 @@ export default async function RatePage({
 
       {done && <div className="banner banner-ok">✓ Assessment submitted. Thank you!</div>}
 
+      <div className="card card-pad" style={{ marginBottom: 20 }}>
+        <AddAssessment options={options} />
+      </div>
+
       {ams.length === 0 ? (
         <div className="banner banner-info">
-          No Account Managers are assigned to you yet. Your administrator controls assignments.
+          Nothing on your list yet — type a name above to add your first assessment.
         </div>
       ) : (
         <div className="am-grid">
@@ -74,9 +89,18 @@ export default async function RatePage({
                       In progress · {rated}/{capCount}
                     </span>
                   )}
-                  <Link className="btn btn-sm btn-primary" href={`/rate/${am.id}`}>
-                    {submitted ? "View" : rated === 0 ? "Start" : "Continue"}
-                  </Link>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {!submitted && rated === 0 && (
+                      <form action={selfUnassignAction.bind(null, am.id)}>
+                        <button className="btn btn-sm btn-ghost" type="submit" title="Remove from my list">
+                          Remove
+                        </button>
+                      </form>
+                    )}
+                    <Link className="btn btn-sm btn-primary" href={`/rate/${am.id}`}>
+                      {submitted ? "View" : rated === 0 ? "Start" : "Continue"}
+                    </Link>
+                  </div>
                 </div>
               </div>
             );

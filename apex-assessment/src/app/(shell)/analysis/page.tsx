@@ -1,18 +1,23 @@
 import Link from "next/link";
-import { requireSuperadmin } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 import {
   assessmentStatuses,
   listAMs,
+  listCapabilities,
   overviewStats,
+  submittedLevels,
   trainingPriorities,
   zoneHeatmap,
 } from "@/lib/queries";
 import { gapClass, fmt } from "@/lib/heat";
 import { ZONES } from "@/lib/seed-data";
-import ZoneMap, { type ZoneMapStat } from "./zone-map";
+import ZoneMap, { type MapAM, type MapCap } from "./zone-map";
 
 export default async function AnalysisPage() {
-  await requireSuperadmin();
+  // the aggregated dashboard is open to every signed-in user; drill-down into
+  // individual ratings stays superadmin-only
+  const user = await requireUser();
+  const isAdmin = user.role === "superadmin";
 
   const stats = overviewStats();
   const { zones, rows } = zoneHeatmap();
@@ -23,25 +28,22 @@ export default async function AnalysisPage() {
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
   const completionPct = Math.round((submittedTotal / (stats.amCount * 3)) * 100);
 
-  // per-zone roll-up for the geographic map
-  const zoneMapStats: ZoneMapStat[] = zones.map((zone, zi) => {
-    const cells = rows.map((r) => ({ cap: r.cap.name, cell: r.cells[zi] }));
-    const scored = cells.filter((c) => c.cell.avgScore != null);
-    const gapped = cells.filter((c) => c.cell.gap != null);
-    const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-    const worstRow = gapped.reduce<{ cap: string; gap: number } | null>((worst, c) => {
-      const g = c.cell.gap!;
-      return g < 0 && (!worst || g < worst.gap) ? { cap: c.cap, gap: g } : worst;
-    }, null);
-    return {
-      zone: zone as ZoneMapStat["zone"],
-      ams: ams.filter((am) => am.zone === zone).length,
-      avgScore: mean(scored.map((c) => c.cell.avgScore!)),
-      avgReq: mean(scored.map((c) => c.cell.avgReq!)),
-      gap: mean(gapped.map((c) => c.cell.gap!)),
-      worst: worstRow,
-    };
-  });
+  // raw per-AM panel scores for the thermal map (filterable client-side)
+  const mapCaps: MapCap[] = listCapabilities().map((c) => ({
+    id: c.id,
+    name: c.name,
+    cluster: c.cluster,
+    reqAcq: c.req_acq,
+    reqSat: c.req_sat,
+  }));
+  const mapAMs: MapAM[] = ams.map((am) => ({
+    id: am.id,
+    code: am.code,
+    name: am.name,
+    zone: am.zone as MapAM["zone"],
+    track: am.track,
+    scores: Object.fromEntries(submittedLevels(am.id).expert),
+  }));
 
   // group heat map rows by cluster for readable sections
   const clusters: { name: string; rows: typeof rows }[] = [];
@@ -98,13 +100,14 @@ export default async function AnalysisPage() {
         </div>
       </div>
 
-      <div className="card card-pad" style={{ marginBottom: 22 }}>
+      <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
         <h2 className="card-title">Zone performance map</h2>
         <p className="card-sub">
-          Each zone is coloured by its average APEX Panel score vs required level. Hover for
-          details, click a zone to open its benchmark.
+          Thermal view of APEX Panel performance vs required levels across Schneider hubs —
+          blue is on target, red is a critical gap. Filter by capability, hover the hubs,
+          click a zone to focus.
         </p>
-        <ZoneMap zones={zoneMapStats} />
+        <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} />
       </div>
 
       {priorities.length > 0 && (
@@ -141,9 +144,13 @@ export default async function AnalysisPage() {
                 <th className="hm-rowhead">Capability</th>
                 {zones.map((z) => (
                   <th key={z}>
-                    <Link href={`/analysis/zone/${z}`} style={{ color: "var(--blue)" }}>
-                      {z}
-                    </Link>
+                    {isAdmin ? (
+                      <Link href={`/analysis/zone/${z}`} style={{ color: "var(--blue)" }}>
+                        {z}
+                      </Link>
+                    ) : (
+                      z
+                    )}
                   </th>
                 ))}
               </tr>
@@ -156,11 +163,11 @@ export default async function AnalysisPage() {
           </table>
         </div>
         <div className="legend">
-          <span><span className="sw" style={{ background: "#c9f5d3" }} />At / above required</span>
-          <span><span className="sw" style={{ background: "#ffefb8" }} />Slightly below (&lt; 0.5)</span>
-          <span><span className="sw" style={{ background: "#ffd9ad" }} />Below (0.5 – 1)</span>
-          <span><span className="sw" style={{ background: "#ffccc6" }} />Critical gap (&gt; 1)</span>
-          <span><span className="sw" style={{ background: "#eef1f6" }} />No data / not applicable</span>
+          <span><span className="sw" style={{ background: "#3dcd58" }} />At / above required</span>
+          <span><span className="sw" style={{ background: "#facc15" }} />Slightly below (&lt; 0.5)</span>
+          <span><span className="sw" style={{ background: "#fb923c" }} />Below (0.5 – 1)</span>
+          <span><span className="sw" style={{ background: "#f4564a" }} />Critical gap (&gt; 1)</span>
+          <span><span className="sw" style={{ background: "#3a465e" }} />No data / not applicable</span>
         </div>
       </div>
 
@@ -177,7 +184,7 @@ export default async function AnalysisPage() {
                 <th>Self</th>
                 <th>Manager</th>
                 <th>APEX Panel</th>
-                <th></th>
+                {isAdmin && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -202,11 +209,13 @@ export default async function AnalysisPage() {
                         </td>
                       );
                     })}
-                    <td>
-                      <Link className="btn btn-sm btn-outline" href={`/analysis/am/${am.id}`}>
-                        Analysis →
-                      </Link>
-                    </td>
+                    {isAdmin && (
+                      <td>
+                        <Link className="btn btn-sm btn-outline" href={`/analysis/am/${am.id}`}>
+                          Analysis →
+                        </Link>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

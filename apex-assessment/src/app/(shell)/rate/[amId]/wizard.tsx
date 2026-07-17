@@ -289,7 +289,7 @@ export default function Wizard({
             type="button"
             className={`dot${onReview ? " current" : ""}`}
             title="Review & submit"
-            style={{ width: 26, background: onReview ? "var(--ink)" : "#cfd4dc" }}
+            style={{ width: 26, background: onReview ? "var(--ink)" : "#3a465e" }}
             onClick={() => setIdx(-1)}
           />
         </div>
