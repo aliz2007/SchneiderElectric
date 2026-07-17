@@ -9,6 +9,7 @@ import {
 } from "@/lib/queries";
 import { gapClass, fmt } from "@/lib/heat";
 import { ZONES } from "@/lib/seed-data";
+import ZoneMap, { type ZoneMapStat } from "./zone-map";
 
 export default async function AnalysisPage() {
   await requireSuperadmin();
@@ -21,6 +22,26 @@ export default async function AnalysisPage() {
 
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
   const completionPct = Math.round((submittedTotal / (stats.amCount * 3)) * 100);
+
+  // per-zone roll-up for the geographic map
+  const zoneMapStats: ZoneMapStat[] = zones.map((zone, zi) => {
+    const cells = rows.map((r) => ({ cap: r.cap.name, cell: r.cells[zi] }));
+    const scored = cells.filter((c) => c.cell.avgScore != null);
+    const gapped = cells.filter((c) => c.cell.gap != null);
+    const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+    const worstRow = gapped.reduce<{ cap: string; gap: number } | null>((worst, c) => {
+      const g = c.cell.gap!;
+      return g < 0 && (!worst || g < worst.gap) ? { cap: c.cap, gap: g } : worst;
+    }, null);
+    return {
+      zone: zone as ZoneMapStat["zone"],
+      ams: ams.filter((am) => am.zone === zone).length,
+      avgScore: mean(scored.map((c) => c.cell.avgScore!)),
+      avgReq: mean(scored.map((c) => c.cell.avgReq!)),
+      gap: mean(gapped.map((c) => c.cell.gap!)),
+      worst: worstRow,
+    };
+  });
 
   // group heat map rows by cluster for readable sections
   const clusters: { name: string; rows: typeof rows }[] = [];
@@ -75,6 +96,15 @@ export default async function AnalysisPage() {
           <div className="kpi-value">{fmt(stats.avgExpert, 2)}</div>
           <div className="kpi-note">scale 1–3 · submitted panel scores</div>
         </div>
+      </div>
+
+      <div className="card card-pad" style={{ marginBottom: 22 }}>
+        <h2 className="card-title">Zone performance map</h2>
+        <p className="card-sub">
+          Each zone is coloured by its average APEX Panel score vs required level. Hover for
+          details, click a zone to open its benchmark.
+        </p>
+        <ZoneMap zones={zoneMapStats} />
       </div>
 
       {priorities.length > 0 && (
