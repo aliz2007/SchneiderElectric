@@ -1,0 +1,304 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { saveRating, submit } from "./actions";
+
+export type WizardCap = {
+  id: number;
+  name: string;
+  cluster: string;
+  l1: string;
+  l2: string;
+  l3: string;
+};
+
+export type WizardInitial = Record<number, { level: number | null; note: string }>;
+
+const LEVEL_META = [
+  { level: 1, tag: "L1", name: "Developing", key: "l1" as const },
+  { level: 2, tag: "L2", name: "Proficient", key: "l2" as const },
+  { level: 3, tag: "L3", name: "Advanced", key: "l3" as const },
+];
+
+export default function Wizard({
+  am,
+  lensLabel,
+  caps,
+  initial,
+  submitted,
+}: {
+  am: { id: number; name: string; account: string; zone: string; track: string };
+  lensLabel: string;
+  caps: WizardCap[];
+  initial: WizardInitial;
+  submitted: boolean;
+}) {
+  const [answers, setAnswers] = useState<WizardInitial>(() => {
+    const a: WizardInitial = {};
+    for (const c of caps) a[c.id] = initial[c.id] ?? { level: null, note: "" };
+    return a;
+  });
+  const firstUnanswered = caps.findIndex((c) => (initial[c.id]?.level ?? null) == null);
+  const [idx, setIdx] = useState(submitted ? -1 : firstUnanswered === -1 ? -1 : firstUnanswered);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [submitting, startSubmit] = useTransition();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const answeredCount = useMemo(
+    () => caps.filter((c) => answers[c.id]?.level != null).length,
+    [caps, answers]
+  );
+  const allAnswered = answeredCount === caps.length;
+  const onReview = idx === -1;
+  const cap = onReview ? null : caps[idx];
+
+  const persist = useCallback(
+    (capId: number, level: number | null, note: string) => {
+      setSaveState("saving");
+      saveRating(am.id, capId, level, note)
+        .then(() => setSaveState("saved"))
+        .catch(() => setSaveState("error"));
+    },
+    [am.id]
+  );
+
+  const choose = useCallback(
+    (capId: number, level: number) => {
+      if (submitted) return;
+      setAnswers((prev) => {
+        const next = { ...prev, [capId]: { ...prev[capId], level } };
+        persist(capId, level, next[capId].note);
+        return next;
+      });
+    },
+    [persist, submitted]
+  );
+
+  const setNote = useCallback(
+    (capId: number, note: string) => {
+      setAnswers((prev) => {
+        const next = { ...prev, [capId]: { ...prev[capId], note } };
+        if (noteTimer.current) clearTimeout(noteTimer.current);
+        noteTimer.current = setTimeout(() => persist(capId, next[capId].level, note), 700);
+        return next;
+      });
+    },
+    [persist]
+  );
+
+  // keyboard shortcuts: 1/2/3 select level, arrows navigate
+  useEffect(() => {
+    if (submitted || onReview) return;
+    const h = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
+      if (e.key >= "1" && e.key <= "3" && cap) choose(cap.id, Number(e.key));
+      if (e.key === "ArrowRight" && idx < caps.length - 1) setIdx(idx + 1);
+      if (e.key === "ArrowLeft" && idx > 0) setIdx(idx - 1);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [cap, idx, caps.length, choose, submitted, onReview]);
+
+  const doSubmit = () => {
+    setSubmitError(null);
+    startSubmit(async () => {
+      try {
+        await submit(am.id);
+      } catch (err) {
+        // redirect() throws internally on success — only surface real errors
+        if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) {
+          setSubmitError(err.message);
+        } else {
+          throw err;
+        }
+      }
+    });
+  };
+
+  return (
+    <div className="wizard">
+      <div className="wizard-top">
+        <div>
+          <div className="page-kicker">{lensLabel}</div>
+          <h1 className="page-title" style={{ marginBottom: 2 }}>
+            {am.name}
+          </h1>
+          <div className="am-meta" style={{ marginTop: 6 }}>
+            <span className="badge badge-zone">{am.zone}</span>
+            <span className="badge badge-track">{am.track}</span>
+            <span className="badge badge-gray">{am.account}</span>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div className="wizard-counter">
+            {answeredCount} / {caps.length} rated
+          </div>
+          <div className="progress-track" style={{ width: 180, marginTop: 6 }}>
+            <div className="progress-fill" style={{ width: `${(answeredCount / caps.length) * 100}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {submitted && (
+        <div className="banner banner-ok">
+          ✓ This assessment has been submitted and is now locked. Contact your administrator if it
+          needs to be reopened.
+        </div>
+      )}
+
+      {!onReview && cap && (
+        <div className="card card-pad">
+          <div className="cluster-kicker">{cap.cluster}</div>
+          <h2 className="cap-title">{cap.name}</h2>
+          <div className="level-cards">
+            {LEVEL_META.map((m) => {
+              const selected = answers[cap.id]?.level === m.level;
+              return (
+                <button
+                  key={m.level}
+                  type="button"
+                  className={`level-card${selected ? " selected" : ""}`}
+                  onClick={() => choose(cap.id, m.level)}
+                  disabled={submitted}
+                >
+                  <div className="lvl-head">
+                    <span className="lvl-num">{m.tag}</span>
+                    {m.name}
+                    <span className="key-hint" style={{ marginLeft: "auto" }}>
+                      press {m.level}
+                    </span>
+                  </div>
+                  <div className="lvl-desc">{cap[m.key]}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label htmlFor={`note-${cap.id}`}>Notes · evidence & behavioural observations (optional)</label>
+            <textarea
+              id={`note-${cap.id}`}
+              className="input"
+              rows={2}
+              placeholder="Concrete examples supporting this rating…"
+              value={answers[cap.id]?.note ?? ""}
+              onChange={(e) => setNote(cap.id, e.target.value)}
+              disabled={submitted}
+            />
+          </div>
+        </div>
+      )}
+
+      {onReview && (
+        <div className="card card-pad">
+          <h2 className="card-title">Review {submitted ? "" : "& submit"}</h2>
+          <p className="card-sub">
+            {submitted
+              ? "Your submitted ratings for this Account Manager."
+              : "Check your ratings, then submit. After submitting, the assessment is locked."}
+          </p>
+          <div className="review-list">
+            {caps.map((c, i) => {
+              const a = answers[c.id];
+              return (
+                <div key={c.id} className="review-row">
+                  <span className={`lvl-chip ${a?.level ? `lvl-${a.level}` : "lvl-none"}`}>
+                    {a?.level ? `L${a.level}` : "—"}
+                  </span>
+                  <span className="review-cap">
+                    {c.name}
+                    {a?.note ? <span style={{ color: "var(--muted)" }}> · 📝</span> : null}
+                  </span>
+                  {!submitted && (
+                    <button className="btn btn-sm btn-ghost" type="button" onClick={() => setIdx(i)}>
+                      Edit
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {submitError && <div className="form-error" style={{ marginTop: 14 }}>{submitError}</div>}
+          {!submitted && (
+            <div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center" }}>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={!allAnswered || submitting}
+                onClick={doSubmit}
+              >
+                {submitting ? "Submitting…" : "Submit assessment"}
+              </button>
+              {!allAnswered && (
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                  {caps.length - answeredCount} capability{caps.length - answeredCount > 1 ? "ies" : ""} left to rate
+                </span>
+              )}
+            </div>
+          )}
+          {submitted && (
+            <Link className="btn btn-outline" style={{ marginTop: 18 }} href="/rate">
+              ← Back to my assessments
+            </Link>
+          )}
+        </div>
+      )}
+
+      <div className="wizard-nav">
+        <div style={{ display: "flex", gap: 8 }}>
+          {!onReview && (
+            <>
+              <button
+                className="btn btn-outline"
+                type="button"
+                disabled={idx === 0}
+                onClick={() => setIdx(idx - 1)}
+              >
+                ← Prev
+              </button>
+              {idx < caps.length - 1 ? (
+                <button className="btn btn-outline" type="button" onClick={() => setIdx(idx + 1)}>
+                  Next →
+                </button>
+              ) : (
+                <button className="btn btn-primary" type="button" onClick={() => setIdx(-1)}>
+                  Review & submit →
+                </button>
+              )}
+            </>
+          )}
+          {onReview && !submitted && (
+            <button className="btn btn-outline" type="button" onClick={() => setIdx(0)}>
+              ← Back to questions
+            </button>
+          )}
+        </div>
+        <div className="dots">
+          {caps.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`dot${answers[c.id]?.level != null ? " answered" : ""}${i === idx ? " current" : ""}`}
+              title={c.name}
+              onClick={() => setIdx(i)}
+            />
+          ))}
+          <button
+            type="button"
+            className={`dot${onReview ? " current" : ""}`}
+            title="Review & submit"
+            style={{ width: 26, background: onReview ? "var(--ink)" : "#cfd4dc" }}
+            onClick={() => setIdx(-1)}
+          />
+        </div>
+        <div className="save-state">
+          {saveState === "saving" && "Saving…"}
+          {saveState === "saved" && "Saved ✓"}
+          {saveState === "error" && <span style={{ color: "var(--red)" }}>Save failed</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
