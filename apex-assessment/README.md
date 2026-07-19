@@ -55,6 +55,8 @@ Open **http://localhost:3000** and sign in as the seeded superadmin:
    - **Zone views** — AM × capability heat map per region (track-aware requirements).
    - **Individuals** — Self vs Manager vs Panel side by side, gap to required level,
      strengths, development areas, perception gaps, and evaluators' evidence notes.
+     Each profile has an **Export PDF** button that downloads a print-ready
+     individual report (superadmin only, same data as the page).
 
 **Demo:** Users & Access → *Load demo dataset* fills all 75 assessments with plausible
 scores so the dashboards can be explored immediately (*Clear all ratings* undoes it).

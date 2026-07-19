@@ -51,6 +51,10 @@ better-sqlite3** app. No external services; SQLite DB auto-creates and auto-seed
   `/analysis/zone/[zone]` AM×capability heat maps; `/analysis/individuals` +
   `/analysis/am/[id]` — Self vs Manager vs Panel comparison, gap-to-required,
   strengths, development areas, perception gaps (|self − panel| ≥ 1), evidence notes.
+  Every profile page has an **Export PDF** button → `GET /analysis/am/[id]/pdf`
+  renders a styled 2-page individual report server-side (@react-pdf/renderer,
+  component in `src/lib/pdf-report.tsx`) and downloads it; superadmin-only, same
+  data as the page.
 - **Auth:** scrypt password hashes, httpOnly cookie sessions in DB, role checks in
   every page AND every server action (never trust the client).
 - **Analysis uses submitted assessments only** — drafts stay private to their author.
@@ -63,7 +67,7 @@ src/lib/db.ts          schema + auto-seed (users, sessions, account_managers,
 src/lib/queries.ts     all data access + analysis math (zoneHeatmap, trainingPriorities…)
 src/lib/session.ts     getCurrentUser / requireUser / requireSuperadmin
 src/app/(shell)/…      rate/ (wizard), analysis/, admin/users/
-e2e/smoke.mjs          Playwright E2E suite — 18/18 passing at handoff (see header
+e2e/smoke.mjs          Playwright E2E suite — 22/22 passing (see header
                        comment for how to run; needs a fresh DB + prod server on :3111)
 ```
 

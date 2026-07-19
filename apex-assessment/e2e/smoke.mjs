@@ -64,7 +64,20 @@ try {
   await page.waitForTimeout(700); // let entrance animation settle
   await page.screenshot({ path: `${SHOTS}/3-individual.png` });
 
-  // ---- 5. zone view ----
+  // ---- 5. PDF export ----
+  const pdfResp = await page.context().request.get(`${BASE}/analysis/am/1/pdf`);
+  const pdfBuf = await pdfResp.body();
+  const pdfOk =
+    pdfResp.status() === 200 &&
+    pdfResp.headers()["content-type"] === "application/pdf" &&
+    pdfBuf.subarray(0, 5).toString() === "%PDF-" &&
+    pdfBuf.length > 5000;
+  pdfOk ? ok(`PDF export downloads (${pdfBuf.length} bytes)`) : fail("PDF export", `status ${pdfResp.status()}`);
+  (await page.locator('a:has-text("Export PDF")').count()) > 0
+    ? ok("Export PDF button on profile page")
+    : fail("Export PDF button", "not found");
+
+  // ---- 6. zone view ----
   await page.goto(`${BASE}/analysis/zone/MEA`);
   await page.waitForSelector("text=Zone benchmark");
   ok("zone MEA heat map renders");

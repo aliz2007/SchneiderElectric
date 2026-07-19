@@ -82,10 +82,21 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
   return (
     <div>
       <div className="page-head">
-        <div className="page-kicker">
-          <Link href="/analysis/individuals" style={{ color: "inherit" }}>Individual analysis</Link>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div>
+            <div className="page-kicker">
+              <Link href="/analysis/individuals" style={{ color: "inherit" }}>Individual analysis</Link>
+            </div>
+            <h1 className="page-title">{am.name}</h1>
+          </div>
+          <a
+            href={`/analysis/am/${am.id}/pdf`}
+            className="btn btn-sm btn-outline"
+            style={{ flexShrink: 0, marginTop: 4, textDecoration: "none" }}
+          >
+            Export PDF
+          </a>
         </div>
-        <h1 className="page-title">{am.name}</h1>
         <div className="am-meta" style={{ marginTop: 6 }}>
           <span className="badge badge-zone">{am.zone}</span>
           <span className="badge badge-track">{am.track} track</span>
