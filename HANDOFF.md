@@ -1,112 +1,190 @@
 # HANDOFF — APEX Assessment app (Schneider Electric)
 
-Context transfer for a new Claude Code session. A previous session built this app but
-pushed to the wrong repository. **Your first job: get this code into THIS repo, then
-continue with the pending work below.**
+**Purpose of this file:** complete context archive. A new session should be able to
+continue this project using ONLY this repository — no external files, no verbal context.
+Last updated: 2026-07-20.
 
-## 1. What this project is
+---
+
+## 1. TL;DR — current state
+
+- The app is **complete and working**: Next.js 15 + SQLite, in `apex-assessment/`.
+- Repo: `https://github.com/aliz2007/SchneiderElectric.git`, branch
+  `claude/apex-assessment-ui-redesign-vr8uel` (the only branch; the demo downloads it).
+- 4 commits shipped: app + premium dark UI → geographic zone map → thermal zone map /
+  self-service assignments / shared dashboard → per-profile PDF export.
+- **UNCOMMITTED, MUST BE PUSHED** (as of 2026-07-20): `package.json` +
+  `package-lock.json` bump `better-sqlite3` → `^12.11.1` and `next` → `15.5.20`.
+  This fixes the Windows demo install crash (see §7). Build passes, E2E 22/22.
+- Also uncommitted: this HANDOFF rewrite, `demo.bat` and `docs/source-materials/`
+  (newly archived into the repo).
+
+## 2. The project
 
 Schneider Electric wants a web app replacing an Excel workbook used to assess the
-**APEX TOP 25 Strategic/Key Account Managers**. Source materials were a 2-page project
-brief (PDF, French) and the workbook `APEX_AM_Assesment_140726` — both fully
-reverse-engineered; everything relevant is already embedded in the code, the originals
-are no longer needed.
+**APEX TOP 25 Strategic/Key Account Managers (KAMs)**. The goal (from the client
+brief): digitalize and simplify the assessment, improve UX vs Excel, get a clear view
+of each KAM's capability mastery, identify gaps between evaluators, feed
+development/training plans, and consolidate results per individual and per
+geographic zone.
 
-The assessment model:
-- **22 capabilities** in 6 clusters, each with written **L1/L2/L3 behavioural anchors**
-  (L1 Developing = 1, L2 Proficient = 2, L3 Advanced = 3).
-- **3 assessment lenses** per Account Manager: **Self**, **Manager**, **APEX Panel**
-  (panel = the authoritative score used in analytics).
-- Each AM has a **track** — *Acquisition* or *Saturation* — which determines the
-  **required level** per capability (some capabilities don't apply to a track).
-- 25 AMs across **4 zones**: MEA, SAM, India, Pacific.
+### Source materials (now archived IN this repo)
 
-Hard product rules from the client brief (already enforced server-side — keep them):
+- `docs/source-materials/Brief-projet-Assessment.pdf` — 2-page project brief (French).
+- `docs/source-materials/APEX_AM_Assesment140726-TEMPLATE-INSTRUCTIONS-ORDRE.xlsx` —
+  the original Excel workbook (template version: all ratings empty).
+
+Both were fully reverse-engineered; everything data-relevant is also embedded 1:1 in
+`apex-assessment/src/lib/seed-data.ts`.
+
+### The assessment model
+
+- **22 capabilities** in **6 clusters**, each with written **L1/L2/L3 behavioural
+  anchors** (L1 Developing = 1, L2 Proficient = 2, L3 Advanced = 3). Full anchor
+  texts: `src/lib/seed-data.ts` (verbatim from the Excel "Capability Guide" tab).
+- **3 assessment lenses** per AM: **Self** (the KAM), **Manager**, **APEX Panel**
+  (panel of Global Account Managers & Segment Leaders — the authoritative score used
+  in analytics).
+- Each AM has a **track** — *Acquisition* or *Saturation* — determining the
+  **required level** per capability. 4 capabilities apply only to Acquisition
+  (Pipeline Shaping, Competitive Positioning, White-Space Penetration, Preferred
+  Partner Positioning), 3 only to Saturation (Share of Wallet Expansion, Retention &
+  Loss Prevention, Software & Services Attach).
+- Required levels: L2 for everything, EXCEPT L3 for Account Management (both tracks),
+  Pipeline Shaping (Acquisition), Share of Wallet Expansion (Saturation).
+- The Excel "Src" column flags capability origin: SE / C (core) / A (acquisition-only)
+  / S (saturation-only).
+- **25 AMs across 4 zones**: MEA (AM01–06), SAM (AM07–12), India (AM13–18),
+  Pacific (AM19–25). Roster with track per AM: `src/lib/seed-data.ts` (matches the
+  Excel Consolidation tab exactly).
+- **11 of 25 names are placeholders** ("Account Manager 1", "Account Manager 13–18",
+  "Account Manager 22–25") because the Excel itself had placeholder tabs. Real names
+  exist only for AM02–AM12 and AM19–AM21. User hasn't provided the missing names.
+
+### Hard product rules from the brief (enforced server-side — KEEP THEM)
+
 1. Evaluators must NEVER see other evaluators' scores (blind assessment).
-2. Required levels must be HIDDEN during rating (anti-anchoring bias); they appear
-   only in analysis.
-3. Ratings are confidential: only superadmins see results/analysis.
-4. The app is the system of record — rubric + roster were seeded from the Excel once;
+2. Required levels must be HIDDEN during rating (anti-anchoring bias); shown only
+   in analysis.
+3. Ratings are confidential: individual results/analysis are superadmin-only.
+4. The app is the system of record — rubric + roster were seeded once from the Excel;
    all ratings are created in-app. The Excel is retired.
 
-## 2. What's in this zip
+The brief's analysis priorities (the client called analysis "the most important part"):
+individual view comparing the 3 lenses + perception gaps + strengths/dev areas;
+capability heat map (level obtained vs required, simple colour code); zone view
+(MEA/SAM/India/Pacific) with strengths/weaknesses, maturity comparison, collective
+development needs, heat maps / synthetic dashboards. **All implemented.**
 
-`apex-assessment/` — a complete, working **Next.js 15 (App Router) + React 19 +
-better-sqlite3** app. No external services; SQLite DB auto-creates and auto-seeds at
+## 3. The app (`apex-assessment/`)
+
+Next.js 15 (App Router, server actions) · React 19 · better-sqlite3 ·
+@react-pdf/renderer. No external services; SQLite DB auto-creates and auto-seeds at
 `data/apex.db` on first run (rubric, 25 AMs, superadmin).
 
-- **Login:** superadmin `vladimir` / `apex2026` (seeded; META: change-after-first-login).
-- **Superadmin (Vladimir):** Users & Access page — creates users, sets role
-  (superadmin/assessor), sets assessor lens (self/manager/expert), assigns which AMs
-  each user rates, enable/disable, reset passwords. Data tools: **Load demo dataset**
-  (fills all 75 assessments with plausible submitted scores — great for demos) and
-  Clear all ratings.
-- **Assessor flow:** `/rate` task list → guided wizard: one capability per screen,
-  rubric anchors inline, keyboard shortcuts (1/2/3, ←/→), notes/evidence field,
-  autosave (700ms debounce on notes), progress dots, review screen, submit → locks.
-  Superadmin can reopen a submitted assessment (individual analysis page, bottom).
-- **Analysis (superadmin only):** `/analysis` dashboard — completion KPIs,
-  "Recommended training focus" (worst zone×capability deficits), **training-needs
-  heat map** (capability × zone, colored by avg APEX score minus required level);
-  `/analysis/zone/[zone]` AM×capability heat maps; `/analysis/individuals` +
-  `/analysis/am/[id]` — Self vs Manager vs Panel comparison, gap-to-required,
-  strengths, development areas, perception gaps (|self − panel| ≥ 1), evidence notes.
-  Every profile page has an **Export PDF** button → `GET /analysis/am/[id]/pdf`
-  renders a styled 2-page individual report server-side (@react-pdf/renderer,
-  component in `src/lib/pdf-report.tsx`) and downloads it; superadmin-only, same
-  data as the page.
+- **Login:** superadmin `vladimir` / `apex2026` (seeded; flagged
+  change-after-first-login).
+- **Superadmin:** Users & Access page — create users, set role (superadmin/assessor),
+  set assessor lens (self/manager/expert), assign AMs, enable/disable, reset
+  passwords. Data tools: **Load demo dataset** (fills all 75 assessments with
+  plausible submitted scores) and **Clear all ratings**.
+- **Assessors** self-assign AMs by typing a name on My Assessments (admin can also
+  pre-assign). One evaluator per AM per lens.
+- **Rating wizard** (`/rate`): one capability per screen, rubric anchors inline,
+  keyboard shortcuts (1/2/3, ←/→), notes/evidence field, autosave (700 ms debounce),
+  progress dots, review screen, submit → locks. Superadmin can reopen a submitted
+  assessment.
+- **Analysis** (dashboard is visible to everyone signed in; individual-level pages
+  are superadmin-only):
+  - `/analysis` — completion KPIs, interactive geographic zone performance map,
+    thermal zone map with capability filter, "recommended training focus",
+    capability × zone heat map (avg APEX Panel score − required level).
+  - `/analysis/zone/[zone]` — AM × capability heat maps (track-aware).
+  - `/analysis/individuals` + `/analysis/am/[id]` — Self vs Manager vs Panel,
+    gap-to-required, strengths, development areas, perception gaps (|self − panel| ≥ 1),
+    evidence notes. **Export PDF** button → `GET /analysis/am/[id]/pdf` renders a
+    styled 2-page report server-side (`src/lib/pdf-report.tsx`), superadmin-only.
 - **Auth:** scrypt password hashes, httpOnly cookie sessions in DB, role checks in
-  every page AND every server action (never trust the client).
+  every page AND every server action.
 - **Analysis uses submitted assessments only** — drafts stay private to their author.
 
 Key files:
 ```
-src/lib/seed-data.ts   the full rubric + roster (extracted 1:1 from the Excel)
-src/lib/db.ts          schema + auto-seed (users, sessions, account_managers,
-                       capabilities, assignments, assessments[unique am+lens], ratings)
-src/lib/queries.ts     all data access + analysis math (zoneHeatmap, trainingPriorities…)
-src/lib/session.ts     getCurrentUser / requireUser / requireSuperadmin
-src/app/(shell)/…      rate/ (wizard), analysis/, admin/users/
-e2e/smoke.mjs          Playwright E2E suite — 22/22 passing (see header
-                       comment for how to run; needs a fresh DB + prod server on :3111)
+src/lib/seed-data.ts    rubric (22 caps, L1/L2/L3 anchors) + 25-AM roster (1:1 from Excel)
+src/lib/db.ts           schema + auto-seed (users, sessions, account_managers,
+                        capabilities, assignments, assessments[unique am+lens], ratings)
+src/lib/queries.ts      all data access + analysis math (zoneHeatmap, trainingPriorities…)
+src/lib/session.ts      getCurrentUser / requireUser / requireSuperadmin
+src/app/(shell)/…       rate/ (wizard), analysis/, admin/users/
+e2e/smoke.mjs           Playwright E2E suite — 22 tests (see header comment for how to
+                        run: fresh DB + prod server on :3111; on this Mac use
+                        CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 ```
 
-## 3. Set up the repo (do this first)
+## 4. How to run
 
-1. Unzip so `apex-assessment/` sits in the repository (keep it as a subfolder unless
-   the user prefers it at root).
-2. `cd apex-assessment && npm install && npm run dev` → http://localhost:3000 —
-   verify login as vladimir works.
-3. Commit and push to the branch the user designates **in this new session's repo**.
-4. Optionally run the E2E suite to confirm 18/18 (build + start on port 3111 first).
+```bash
+cd apex-assessment
+npm install
+npm run dev          # http://localhost:3000 — login vladimir / apex2026
+```
 
-## 4. PENDING WORK — not started (this is the user's active request)
+Prod: `npm run build && npm start`. E2E: build, delete `data/`,
+`npx next start -p 3111`, then `node e2e/smoke.mjs` (currently **22/22 passing**).
 
-The user saw the current UI and **rejected it**: “looks terrible, like AI, simple
-squares everywhere, kind of like Streamlit”. They want a full visual overhaul:
+## 5. Agreed decisions (don't relitigate)
 
-- **Apple-app feel**: sophisticated, premium, typography-led, depth (glass/blur,
-  layered shadows, large radii), generous whitespace — NOT flat gray boxes.
-- **Vibrant colors** (keep Schneider green #3DCD58 as the hero accent).
-- **Scroll animations** (reveal-on-scroll), **hover animations** (lift, glow),
-  **cursor UI animations** (e.g. spotlight/glow tracking the pointer on cards).
-- Smooth springy easing, micro-interactions (button press, selection pop, animated
-  progress, count-up KPIs are all fair game). Respect `prefers-reduced-motion`.
-
-Implementation notes from the previous session (suggested, not binding): the entire
-look lives in `src/app/globals.css` (semantic class names — cards, badges, heat map
-cells, wizard level-cards…), so a rewrite of that file plus one small client component
-(IntersectionObserver for reveals, pointermove for cursor glow, mounted in the root
-layout) gets 90% of it without touching page logic. **Keep class names and visible
-text labels stable** so `e2e/smoke.mjs` keeps passing — rerun it after the redesign
-(add small waits before screenshots if reveal animations race them).
-
-## 5. Other agreed decisions (context you may need)
-
-- v1 auth is deliberately username/password managed by the superadmin; real SSO is a
-  later production concern — flagged to the user already.
+- v1 auth = username/password managed by the superadmin; real SSO is a later
+  production concern (already flagged to the user).
 - SQLite is deliberate (zero infra); swap to Postgres only if the user asks.
-- 10 of the 25 roster names are placeholders (e.g. "Account Manager 13") because the
-  source Excel had placeholder tabs; user hasn't provided real names yet.
-- Ideas floated but NOT requested: roster editing UI, CSV/Excel export, multi-cycle
-  campaigns (year-over-year comparison). Don't build unless asked.
+- Ideas floated but NOT requested — don't build unless asked: roster editing UI,
+  CSV/Excel export, multi-cycle campaigns (year-over-year comparison).
+
+## 6. Pending / open items
+
+1. **Push the uncommitted dependency fix** (§7) — the Windows demo stays broken
+   until the branch is updated.
+2. **UI redesign status — ask the user before doing visual work.** History: the user
+   rejected the first UI ("looks terrible, like AI, simple squares everywhere, like
+   Streamlit") and asked for an Apple-app feel (glass/blur, depth, vibrant colors with
+   Schneider green #3DCD58 as hero accent, scroll/hover/cursor animations, springy
+   easing, respect `prefers-reduced-motion`). Commit `03b5fe7` then shipped a "dark
+   UI" redesign + thermal map; it's unclear whether the user has approved the current
+   look. If more visual work is requested: the look lives in `src/app/globals.css`
+   (semantic class names) + `src/app/fx.tsx` (client effects). **Keep class names and
+   visible text labels stable** so `e2e/smoke.mjs` keeps passing; rerun E2E after any
+   redesign.
+3. **11 placeholder AM names** — waiting on the user for real names (§2).
+4. `demo.bat` sets `APEX_DEMO=1` but no code reads it (vestigial) — demo data is
+   loaded via the admin "Load demo dataset" button.
+
+## 7. The Windows demo launcher (`demo.bat`)
+
+`demo.bat` (now archived at repo root; the distributed copy lives one folder up on the
+user's Mac) is a double-click Windows demo:
+
+1. Installs Node.js LTS via winget if missing.
+2. Downloads `https://github.com/aliz2007/SchneiderElectric/archive/refs/heads/claude/apex-assessment-ui-redesign-vr8uel.zip`
+   on every launch into `%LOCALAPPDATA%\apex-assessment-demo`.
+3. Skips install/build when the zip hash is unchanged; otherwise
+   `npm ci --no-audit --no-fund` + `npm run build`.
+4. Starts `npm start -- -p 3000`, opens the browser, prints the vladimir login.
+
+**2026-07-19 incident (fixed, pending push):** install crashed on the demo PC —
+`better-sqlite3@11.10.0` has no prebuilt binary for Node 24 (ABI v137, win32-x64),
+so npm fell back to `node-gyp`, which needs Python + VS Build Tools. Fix:
+`better-sqlite3` → `^12.11.1` (v12 ships `node-v137-win32-x64` prebuilds — verified;
+no compilation ever needed) and `next` `15.1.6` → `15.5.20` (patches CVE-2025-66478,
+which npm was warning about during the demo install). Verified on Node 24.18.0:
+module loads, `npm run build` passes, E2E 22/22. Since the launcher runs `npm ci`
+against the committed lockfile, pushing the lockfile IS the fix.
+
+## 8. Machine-specific warning (this Mac)
+
+The project folder is deeply nested with DUPLICATE copies:
+`~/schneider project/SchneiderElectric/SchneiderElectric/…/SchneiderElectric` (6×).
+**The canonical repo** is the deepest one (the one containing this file), whose
+`origin` is `github.com/aliz2007/SchneiderElectric.git`. One level up there is
+ANOTHER git repo with its own older `apex-assessment/`, `HANDOFF.md`, and the
+distributed `demo.bat` — a leftover from an earlier session that pushed to the wrong
+place. Don't edit or commit in the parent copy; consider cleaning it up with the user.

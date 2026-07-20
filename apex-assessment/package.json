@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
-    "better-sqlite3": "^11.8.1",
-    "next": "15.1.6",
+    "better-sqlite3": "^12.11.1",
+    "next": "15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
