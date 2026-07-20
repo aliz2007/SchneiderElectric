@@ -12,6 +12,7 @@ import {
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
+import { buildNarrative } from "@/lib/report-narrative";
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -77,6 +78,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     } else last.rows.push(row);
   }
 
+  const hasPanelData = levels.expert.size > 0;
+  const narrative = buildNarrative({
+    amName: am.name,
+    track: am.track,
+    hasPanelData,
+    rows,
+    caps,
+    strengths,
+    development,
+    perceptionGaps,
+  });
+
   const buffer = await renderToBuffer(
     createElement(AmReportPdf, {
       amName: am.name,
@@ -96,7 +109,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       development,
       perceptionGaps,
       clusters,
-      hasPanelData: levels.expert.size > 0,
+      narrative,
+      hasPanelData,
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );
 

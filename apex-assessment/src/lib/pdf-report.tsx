@@ -1,10 +1,15 @@
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { Narrative } from "./report-narrative";
 
 /**
  * Individual APEX assessment report — printable PDF mirror of /analysis/am/[id].
  * Light theme on purpose: this document is meant to be printed and shared.
  * Stick to WinAnsi-safe characters (no ✓/✗/↓) — the base Helvetica font
  * can't encode them.
+ *
+ * Page order: (1) cover, (2) overview — profile + strengths/development +
+ * perception, (3) narrative — strengths/weaknesses paragraphs + capability
+ * definitions, (4) capability detail table (with theme notes).
  */
 
 export type ReportRow = {
@@ -28,6 +33,7 @@ export type AmReportProps = {
   development: { name: string; expert: number; req: number | null }[];
   perceptionGaps: { name: string; perception: number; self?: number; expert?: number }[];
   clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[];
+  narrative: Narrative;
   hasPanelData: boolean;
 };
 
@@ -169,6 +175,49 @@ const s = StyleSheet.create({
     paddingTop: 1.5,
   },
   themeNoteText: { flex: 1, fontSize: 8.5, color: "#3c4760", lineHeight: 1.4 },
+
+  // ---- cover page ----
+  coverPage: { fontFamily: "Helvetica", color: INK, flexDirection: "column" },
+  coverBand: { backgroundColor: GREEN_DEEP, paddingTop: 52, paddingBottom: 38, paddingHorizontal: 46 },
+  coverBrandRow: { flexDirection: "row", alignItems: "center", gap: 11 },
+  coverLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coverLogoText: { color: "#ffffff", fontSize: 16, fontFamily: "Helvetica-Bold" },
+  coverBrandName: { color: "#ffffff", fontSize: 16, fontFamily: "Helvetica-Bold", letterSpacing: 0.2 },
+  coverBrandSub: { color: "#cdead8", fontSize: 8.5, marginTop: 2 },
+  coverBody: { paddingHorizontal: 46, paddingTop: 92, flexGrow: 1 },
+  coverKicker: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: GREEN_DEEP,
+    letterSpacing: 2.2,
+    textTransform: "uppercase",
+  },
+  coverName: { fontSize: 34, fontFamily: "Helvetica-Bold", letterSpacing: -0.6, lineHeight: 1.15, marginTop: 12 },
+  coverAccount: { fontSize: 12, color: MUTED, marginTop: 8, marginBottom: 16 },
+  coverMeta: { paddingHorizontal: 46, paddingBottom: 44 },
+  coverMetaLine: { height: 1, backgroundColor: LINE, marginBottom: 12 },
+  coverMetaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
+  coverConf: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#b03a3a", letterSpacing: 1.4 },
+  coverMetaText: { fontSize: 8.5, color: MUTED, marginTop: 3 },
+  coverLensRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+
+  // ---- narrative page ----
+  para: { fontSize: 9.5, color: "#31405e", lineHeight: 1.55, marginBottom: 11 },
+  paraHead: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: INK, marginTop: 3, marginBottom: 4 },
+  defDivider: { height: 1, backgroundColor: LINE, marginTop: 4, marginBottom: 14 },
+  defItem: { borderLeftWidth: 2.5, borderLeftColor: "#bfe9cf", paddingLeft: 11, marginBottom: 11 },
+  defHead: { flexDirection: "row", alignItems: "baseline", gap: 7, marginBottom: 2 },
+  defName: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: INK },
+  defCluster: { flexGrow: 1, fontSize: 7.2, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 },
+  defLevel: { fontSize: 7, fontFamily: "Helvetica-Bold", color: GREEN_DEEP, letterSpacing: 0.6 },
+  defText: { fontSize: 9, color: "#3c4760", lineHeight: 1.45 },
 });
 
 function Lvl({ level }: { level?: number }) {
@@ -190,6 +239,127 @@ function SectionHead({ title, sub }: { title: string; sub?: string }) {
   );
 }
 
+/** Green top band + page footer, repeated (fixed) on every content page. */
+function Chrome({ generatedAt }: { generatedAt: string }) {
+  return (
+    <>
+      <View style={s.topBand} fixed />
+      <View style={s.footer} fixed>
+        <View style={s.footerLine} />
+        <View style={s.footerRow}>
+          <Text style={s.footerText}>
+            Schneider Electric · APEX TOP 25 — Confidential assessment report · Generated {generatedAt}
+          </Text>
+          <Text
+            style={s.footerText}
+            render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
+          />
+        </View>
+      </View>
+    </>
+  );
+}
+
+function CoverPage(p: AmReportProps) {
+  return (
+    <Page size="A4" style={s.coverPage}>
+      <View style={s.coverBand}>
+        <View style={s.coverBrandRow}>
+          <View style={s.coverLogo}>
+            <Text style={s.coverLogoText}>SE</Text>
+          </View>
+          <View>
+            <Text style={s.coverBrandName}>Schneider Electric</Text>
+            <Text style={s.coverBrandSub}>APEX TOP 25 · Strategic Account Manager Assessment</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={s.coverBody}>
+        <Text style={s.coverKicker}>Individual Capability Report</Text>
+        <Text style={s.coverName}>{p.amName}</Text>
+        <Text style={s.coverAccount}>{p.account}</Text>
+        <View style={s.chipRow}>
+          <View style={[s.chip, s.chipAccent]}>
+            <Text style={s.chipText}>{p.zone}</Text>
+          </View>
+          <View style={s.chip}>
+            <Text style={s.chipText}>{p.track} track</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={s.coverMeta}>
+        <View style={s.coverMetaLine} />
+        <View style={s.coverMetaRow}>
+          <View>
+            <Text style={s.coverConf}>CONFIDENTIAL</Text>
+            <Text style={s.coverMetaText}>Prepared for internal talent-development use only.</Text>
+          </View>
+          <Text style={s.coverMetaText}>Generated {p.generatedAt}</Text>
+        </View>
+        <View style={s.coverLensRow}>
+          {p.lensStatus.map((l) => (
+            <View key={l.label} style={s.chip}>
+              <Text style={[s.chipText, l.submitted ? s.chipOk : s.chipPending]}>
+                {l.label}: {l.submitted ? "submitted" : "pending"}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Page>
+  );
+}
+
+function NarrativePage(p: AmReportProps) {
+  const n = p.narrative;
+  return (
+    <Page size="A4" style={s.page}>
+      <Chrome generatedAt={p.generatedAt} />
+
+      <SectionHead
+        title="Strengths & development summary"
+        sub="A narrative read of the APEX Panel scores and self-perception"
+      />
+      <Text style={s.para}>{n.summary}</Text>
+
+      <Text style={s.paraHead}>Strengths</Text>
+      <Text style={s.para}>{n.strengths}</Text>
+
+      <Text style={s.paraHead}>Development areas</Text>
+      <Text style={s.para}>{n.development}</Text>
+
+      {n.perception ? (
+        <>
+          <Text style={s.paraHead}>Self-perception vs panel</Text>
+          <Text style={s.para}>{n.perception}</Text>
+        </>
+      ) : null}
+
+      {n.definitions.length > 0 && (
+        <>
+          <View style={s.defDivider} />
+          <SectionHead
+            title="Capability definitions"
+            sub="The expected standard for each capability named above — the behavioural anchor at the level this track requires"
+          />
+          {n.definitions.map((d) => (
+            <View key={d.name} style={s.defItem} wrap={false}>
+              <View style={s.defHead}>
+                <Text style={s.defName}>{d.name}</Text>
+                <Text style={s.defCluster}>{d.cluster}</Text>
+                <Text style={s.defLevel}>{d.applicable ? `STANDARD L${d.level}` : "REFERENCE L2"}</Text>
+              </View>
+              <Text style={s.defText}>{d.text}</Text>
+            </View>
+          ))}
+        </>
+      )}
+    </Page>
+  );
+}
+
 export function AmReportPdf(p: AmReportProps) {
   return (
     <Document
@@ -197,21 +367,10 @@ export function AmReportPdf(p: AmReportProps) {
       author="Schneider Electric"
       subject="APEX TOP 25 individual capability report"
     >
-      <Page size="A4" style={s.page}>
-        <View style={s.topBand} fixed />
+      <CoverPage {...p} />
 
-        <View style={s.footer} fixed>
-          <View style={s.footerLine} />
-          <View style={s.footerRow}>
-            <Text style={s.footerText}>
-              Schneider Electric · APEX TOP 25 — Confidential assessment report · Generated {p.generatedAt}
-            </Text>
-            <Text
-              style={s.footerText}
-              render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
-            />
-          </View>
-        </View>
+      <Page size="A4" style={s.page}>
+        <Chrome generatedAt={p.generatedAt} />
 
         {/* brand */}
         <View style={s.brandRow}>
@@ -325,13 +484,18 @@ export function AmReportPdf(p: AmReportProps) {
           </View>
         )}
 
-        {/* capability detail — starts on its own page, heading + table kept together */}
-        <View break>
-          <SectionHead
-            title="Capability detail"
-            sub="Three lenses vs the required level, grouped by cluster"
-          />
-          <View style={s.table}>
+      </Page>
+
+      <NarrativePage {...p} />
+
+      {/* capability detail — three lenses vs required, grouped by cluster */}
+      <Page size="A4" style={s.page}>
+        <Chrome generatedAt={p.generatedAt} />
+        <SectionHead
+          title="Capability detail"
+          sub="Three lenses vs the required level, grouped by cluster"
+        />
+        <View style={s.table}>
           <View style={s.thead}>
             <Text style={[s.th, s.cellCap]}>Capability</Text>
             <Text style={[s.th, s.cellText]}>Required</Text>
@@ -385,7 +549,6 @@ export function AmReportPdf(p: AmReportProps) {
               ))}
             </View>
           ))}
-          </View>
         </View>
       </Page>
     </Document>
