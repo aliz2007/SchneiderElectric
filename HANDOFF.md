@@ -110,9 +110,15 @@ Next.js 15 (App Router, server actions) · React 19 · better-sqlite3 ·
   - `/analysis/individuals` + `/analysis/am/[id]` — Self vs Manager vs Panel,
     gap-to-required, strengths, development areas, perception gaps (|self − panel| ≥ 1),
     and the Manager/Panel **theme notes** shown under each theme inside the capability
-    detail. **Export PDF** button → `GET /analysis/am/[id]/pdf` renders a styled report
-    server-side (`src/lib/pdf-report.tsx`, theme notes embedded in the capability-detail
-    table), superadmin-only.
+    detail. **Export PDF** button → `GET /analysis/am/[id]/pdf` renders a styled
+    server-side report (`src/lib/pdf-report.tsx`), superadmin-only, as **4 ordered pages**:
+    (1) cover, (2) overview = profile + strengths/development + perception gaps,
+    (3) narrative = a per-person strengths/weaknesses write-up + a definition of every
+    capability it names, (4) capability-detail table with theme notes. The narrative is
+    generated **deterministically** from the person's scores (`src/lib/report-narrative.ts`)
+    — no LLM/external call — and falls back to provisional wording when the panel hasn't
+    scored yet. Capability definitions reuse the rubric behavioural anchor at the required
+    level (the source Excel labels those anchors the "capability definitions").
 - **Auth:** scrypt password hashes, httpOnly cookie sessions in DB, role checks in
   every page AND every server action.
 - **Analysis uses submitted assessments only** — drafts stay private to their author.
@@ -124,6 +130,9 @@ src/lib/db.ts           schema + auto-seed (users, sessions, account_managers,
                         capabilities, assignments, assessments[unique am+lens], ratings,
                         theme_notes[unique assessment+cluster])
 src/lib/queries.ts      all data access + analysis math (zoneHeatmap, trainingPriorities…)
+src/lib/report-narrative.ts  deterministic strengths/weaknesses prose + capability
+                        definitions for the PDF narrative page (no LLM)
+src/lib/pdf-report.tsx  4-page @react-pdf report (cover / overview / narrative / detail)
 src/lib/session.ts      getCurrentUser / requireUser / requireSuperadmin
 src/app/(shell)/…       rate/ (wizard), analysis/, admin/users/
 e2e/smoke.mjs           Playwright E2E suite — 32 tests (see header comment for how to
