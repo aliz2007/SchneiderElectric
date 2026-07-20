@@ -695,6 +695,24 @@ select.input option { background: #0e1729; color: var(--ink); }
 .note-lens { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-left: 6px; }
 .note-text { font-size: 13.5px; color: var(--ink-2); margin-top: 2px; }
 
+/* theme (cluster) note shown under a theme header inside capability detail */
+.theme-note-block {
+  border-left: 3px solid rgba(61, 205, 88, 0.5);
+  padding: 4px 0 4px 13px; margin: 4px 0 8px;
+}
+.theme-note-block .note-lens { margin-left: 0; }
+.theme-note-block .note-text { font-size: 13px; }
+
+/* theme-note editor in the rating wizard */
+.theme-note-field label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px; }
+.theme-note-name {
+  text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; font-size: 11.5px;
+  background: linear-gradient(90deg, var(--se-green-bright), #9be8ab);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.theme-note-hint { font-weight: 500; color: var(--muted); font-size: 12px; }
+.theme-notes-review { border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: 8px; }
+
 /* ---------- admin ---------- */
 
 .details-box {

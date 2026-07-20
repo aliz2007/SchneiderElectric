@@ -11,6 +11,9 @@ export type AssignResult = { ok: boolean; error?: string };
 export async function selfAssign(amId: number): Promise<AssignResult> {
   const user = await requireUser();
   if (!user.lens) return { ok: false, error: "Your account has no assessment lens configured." };
+  if (user.lens === "self") {
+    return { ok: false, error: "Self-assessors can only complete their own assessment." };
+  }
   const am = getAM(amId);
   if (!am) return { ok: false, error: "Unknown Account Manager." };
   if (isAssigned(user.id, amId)) return { ok: true };

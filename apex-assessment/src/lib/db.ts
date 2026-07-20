@@ -89,6 +89,15 @@ function migrate(db: Database.Database) {
       note TEXT,
       PRIMARY KEY (assessment_id, capability_id)
     );
+
+    -- One free-text note per theme (capability cluster) per assessment. Captured by
+    -- Manager / APEX Panel evaluators only (self-assessments carry no notes).
+    CREATE TABLE IF NOT EXISTS theme_notes (
+      assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+      cluster TEXT NOT NULL,
+      note TEXT,
+      PRIMARY KEY (assessment_id, cluster)
+    );
   `);
 
   const capCount = (db.prepare("SELECT COUNT(*) AS n FROM capabilities").get() as { n: number }).n;

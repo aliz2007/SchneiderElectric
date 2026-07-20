@@ -88,12 +88,19 @@ Next.js 15 (App Router, server actions) · React 19 · better-sqlite3 ·
   set assessor lens (self/manager/expert), assign AMs, enable/disable, reset
   passwords. Data tools: **Load demo dataset** (fills all 75 assessments with
   plausible submitted scores) and **Clear all ratings**.
-- **Assessors** self-assign AMs by typing a name on My Assessments (admin can also
-  pre-assign). One evaluator per AM per lens.
-- **Rating wizard** (`/rate`): one capability per screen, rubric anchors inline,
-  keyboard shortcuts (1/2/3, ←/→), notes/evidence field, autosave (700 ms debounce),
-  progress dots, review screen, submit → locks. Superadmin can reopen a submitted
-  assessment.
+- **Assessors** (Manager / APEX Panel) self-assign AMs by typing a name on My
+  Assessments (admin can also pre-assign). One evaluator per AM per lens.
+  **Self-assessors are the exception**: they only ever assess themselves, so `/rate`
+  redirects them straight onto their own self-assessment (their single linked AM) — no
+  pick-someone list, and self-assign is refused server-side. If no AM is linked yet they
+  see a "ask your administrator" banner.
+- **Rating wizard** (`/rate/[amId]`): one capability per screen, rubric anchors inline,
+  keyboard shortcuts (1/2/3, ←/→), autosave (700 ms debounce), progress dots, review
+  screen, submit → locks. Superadmin can reopen a submitted assessment.
+  **Theme notes:** Manager & APEX Panel capture one free-text note per theme (capability
+  cluster, e.g. "Executive & Customer Leadership") — editable in-context on each
+  capability screen and all together on the review screen. Self-assessments carry **no
+  notes** (enforced server-side). Stored in the `theme_notes` table.
 - **Analysis** (dashboard is visible to everyone signed in; individual-level pages
   are superadmin-only):
   - `/analysis` — completion KPIs, interactive geographic zone performance map,
@@ -102,8 +109,10 @@ Next.js 15 (App Router, server actions) · React 19 · better-sqlite3 ·
   - `/analysis/zone/[zone]` — AM × capability heat maps (track-aware).
   - `/analysis/individuals` + `/analysis/am/[id]` — Self vs Manager vs Panel,
     gap-to-required, strengths, development areas, perception gaps (|self − panel| ≥ 1),
-    evidence notes. **Export PDF** button → `GET /analysis/am/[id]/pdf` renders a
-    styled 2-page report server-side (`src/lib/pdf-report.tsx`), superadmin-only.
+    and the Manager/Panel **theme notes** shown under each theme inside the capability
+    detail. **Export PDF** button → `GET /analysis/am/[id]/pdf` renders a styled report
+    server-side (`src/lib/pdf-report.tsx`, theme notes embedded in the capability-detail
+    table), superadmin-only.
 - **Auth:** scrypt password hashes, httpOnly cookie sessions in DB, role checks in
   every page AND every server action.
 - **Analysis uses submitted assessments only** — drafts stay private to their author.
@@ -112,11 +121,12 @@ Key files:
 ```
 src/lib/seed-data.ts    rubric (22 caps, L1/L2/L3 anchors) + 25-AM roster (1:1 from Excel)
 src/lib/db.ts           schema + auto-seed (users, sessions, account_managers,
-                        capabilities, assignments, assessments[unique am+lens], ratings)
+                        capabilities, assignments, assessments[unique am+lens], ratings,
+                        theme_notes[unique assessment+cluster])
 src/lib/queries.ts      all data access + analysis math (zoneHeatmap, trainingPriorities…)
 src/lib/session.ts      getCurrentUser / requireUser / requireSuperadmin
 src/app/(shell)/…       rate/ (wizard), analysis/, admin/users/
-e2e/smoke.mjs           Playwright E2E suite — 22 tests (see header comment for how to
+e2e/smoke.mjs           Playwright E2E suite — 32 tests (see header comment for how to
                         run: fresh DB + prod server on :3111; on this Mac use
                         CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 ```
@@ -130,7 +140,7 @@ npm run dev          # http://localhost:3000 — login vladimir / apex2026
 ```
 
 Prod: `npm run build && npm start`. E2E: build, delete `data/`,
-`npx next start -p 3111`, then `node e2e/smoke.mjs` (currently **22/22 passing**).
+`npx next start -p 3111`, then `node e2e/smoke.mjs` (currently **32/32 passing**).
 
 ## 5. Agreed decisions (don't relitigate)
 

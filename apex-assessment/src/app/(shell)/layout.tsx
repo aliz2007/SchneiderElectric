@@ -6,7 +6,9 @@ import { logout } from "./actions";
 export default async function ShellLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
-  const rateItems: NavItem[] = user.lens ? [{ href: "/rate", label: "My Assessments", ico: "✎" }] : [];
+  const rateItems: NavItem[] = user.lens
+    ? [{ href: "/rate", label: user.lens === "self" ? "My Self-Assessment" : "My Assessments", ico: "✎" }]
+    : [];
   // the aggregated dashboard is open to everyone; individual results & access
   // management stay superadmin-only
   const adminItems: NavItem[] = [

@@ -1,6 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { getAM, getOrCreateAssessment, getRatings, isAssigned, listCapabilities } from "@/lib/queries";
+import {
+  getAM,
+  getOrCreateAssessment,
+  getRatings,
+  getThemeNotes,
+  isAssigned,
+  listCapabilities,
+} from "@/lib/queries";
 import { LENS_LABELS } from "@/lib/seed-data";
 import Wizard, { type WizardCap, type WizardInitial } from "./wizard";
 
@@ -31,7 +38,14 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
   }));
 
   const initial: WizardInitial = {};
-  for (const r of ratings) initial[r.capability_id] = { level: r.level, note: r.note ?? "" };
+  for (const r of ratings) initial[r.capability_id] = { level: r.level };
+
+  // Manager / APEX Panel capture one note per theme; self-assessments carry no notes.
+  const themeNotesEnabled = user.lens !== "self";
+  const initialThemeNotes: Record<string, string> = {};
+  if (themeNotesEnabled) {
+    for (const t of getThemeNotes(assessment.id)) initialThemeNotes[t.cluster] = t.note;
+  }
 
   return (
     <Wizard
@@ -39,6 +53,8 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
       lensLabel={LENS_LABELS[user.lens]}
       caps={caps}
       initial={initial}
+      themeNotesEnabled={themeNotesEnabled}
+      initialThemeNotes={initialThemeNotes}
       submitted={assessment.status === "submitted"}
     />
   );

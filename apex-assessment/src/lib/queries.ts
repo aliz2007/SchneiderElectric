@@ -76,13 +76,40 @@ export function getRatings(assessmentId: number): RatingRow[] {
     .all(assessmentId) as RatingRow[];
 }
 
-export function upsertRating(assessmentId: number, capabilityId: number, level: number | null, note: string | null) {
+export function upsertRating(assessmentId: number, capabilityId: number, level: number | null) {
   const db = getDb();
   db.prepare(
-    `INSERT INTO ratings (assessment_id, capability_id, level, note)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT (assessment_id, capability_id) DO UPDATE SET level = excluded.level, note = excluded.note`
-  ).run(assessmentId, capabilityId, level, note);
+    `INSERT INTO ratings (assessment_id, capability_id, level)
+     VALUES (?, ?, ?)
+     ON CONFLICT (assessment_id, capability_id) DO UPDATE SET level = excluded.level`
+  ).run(assessmentId, capabilityId, level);
+  db.prepare("UPDATE assessments SET updated_at = datetime('now') WHERE id = ?").run(assessmentId);
+}
+
+// ---------- theme (cluster) notes ----------
+
+export type ThemeNoteRow = { cluster: string; note: string };
+
+/** All theme notes captured on a single assessment (draft or submitted). */
+export function getThemeNotes(assessmentId: number): ThemeNoteRow[] {
+  return getDb()
+    .prepare(
+      "SELECT cluster, note FROM theme_notes WHERE assessment_id = ? AND note IS NOT NULL AND TRIM(note) != ''"
+    )
+    .all(assessmentId) as ThemeNoteRow[];
+}
+
+export function upsertThemeNote(assessmentId: number, cluster: string, note: string | null) {
+  const db = getDb();
+  if (note == null) {
+    db.prepare("DELETE FROM theme_notes WHERE assessment_id = ? AND cluster = ?").run(assessmentId, cluster);
+  } else {
+    db.prepare(
+      `INSERT INTO theme_notes (assessment_id, cluster, note)
+       VALUES (?, ?, ?)
+       ON CONFLICT (assessment_id, cluster) DO UPDATE SET note = excluded.note`
+    ).run(assessmentId, cluster, note);
+  }
   db.prepare("UPDATE assessments SET updated_at = datetime('now') WHERE id = ?").run(assessmentId);
 }
 
@@ -175,15 +202,19 @@ export function submittedLevels(amId: number): Record<Lens, Map<number, number>>
   return out;
 }
 
-export function submittedNotes(amId: number): { lens: Lens; capability_id: number; note: string }[] {
+/**
+ * Theme (cluster) notes from submitted Manager / APEX Panel assessments, for the
+ * individual analysis view and PDF. Self-assessments never carry notes.
+ */
+export function submittedThemeNotes(amId: number): { lens: Lens; cluster: string; note: string }[] {
   return getDb()
     .prepare(
-      `SELECT a.lens, r.capability_id, r.note
-       FROM assessments a JOIN ratings r ON r.assessment_id = a.id
-       WHERE a.am_id = ? AND a.status = 'submitted' AND r.note IS NOT NULL AND TRIM(r.note) != ''
-       ORDER BY r.capability_id`
+      `SELECT a.lens, t.cluster, t.note
+       FROM assessments a JOIN theme_notes t ON t.assessment_id = a.id
+       WHERE a.am_id = ? AND a.status = 'submitted' AND a.lens IN ('manager','expert')
+         AND t.note IS NOT NULL AND TRIM(t.note) != ''`
     )
-    .all(amId) as { lens: Lens; capability_id: number; note: string }[];
+    .all(amId) as { lens: Lens; cluster: string; note: string }[];
 }
 
 export type LensStatus = { status: "missing" | "draft" | "submitted"; rated: number };

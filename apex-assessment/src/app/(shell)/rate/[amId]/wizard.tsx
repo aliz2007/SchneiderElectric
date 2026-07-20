@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { saveRating, submit } from "./actions";
+import { saveRating, saveThemeNote, submit } from "./actions";
 
 export type WizardCap = {
   id: number;
@@ -13,7 +13,7 @@ export type WizardCap = {
   l3: string;
 };
 
-export type WizardInitial = Record<number, { level: number | null; note: string }>;
+export type WizardInitial = Record<number, { level: number | null }>;
 
 const LEVEL_META = [
   { level: 1, tag: "L1", name: "Developing", key: "l1" as const },
@@ -26,25 +26,41 @@ export default function Wizard({
   lensLabel,
   caps,
   initial,
+  themeNotesEnabled,
+  initialThemeNotes,
   submitted,
 }: {
   am: { id: number; name: string; account: string; zone: string; track: string };
   lensLabel: string;
   caps: WizardCap[];
   initial: WizardInitial;
+  themeNotesEnabled: boolean;
+  initialThemeNotes: Record<string, string>;
   submitted: boolean;
 }) {
   const [answers, setAnswers] = useState<WizardInitial>(() => {
     const a: WizardInitial = {};
-    for (const c of caps) a[c.id] = initial[c.id] ?? { level: null, note: "" };
+    for (const c of caps) a[c.id] = initial[c.id] ?? { level: null };
     return a;
+  });
+  // ordered, de-duplicated list of themes (clusters) as they appear in the rubric
+  const themes = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of caps) if (!seen.has(c.cluster)) { seen.add(c.cluster); out.push(c.cluster); }
+    return out;
+  }, [caps]);
+  const [themeNotes, setThemeNotes] = useState<Record<string, string>>(() => {
+    const n: Record<string, string> = {};
+    for (const t of themes) n[t] = initialThemeNotes[t] ?? "";
+    return n;
   });
   const firstUnanswered = caps.findIndex((c) => (initial[c.id]?.level ?? null) == null);
   const [idx, setIdx] = useState(submitted ? -1 : firstUnanswered === -1 ? -1 : firstUnanswered);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitting, startSubmit] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const answeredCount = useMemo(
     () => caps.filter((c) => answers[c.id]?.level != null).length,
@@ -54,38 +70,30 @@ export default function Wizard({
   const onReview = idx === -1;
   const cap = onReview ? null : caps[idx];
 
-  const persist = useCallback(
-    (capId: number, level: number | null, note: string) => {
-      setSaveState("saving");
-      saveRating(am.id, capId, level, note)
-        .then(() => setSaveState("saved"))
-        .catch(() => setSaveState("error"));
-    },
-    [am.id]
-  );
-
   const choose = useCallback(
     (capId: number, level: number) => {
       if (submitted) return;
-      setAnswers((prev) => {
-        const next = { ...prev, [capId]: { ...prev[capId], level } };
-        persist(capId, level, next[capId].note);
-        return next;
-      });
+      setAnswers((prev) => ({ ...prev, [capId]: { level } }));
+      setSaveState("saving");
+      saveRating(am.id, capId, level)
+        .then(() => setSaveState("saved"))
+        .catch(() => setSaveState("error"));
     },
-    [persist, submitted]
+    [am.id, submitted]
   );
 
-  const setNote = useCallback(
-    (capId: number, note: string) => {
-      setAnswers((prev) => {
-        const next = { ...prev, [capId]: { ...prev[capId], note } };
-        if (noteTimer.current) clearTimeout(noteTimer.current);
-        noteTimer.current = setTimeout(() => persist(capId, next[capId].level, note), 700);
-        return next;
-      });
+  const setThemeNote = useCallback(
+    (cluster: string, note: string) => {
+      setThemeNotes((prev) => ({ ...prev, [cluster]: note }));
+      if (noteTimers.current[cluster]) clearTimeout(noteTimers.current[cluster]);
+      noteTimers.current[cluster] = setTimeout(() => {
+        setSaveState("saving");
+        saveThemeNote(am.id, cluster, note)
+          .then(() => setSaveState("saved"))
+          .catch(() => setSaveState("error"));
+      }, 700);
     },
-    [persist]
+    [am.id]
   );
 
   // keyboard shortcuts: 1/2/3 select level, arrows navigate
@@ -176,18 +184,23 @@ export default function Wizard({
               );
             })}
           </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label htmlFor={`note-${cap.id}`}>Notes · evidence & behavioural observations (optional)</label>
-            <textarea
-              id={`note-${cap.id}`}
-              className="input"
-              rows={2}
-              placeholder="Concrete examples supporting this rating…"
-              value={answers[cap.id]?.note ?? ""}
-              onChange={(e) => setNote(cap.id, e.target.value)}
-              disabled={submitted}
-            />
-          </div>
+          {themeNotesEnabled && (
+            <div className="field theme-note-field" style={{ marginBottom: 0 }}>
+              <label htmlFor={`theme-note-${idx}`}>
+                Theme notes · <span className="theme-note-name">{cap.cluster}</span>
+                <span className="theme-note-hint"> — one note for this theme, shared across its capabilities</span>
+              </label>
+              <textarea
+                id={`theme-note-${idx}`}
+                className="input"
+                rows={2}
+                placeholder={`Overall observations on ${cap.cluster}…`}
+                value={themeNotes[cap.cluster] ?? ""}
+                onChange={(e) => setThemeNote(cap.cluster, e.target.value)}
+                disabled={submitted}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -207,10 +220,7 @@ export default function Wizard({
                   <span className={`lvl-chip ${a?.level ? `lvl-${a.level}` : "lvl-none"}`}>
                     {a?.level ? `L${a.level}` : "—"}
                   </span>
-                  <span className="review-cap">
-                    {c.name}
-                    {a?.note ? <span style={{ color: "var(--muted)" }}> · 📝</span> : null}
-                  </span>
+                  <span className="review-cap">{c.name}</span>
                   {!submitted && (
                     <button className="btn btn-sm btn-ghost" type="button" onClick={() => setIdx(i)}>
                       Edit
@@ -220,6 +230,34 @@ export default function Wizard({
               );
             })}
           </div>
+
+          {themeNotesEnabled && (
+            <div className="theme-notes-review">
+              <h3 className="card-title" style={{ fontSize: 15, marginTop: 22 }}>
+                Theme notes
+              </h3>
+              <p className="card-sub" style={{ marginBottom: 12 }}>
+                One note per theme — these appear on the individual report and PDF.
+              </p>
+              {themes.map((t) => (
+                <div key={t} className="field theme-note-field">
+                  <label htmlFor={`review-note-${t}`}>
+                    <span className="theme-note-name">{t}</span>
+                  </label>
+                  <textarea
+                    id={`review-note-${t}`}
+                    className="input"
+                    rows={2}
+                    placeholder={`Overall observations on ${t}…`}
+                    value={themeNotes[t] ?? ""}
+                    onChange={(e) => setThemeNote(t, e.target.value)}
+                    disabled={submitted}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           {submitError && <div className="form-error" style={{ marginTop: 14 }}>{submitError}</div>}
           {!submitted && (
             <div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center" }}>

@@ -27,8 +27,7 @@ export type AmReportProps = {
   strengths: { name: string; expert: number; req: number | null }[];
   development: { name: string; expert: number; req: number | null }[];
   perceptionGaps: { name: string; perception: number; self?: number; expert?: number }[];
-  clusters: { name: string; rows: ReportRow[] }[];
-  notes: { capability: string; lens: string; note: string }[];
+  clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[];
   hasPanelData: boolean;
 };
 
@@ -150,11 +149,26 @@ const s = StyleSheet.create({
   cellNum: { width: "11.6%", alignItems: "center" },
   cellText: { width: "11.6%", textAlign: "center" },
 
-  noteBlock: { borderLeftWidth: 2.5, borderLeftColor: "#bfe9cf", backgroundColor: CARD, borderRadius: 6, padding: 9, marginBottom: 7 },
-  noteMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
-  noteCap: { fontSize: 9, fontFamily: "Helvetica-Bold" },
-  noteLens: { fontSize: 7.5, color: GREEN_DEEP, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.6 },
-  noteText: { fontSize: 8.8, color: "#3c4760", lineHeight: 1.45 },
+  // theme (cluster) note rendered inside the capability-detail table, under the header
+  themeNoteRow: {
+    paddingTop: 5,
+    paddingBottom: 5,
+    paddingHorizontal: 10,
+    backgroundColor: "#fbfdfb",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f3f8",
+  },
+  themeNote: { flexDirection: "row", gap: 6, marginBottom: 3 },
+  themeNoteLens: {
+    width: 62,
+    fontSize: 7,
+    color: GREEN_DEEP,
+    fontFamily: "Helvetica-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingTop: 1.5,
+  },
+  themeNoteText: { flex: 1, fontSize: 8.5, color: "#3c4760", lineHeight: 1.4 },
 });
 
 function Lvl({ level }: { level?: number }) {
@@ -331,6 +345,16 @@ export function AmReportPdf(p: AmReportProps) {
               <View style={s.clusterRow} wrap={false}>
                 <Text style={s.clusterText}>{cl.name.toUpperCase()}</Text>
               </View>
+              {cl.notes.length > 0 && (
+                <View style={s.themeNoteRow} wrap={false}>
+                  {cl.notes.map((n, i) => (
+                    <View key={i} style={[s.themeNote, i === cl.notes.length - 1 ? { marginBottom: 0 } : {}]}>
+                      <Text style={s.themeNoteLens}>{n.lens}</Text>
+                      <Text style={s.themeNoteText}>{n.note}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
               {cl.rows.map((r) => (
                 <View key={r.name} style={s.tr} wrap={false}>
                   <Text style={[s.td, s.cellCap, { fontFamily: "Helvetica-Bold" }]}>{r.name}</Text>
@@ -363,22 +387,6 @@ export function AmReportPdf(p: AmReportProps) {
           ))}
           </View>
         </View>
-
-        {/* evidence notes */}
-        {p.notes.length > 0 && (
-          <View>
-            <SectionHead title="Evidence & observations" sub="Notes captured by evaluators during assessment" />
-            {p.notes.map((n, i) => (
-              <View key={i} style={s.noteBlock} wrap={false}>
-                <View style={s.noteMeta}>
-                  <Text style={s.noteCap}>{n.capability}</Text>
-                  <Text style={s.noteLens}>{n.lens}</Text>
-                </View>
-                <Text style={s.noteText}>{n.note}</Text>
-              </View>
-            ))}
-          </View>
-        )}
       </Page>
     </Document>
   );

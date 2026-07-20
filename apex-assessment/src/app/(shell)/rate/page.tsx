@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { assignedAMs, getAssessment, listAMs, ratedCount, listCapabilities } from "@/lib/queries";
 import { LENS_LABELS } from "@/lib/seed-data";
@@ -24,6 +25,25 @@ export default async function RatePage({
         <div className="banner banner-info">
           Your account has no assessment lens configured. Ask your administrator to assign you a
           role (Self / Manager / APEX Panel) and Account Managers to assess.
+        </div>
+      </div>
+    );
+  }
+
+  // A self-assessor only ever assesses themselves — skip the pick-someone list and
+  // drop them straight onto their own self-assessment (their single linked profile).
+  if (user.lens === "self") {
+    const mine = assignedAMs(user.id);
+    if (mine.length > 0) redirect(`/rate/${mine[0].id}`);
+    return (
+      <div>
+        <div className="page-head">
+          <div className="page-kicker">{LENS_LABELS.self}</div>
+          <h1 className="page-title">My Self-Assessment</h1>
+        </div>
+        <div className="banner banner-info">
+          Your self-assessment isn&apos;t set up yet. Ask your administrator to link your Account
+          Manager profile to your account so it can appear here.
         </div>
       </div>
     );

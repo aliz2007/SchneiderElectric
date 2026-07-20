@@ -10,6 +10,7 @@ import {
   ratedCount,
   submitAssessment,
   upsertRating,
+  upsertThemeNote,
 } from "@/lib/queries";
 
 /** Auth + ownership guard shared by every mutation. Returns the caller's draft assessment. */
@@ -23,13 +24,26 @@ async function guard(amId: number) {
   return { user, am, assessment };
 }
 
-export async function saveRating(amId: number, capabilityId: number, level: number | null, note: string) {
+export async function saveRating(amId: number, capabilityId: number, level: number | null) {
   const { assessment } = await guard(amId);
   if (assessment.status === "submitted") throw new Error("Assessment already submitted.");
   if (level != null && ![1, 2, 3].includes(level)) throw new Error("Invalid level.");
   const capIds = new Set(listCapabilities().map((c) => c.id));
   if (!capIds.has(capabilityId)) throw new Error("Invalid capability.");
-  upsertRating(assessment.id, capabilityId, level, note.trim() === "" ? null : note.trim());
+  upsertRating(assessment.id, capabilityId, level);
+}
+
+/**
+ * Save a Manager / APEX Panel note for one theme (capability cluster). Self-assessors
+ * do not capture notes, so the self lens is rejected server-side.
+ */
+export async function saveThemeNote(amId: number, cluster: string, note: string) {
+  const { user, assessment } = await guard(amId);
+  if (user.lens === "self") throw new Error("Self-assessments do not capture notes.");
+  if (assessment.status === "submitted") throw new Error("Assessment already submitted.");
+  const clusters = new Set(listCapabilities().map((c) => c.cluster));
+  if (!clusters.has(cluster)) throw new Error("Invalid theme.");
+  upsertThemeNote(assessment.id, cluster, note.trim() === "" ? null : note.trim());
 }
 
 export async function submit(amId: number) {

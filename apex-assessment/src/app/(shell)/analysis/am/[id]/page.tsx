@@ -7,7 +7,7 @@ import {
   listCapabilities,
   requiredLevel,
   submittedLevels,
-  submittedNotes,
+  submittedThemeNotes,
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { gapClass } from "@/lib/heat";
@@ -27,8 +27,18 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
 
   const caps = listCapabilities();
   const levels = submittedLevels(am.id);
-  const notes = submittedNotes(am.id);
-  const capById = new Map(caps.map((c) => [c.id, c]));
+
+  // Theme notes (Manager / APEX Panel) grouped by cluster, shown inside the
+  // capability detail so each theme's commentary sits with its ratings.
+  const themeNotes = submittedThemeNotes(am.id);
+  const notesByCluster = new Map<string, { lens: Lens; note: string }[]>();
+  for (const n of themeNotes) {
+    if (!notesByCluster.has(n.cluster)) notesByCluster.set(n.cluster, []);
+    notesByCluster.get(n.cluster)!.push({ lens: n.lens, note: n.note });
+  }
+  for (const list of notesByCluster.values()) {
+    list.sort((a, b) => LENSES.indexOf(a.lens) - LENSES.indexOf(b.lens));
+  }
 
   type Row = {
     cap: (typeof caps)[number];
@@ -170,6 +180,9 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
 
       <div className="card card-pad" style={{ marginBottom: 20 }}>
         <h2 className="card-title">Capability detail · three lenses vs required</h2>
+        <p className="card-sub" style={{ marginTop: -2, marginBottom: 10 }}>
+          Manager &amp; APEX Panel notes appear under each theme.
+        </p>
         <div className="legend" style={{ marginTop: 0, marginBottom: 12 }}>
           <span><span className="lens-dot ld-self" />Self</span>
           <span><span className="lens-dot ld-manager" />Manager</span>
@@ -190,26 +203,17 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
             </thead>
             <tbody>
               {clusters.map((cl) => (
-                <ClusterSection key={cl.name} name={cl.name} rows={cl.rows} />
+                <ClusterSection
+                  key={cl.name}
+                  name={cl.name}
+                  rows={cl.rows}
+                  notes={notesByCluster.get(cl.name) ?? []}
+                />
               ))}
             </tbody>
           </table>
         </div>
       </div>
-
-      {notes.length > 0 && (
-        <div className="card card-pad" style={{ marginBottom: 20 }}>
-          <h2 className="card-title">Evidence & observations</h2>
-          <p className="card-sub">Notes captured by evaluators during assessment.</p>
-          {notes.map((n, i) => (
-            <div key={i} className="note-block">
-              <span className="note-cap">{capById.get(n.capability_id)?.name}</span>
-              <span className="note-lens">{LENS_LABELS[n.lens as Lens]}</span>
-              <div className="note-text">{n.note}</div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="card card-pad">
         <h2 className="card-title">Administration</h2>
@@ -231,6 +235,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
 function ClusterSection({
   name,
   rows,
+  notes,
 }: {
   name: string;
   rows: {
@@ -241,6 +246,7 @@ function ClusterSection({
     expert?: number;
     gap: number | null;
   }[];
+  notes: { lens: Lens; note: string }[];
 }) {
   return (
     <>
@@ -249,6 +255,18 @@ function ClusterSection({
           <span className="cluster-kicker">{name}</span>
         </td>
       </tr>
+      {notes.length > 0 && (
+        <tr>
+          <td colSpan={6} style={{ paddingTop: 0, paddingBottom: 4 }}>
+            {notes.map((n, i) => (
+              <div key={i} className="theme-note-block">
+                <span className="note-lens">{LENS_LABELS[n.lens]}</span>
+                <div className="note-text">{n.note}</div>
+              </div>
+            ))}
+          </td>
+        </tr>
+      )}
       {rows.map((r) => (
         <tr key={r.cap.id}>
           <td style={{ fontWeight: 550 }}>{r.cap.name}</td>

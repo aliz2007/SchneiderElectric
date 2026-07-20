@@ -8,7 +8,7 @@ import {
   listCapabilities,
   requiredLevel,
   submittedLevels,
-  submittedNotes,
+  submittedThemeNotes,
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
@@ -22,8 +22,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const caps = listCapabilities();
   const levels = submittedLevels(am.id);
-  const notes = submittedNotes(am.id);
-  const capById = new Map(caps.map((c) => [c.id, c]));
+
+  // Manager / APEX Panel theme notes, grouped by cluster and ordered by lens.
+  const themeNotes = submittedThemeNotes(am.id);
+  const notesByCluster = new Map<string, { lens: string; note: string }[]>();
+  for (const n of themeNotes) {
+    if (!notesByCluster.has(n.cluster)) notesByCluster.set(n.cluster, []);
+    notesByCluster.get(n.cluster)!.push({ lens: n.lens, note: n.note });
+  }
+  for (const list of notesByCluster.values()) {
+    list.sort((a, b) => LENSES.indexOf(a.lens as Lens) - LENSES.indexOf(b.lens as Lens));
+    for (const item of list) item.lens = LENS_LABELS[item.lens as Lens];
+  }
 
   type FullRow = ReportRow & { perception: number | null };
   const rows: FullRow[] = caps.map((cap) => {
@@ -59,11 +69,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!))
     .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
 
-  const clusters: { name: string; rows: ReportRow[] }[] = [];
+  const clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[] = [];
   for (const row of rows) {
     const last = clusters[clusters.length - 1];
-    if (!last || last.name !== row.cluster) clusters.push({ name: row.cluster, rows: [row] });
-    else last.rows.push(row);
+    if (!last || last.name !== row.cluster) {
+      clusters.push({ name: row.cluster, rows: [row], notes: notesByCluster.get(row.cluster) ?? [] });
+    } else last.rows.push(row);
   }
 
   const buffer = await renderToBuffer(
@@ -85,11 +96,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       development,
       perceptionGaps,
       clusters,
-      notes: notes.map((n) => ({
-        capability: capById.get(n.capability_id)?.name ?? "",
-        lens: LENS_LABELS[n.lens as Lens],
-        note: n.note,
-      })),
       hasPanelData: levels.expert.size > 0,
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );

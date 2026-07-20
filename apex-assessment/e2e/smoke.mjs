@@ -12,6 +12,9 @@ const BASE = process.env.BASE ?? "http://localhost:3111";
 const SHOTS = process.env.SHOTS ?? "./e2e-shots";
 mkdirSync(SHOTS, { recursive: true });
 
+// distinctive per-theme note captured by the manager, asserted later in analysis
+const THEME_NOTE = "Strong CTO relationship; needs a steadier C-level cadence next quarter.";
+
 const results = [];
 const ok = (name) => { results.push(`✓ ${name}`); console.log(`✓ ${name}`); };
 const fail = (name, extra) => { results.push(`✗ ${name} ${extra ?? ""}`); console.log(`✗ ${name}`, extra ?? ""); };
@@ -138,19 +141,30 @@ try {
   await page.locator(".level-card").nth(0).click(); // change to L1
   await page.waitForSelector("text=Saved ✓");
   ok("rating change autosaves");
-  await page.fill("textarea", "Relies on the account team for plan direction this cycle.");
-  await page.waitForTimeout(1000);
+
+  // manager/panel capture ONE note per theme (self-assessors get none — checked in step 10)
+  const noteFields = await page.locator(".theme-note-field textarea").count();
+  noteFields === 1 ? ok("manager sees a per-theme note field") : fail("manager theme note field", `${noteFields}`);
+  await page.fill(".theme-note-field textarea", THEME_NOTE);
+  await page.waitForTimeout(1100); // debounce (700ms) + save
   await page.screenshot({ path: `${SHOTS}/5-wizard.png` });
 
-  // reload → draft persisted with all 22 still answered + our edit
+  // reload → draft persisted with all 22 still answered + our edit + the theme note
   await page.reload();
   await page.waitForSelector(".level-cards, .review-list");
   const answered = await page.locator(".dot.answered").count();
   answered === 22 ? ok("draft persists across reload (22 answered)") : fail("draft persistence", `${answered}`);
   const firstChip = (await page.locator(".review-row .lvl-chip").first().textContent())?.trim();
   firstChip === "L1" ? ok("edited level persisted (L1)") : fail("edited level", firstChip ?? "");
+  const savedNote = await page.locator(".theme-notes-review textarea").first().inputValue();
+  savedNote === THEME_NOTE ? ok("theme note persists across reload") : fail("theme note persistence", savedNote);
 
-  // ---- 9. back as superadmin ----
+  // submit the manager assessment so the note feeds analysis (all 22 rated → allowed)
+  await page.locator('button:has-text("Submit assessment")').click();
+  await page.waitForURL(/\/rate(\?|$)/);
+  ok("manager assessment submitted");
+
+  // ---- 9. back as superadmin: theme note surfaces in analysis + PDF ----
   await page.click("text=Sign out");
   await page.waitForURL("**/login");
   await page.fill("#username", "vladimir");
@@ -158,6 +172,53 @@ try {
   await page.click("button[type=submit]");
   await page.waitForURL("**/analysis");
   ok("vladimir back in");
+
+  await page.goto(`${BASE}/analysis/am/2`);
+  await page.waitForSelector("text=Capability detail");
+  const noteInAnalysis = await page
+    .locator(`.theme-note-block:has-text(${JSON.stringify(THEME_NOTE.slice(0, 24))})`)
+    .count();
+  noteInAnalysis > 0 ? ok("theme note surfaces in capability detail") : fail("theme note in analysis", `${noteInAnalysis}`);
+  const pdf2 = await page.context().request.get(`${BASE}/analysis/am/2/pdf`);
+  const pdf2Buf = await pdf2.body();
+  pdf2.status() === 200 && pdf2Buf.subarray(0, 5).toString() === "%PDF-" && pdf2Buf.length > 5000
+    ? ok("PDF with theme note renders")
+    : fail("PDF with theme note", `status ${pdf2.status()}`);
+
+  // ---- 10. self-assessor lands straight on their own assessment (no picking, no notes) ----
+  await page.goto(`${BASE}/admin/users`);
+  await page.fill('input[name="displayName"]', "Self KAM");
+  await page.fill('input[name="username"]', "selfkam");
+  await page.fill('input[name="password"]', "secret123");
+  await page.selectOption('select[name="lens"]', "self");
+  await page.locator(".card form details summary").first().click();
+  await page.locator('form input[name="am"][value="4"]').first().check();
+  await page.locator('button:has-text("Create user")').click();
+  await page.waitForURL(/\/admin\/users\?ok=/);
+  ok("self-assessor created (linked to AM04)");
+
+  // demo submitted AM04's self assessment — reopen it so the KAM can open it
+  await page.goto(`${BASE}/analysis/am/4`);
+  await page.locator('button:has-text("Reopen Self Assessment")').click();
+  await page.waitForTimeout(500);
+
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "selfkam");
+  await page.fill("#password", "secret123");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/rate/4");
+  ok("self-assessor lands directly on their own self-assessment");
+  const ownName = await page.locator(".wizard-top .page-title").textContent();
+  ownName?.includes("Biju Mathew") ? ok("self-assessor sees their own profile") : fail("self profile", ownName ?? "");
+  const selfNotes = await page.locator("textarea").count();
+  selfNotes === 0 ? ok("self-assessor has no note fields") : fail("self notes hidden", `${selfNotes}`);
+
+  // the pick-someone list is out of reach — /rate redirects them onto their own assessment
+  await page.goto(`${BASE}/rate`);
+  await page.waitForURL("**/rate/4");
+  ok("self-assessor /rate redirects to own assessment (no picking others)");
+  await page.screenshot({ path: `${SHOTS}/6-self-assessor.png` });
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});
