@@ -213,13 +213,7 @@ const s = StyleSheet.create({
   // ---- narrative page ----
   para: { fontSize: 9.5, color: "#31405e", lineHeight: 1.55, marginBottom: 11 },
   paraHead: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: INK, marginTop: 3, marginBottom: 4 },
-  defDivider: { height: 1, backgroundColor: LINE, marginTop: 4, marginBottom: 14 },
-  defItem: { borderLeftWidth: 2.5, borderLeftColor: "#bfe9cf", paddingLeft: 11, marginBottom: 11 },
-  defHead: { flexDirection: "row", alignItems: "baseline", gap: 7, marginBottom: 2 },
-  defName: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: INK },
-  defCluster: { flexGrow: 1, fontSize: 7.2, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 },
-  defLevel: { fontSize: 7, fontFamily: "Helvetica-Bold", color: GREEN_DEEP, letterSpacing: 0.6 },
-  defText: { fontSize: 9, color: "#3c4760", lineHeight: 1.45 },
+  clusterLead: { fontFamily: "Helvetica-Bold", color: INK },
   sourceTag: {
     fontSize: 7.5,
     color: GREEN_DEEP,
@@ -256,6 +250,41 @@ function NarrativeBody({ text }: { text: string }) {
           </View>
         ) : (
           <Text key={i} style={[s.para, { marginBottom: 7 }]}>
+            {clean}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Renders a cluster-organised section (strengths / development). Each paragraph the
+ * model writes starts with an exact cluster name; we bold that lead so the section
+ * scans by theme. A paragraph that doesn't start with a known cluster (e.g. the
+ * deterministic fallback prose) simply renders plain.
+ */
+function ClusterNarrative({ text, clusterNames }: { text: string; clusterNames: string[] }) {
+  const paras = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return (
+    <View>
+      {paras.map((p, i) => {
+        const clean = p.replace(/^[-*]\s+/, "");
+        const cl = clusterNames.find((c) => clean.toLowerCase().startsWith(c.toLowerCase()));
+        if (cl) {
+          const rest = clean.slice(cl.length); // typically ": ..."
+          return (
+            <Text key={i} style={[s.para, { marginBottom: 9 }]}>
+              <Text style={s.clusterLead}>{cl}</Text>
+              {rest}
+            </Text>
+          );
+        }
+        return (
+          <Text key={i} style={[s.para, { marginBottom: 9 }]}>
             {clean}
           </Text>
         );
@@ -365,13 +394,14 @@ function CoverPage(p: AmReportProps) {
 
 function NarrativePage(p: AmReportProps) {
   const n = p.narrative;
+  const clusterNames = p.clusters.map((c) => c.name);
   return (
     <Page size="A4" style={s.page}>
       <Chrome generatedAt={p.generatedAt} />
 
       <SectionHead
         title="Strengths & development summary"
-        sub="A narrative read of the APEX Panel scores and self-perception"
+        sub="A narrative read of the APEX Panel scores, by capability cluster"
       />
       <Text style={s.sourceTag}>
         {p.narrativeSource === "kimi" ? "Written by Kimi (Moonshot AI)" : "Generated automatically from the assessment data"}
@@ -379,37 +409,17 @@ function NarrativePage(p: AmReportProps) {
       <Text style={s.para}>{n.summary}</Text>
 
       <Text style={s.paraHead}>Strengths</Text>
-      <NarrativeBody text={n.strengths} />
+      <ClusterNarrative text={n.strengths} clusterNames={clusterNames} />
 
       <Text style={s.paraHead} wrap={false}>Development areas</Text>
-      <NarrativeBody text={n.development} />
+      <ClusterNarrative text={n.development} clusterNames={clusterNames} />
 
-      {n.perception ? (
+      {n.comments ? (
         <>
-          <Text style={s.paraHead} wrap={false}>Self-perception vs panel</Text>
-          <NarrativeBody text={n.perception} />
+          <Text style={s.paraHead} wrap={false}>Assessment comments</Text>
+          <NarrativeBody text={n.comments} />
         </>
       ) : null}
-
-      {n.definitions.length > 0 && (
-        <>
-          <View style={s.defDivider} />
-          <SectionHead
-            title="Capability definitions"
-            sub="The expected standard for each capability named above — the behavioural anchor at the level this track requires"
-          />
-          {n.definitions.map((d) => (
-            <View key={d.name} style={s.defItem} wrap={false}>
-              <View style={s.defHead}>
-                <Text style={s.defName}>{d.name}</Text>
-                <Text style={s.defCluster}>{d.cluster}</Text>
-                <Text style={s.defLevel}>{d.applicable ? `STANDARD L${d.level}` : "REFERENCE L2"}</Text>
-              </View>
-              <Text style={s.defText}>{d.text}</Text>
-            </View>
-          ))}
-        </>
-      )}
     </Page>
   );
 }

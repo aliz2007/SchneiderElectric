@@ -32,7 +32,7 @@ export type Narrative = {
   summary: string;
   strengths: string;
   development: string;
-  perception: string | null;
+  comments: string | null;
   definitions: CapabilityDefinition[];
 };
 
@@ -55,8 +55,9 @@ export function buildNarrative(input: {
   strengths: Ranked[];
   development: Ranked[];
   perceptionGaps: Perception[];
+  themeNotes: { lens: string; cluster: string; note: string }[];
 }): Narrative {
-  const { amName, track, hasPanelData, rows, caps, strengths, development, perceptionGaps } = input;
+  const { amName, track, hasPanelData, rows, caps, strengths, development, perceptionGaps, themeNotes } = input;
 
   const applicable = rows.filter((r) => r.req != null);
   const scored = applicable.filter((r) => r.expert != null);
@@ -113,18 +114,18 @@ export function buildNarrative(input: {
     developmentText = d;
   }
 
-  // ---- perception (self vs panel) ----
-  let perceptionText: string | null = null;
-  if (hasPanelData && perceptionGaps.length > 0) {
-    const over = perceptionGaps.filter((p) => p.perception > 0).map((p) => p.name);
-    const under = perceptionGaps.filter((p) => p.perception < 0).map((p) => p.name);
-    const clauses: string[] = [];
-    if (over.length) clauses.push(`rates themselves above the panel on ${joinNames(over)}`);
-    if (under.length) clauses.push(`is more critical than the panel on ${joinNames(under)}`);
-    const n = perceptionGaps.length;
-    perceptionText =
-      `Self-assessment and the panel diverge by a full level or more on ${n} ${n === 1 ? "capability" : "capabilities"}: ${amName} ${joinNames(clauses)}. ` +
-      `These are the most useful starting points for a calibration conversation.`;
+  // ---- comments (only when evaluators actually wrote notes) ----
+  let commentsText: string | null = null;
+  if (themeNotes.length > 0) {
+    const clusters: string[] = [];
+    const seenC = new Set<string>();
+    for (const n of themeNotes) if (!seenC.has(n.cluster)) { seenC.add(n.cluster); clusters.push(n.cluster); }
+    const lenses: string[] = [];
+    const seenL = new Set<string>();
+    for (const n of themeNotes) if (!seenL.has(n.lens)) { seenL.add(n.lens); lenses.push(n.lens); }
+    commentsText =
+      `${joinNames(lenses)} recorded written comments on ${clusters.length} ${clusters.length === 1 ? "theme" : "themes"} — ${joinNames(clusters)}. ` +
+      `Those observations sit with their capability clusters in the detailed breakdown of this report.`;
   }
 
   // ---- definitions of every capability named above ----
@@ -149,5 +150,5 @@ export function buildNarrative(input: {
     return [{ name, cluster: cap.cluster, level, applicable: req != null, text }];
   });
 
-  return { summary, strengths: strengthsText, development: developmentText, perception: perceptionText, definitions };
+  return { summary, strengths: strengthsText, development: developmentText, comments: commentsText, definitions };
 }

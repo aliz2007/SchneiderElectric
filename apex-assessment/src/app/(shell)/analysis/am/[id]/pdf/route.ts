@@ -107,6 +107,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     strengths,
     development,
     perceptionGaps,
+    themeNotes: themeNotes.map((n) => ({ lens: LENS_LABELS[n.lens], cluster: n.cluster, note: n.note })),
   });
 
   // When Kimi (Moonshot) is configured and there is panel data to reason from, let it
@@ -141,9 +142,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       definitions: narrative.definitions.map((d) => ({ name: d.name, level: d.level, text: d.text })),
     });
     if (ai) {
-      narrative.strengths = ai.strength;
+      narrative.strengths = ai.strengths;
       narrative.development = ai.development;
-      narrative.perception = ai.perception;
+      narrative.comments = ai.comments.trim() ? ai.comments : null;
       narrativeSource = "kimi";
     }
     // generateAiNarrative records "OK" or the exact failure reason
