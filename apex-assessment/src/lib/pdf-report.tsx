@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Narrative } from "./report-narrative";
 
 /**
@@ -35,6 +35,7 @@ export type AmReportProps = {
   clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[];
   narrative: Narrative;
   narrativeSource: "kimi" | "auto";
+  logoDataUri: string; // brand mark PNG as a data URI ("" = fall back to the "SE" text mark)
   hasPanelData: boolean;
 };
 
@@ -308,9 +309,15 @@ function CoverPage(p: AmReportProps) {
     <Page size="A4" style={s.coverPage}>
       <View style={s.coverBand}>
         <View style={s.coverBrandRow}>
-          <View style={s.coverLogo}>
-            <Text style={s.coverLogoText}>SE</Text>
-          </View>
+          {p.logoDataUri ? (
+            <View style={[s.coverLogo, { backgroundColor: "#ffffff" }]}>
+              <Image src={p.logoDataUri} style={{ width: 30, height: 30 }} />
+            </View>
+          ) : (
+            <View style={s.coverLogo}>
+              <Text style={s.coverLogoText}>SE</Text>
+            </View>
+          )}
           <View>
             <Text style={s.coverBrandName}>Schneider Electric</Text>
             <Text style={s.coverBrandSub}>APEX TOP 25 · Strategic Account Manager Assessment</Text>
@@ -422,9 +429,13 @@ export function AmReportPdf(p: AmReportProps) {
         {/* brand */}
         <View style={s.brandRow}>
           <View style={s.brandLeft}>
-            <View style={s.logoMark}>
-              <Text style={s.logoMarkText}>SE</Text>
-            </View>
+            {p.logoDataUri ? (
+              <Image src={p.logoDataUri} style={{ width: 30, height: 30 }} />
+            ) : (
+              <View style={s.logoMark}>
+                <Text style={s.logoMarkText}>SE</Text>
+              </View>
+            )}
             <View>
               <Text style={s.brandName}>Schneider Electric</Text>
               <Text style={s.brandSub}>APEX TOP 25 · Strategic Account Manager Assessment</Text>

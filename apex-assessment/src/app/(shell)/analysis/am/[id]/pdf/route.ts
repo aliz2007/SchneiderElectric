@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { notFound } from "next/navigation";
 import { renderToBuffer } from "@react-pdf/renderer";
@@ -15,6 +17,16 @@ import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
 import { buildNarrative } from "@/lib/report-narrative";
 import { aiNarrativeEnabled, generateAiNarrative, recordAiResult, lastAiResult } from "@/lib/ai-narrative";
+
+// the brand mark, embedded once as a data URI so @react-pdf can draw it
+let LOGO_DATA_URI = "";
+try {
+  LOGO_DATA_URI =
+    "data:image/png;base64," +
+    fs.readFileSync(path.join(process.cwd(), "public", "mark.png")).toString("base64");
+} catch {
+  /* no logo file — the report falls back to the "SE" text mark */
+}
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -155,6 +167,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       clusters,
       narrative,
       narrativeSource,
+      logoDataUri: LOGO_DATA_URI,
       hasPanelData,
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );
