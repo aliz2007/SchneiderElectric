@@ -5,6 +5,7 @@ import { LENS_LABELS, type Lens } from "@/lib/seed-data";
 import {
   clearAllRatings,
   createSandboxAssessors,
+  deleteUser,
   loadDemoData,
   resetPassword,
   toggleActive,
@@ -140,6 +141,23 @@ export default async function UsersPage({
                             </form>
                           </div>
                         </details>
+                        {u.id !== me.id && (
+                          <details className="details-box" style={{ marginTop: 0 }}>
+                            <summary>Delete</summary>
+                            <div className="details-inner">
+                              <p className="card-sub" style={{ marginBottom: 8 }}>
+                                Permanently removes <strong>{u.display_name}</strong> and their login.
+                                Any assessments they submitted are kept (their name is just unlinked).
+                                This can&apos;t be undone.
+                              </p>
+                              <form action={deleteUser.bind(null, u.id)}>
+                                <button className="btn btn-sm btn-danger" type="submit">
+                                  Confirm delete
+                                </button>
+                              </form>
+                            </div>
+                          </details>
+                        )}
                       </div>
                     </td>
                   </tr>

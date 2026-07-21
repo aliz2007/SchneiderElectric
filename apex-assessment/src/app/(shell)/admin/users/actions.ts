@@ -54,6 +54,31 @@ export async function toggleActive(userId: number) {
   revalidatePath("/admin/users");
 }
 
+/** Permanently delete a user. Sessions & assignments cascade; submitted assessments are
+ *  kept (rater_user_id is set NULL). Guards against self-deletion and removing the last
+ *  superadmin. */
+export async function deleteUser(userId: number) {
+  const me = await requireSuperadmin();
+  if (userId === me.id) {
+    redirect("/admin/users?err=" + encodeURIComponent("You cannot delete your own account."));
+  }
+  const db = getDb();
+  const target = db.prepare("SELECT role FROM users WHERE id = ?").get(userId) as
+    | { role: string }
+    | undefined;
+  if (!target) redirect("/admin/users?err=" + encodeURIComponent("That user no longer exists."));
+  if (target!.role === "superadmin") {
+    const admins = (db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'superadmin'").get() as {
+      n: number;
+    }).n;
+    if (admins <= 1) {
+      redirect("/admin/users?err=" + encodeURIComponent("Cannot delete the only superadmin account."));
+    }
+  }
+  db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  redirect("/admin/users?ok=Account+deleted");
+}
+
 export async function resetPassword(userId: number, formData: FormData) {
   await requireSuperadmin();
   const password = String(formData.get("password") ?? "");

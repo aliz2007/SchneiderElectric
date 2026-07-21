@@ -245,6 +245,24 @@ try {
   ok("sandbox self.demo lands on their own assessment");
   const sandboxAnswered = await page.locator(".dot.answered").count();
   sandboxAnswered === 0 ? ok("sandbox self-assessment starts blank") : fail("sandbox not blank", `${sandboxAnswered}`);
+
+  // ---- 12. superadmin can permanently delete a user account ----
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "vladimir");
+  await page.fill("#password", "apex2026");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/analysis");
+  await page.goto(`${BASE}/admin/users`);
+  const beforeRows = await page.locator("table.table tbody tr").count();
+  await page.locator('tr:has-text("selfkam") details:has(summary:has-text("Delete")) summary').click();
+  await page.locator('tr:has-text("selfkam") button:has-text("Confirm delete")').click();
+  await page.waitForURL(/\/admin\/users\?ok=/);
+  const afterRows = await page.locator("table.table tbody tr").count();
+  const gone = await page.locator('tr:has-text("selfkam")').count();
+  afterRows === beforeRows - 1 && gone === 0
+    ? ok("superadmin deletes a user account")
+    : fail("delete user", `${beforeRows}->${afterRows}, gone=${gone}`);
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});
