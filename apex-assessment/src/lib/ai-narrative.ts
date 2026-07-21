@@ -4,9 +4,8 @@
 // network blocked, bad response, timeout) it returns null and the caller falls back to
 // the deterministic narrative, so the PDF always renders.
 //
-// The API key is baked in (see EMBEDDED_KEY below) — there is no in-app key field.
-// Everything else has a sensible default and can be overridden from the environment:
-//   MOONSHOT_API_KEY   — optional override for the baked-in key
+// The API key is hardcoded (see EMBEDDED_KEY below) — no env file, no in-app field.
+// The rest have sensible defaults, overridable from the environment if ever needed:
 //   MOONSHOT_BASE_URL  — default https://api.moonshot.ai/v1
 //   MOONSHOT_MODEL     — default kimi-latest; auto-falls back to moonshot-v1-128k / -32k if the key can't use it
 //   MOONSHOT_MAX_TOKENS — default 8000 (room for a full report covering every capability)
@@ -46,10 +45,8 @@ const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
 const DEFAULT_MODEL = "kimi-latest";
 const FALLBACK_MODELS = ["kimi-latest", "moonshot-v1-128k", "moonshot-v1-32k"];
 
-// The Kimi (Moonshot) API key, baked in so AI feedback works with no setup and no
-// in-app field. This is the ONE place the key lives. Paste the sk-... key between
-// the quotes; leave it "" to fall back to the MOONSHOT_API_KEY environment variable.
-// To switch keys or providers later, edit this single line.
+// The Kimi (Moonshot) API key, hardcoded directly so AI feedback just works:
+// no setup, no environment file, no in-app field.
 const EMBEDDED_KEY = "sk-ZVEY166shPfyZqQEWjkoICwlOkvb7qFjD9IYYiBhHQmupbUk";
 
 /** The configured model first, then the fallbacks, de-duplicated and non-empty. */
@@ -104,8 +101,8 @@ function cleanKey(raw: string): string {
 }
 
 export function aiConfig(): AiConfig {
-  // Key is fixed: the baked-in constant (or MOONSHOT_API_KEY env override) — no in-app setting.
-  const apiKey = cleanKey(process.env.MOONSHOT_API_KEY || EMBEDDED_KEY);
+  // Key is fixed: read straight from the hardcoded constant, nothing to configure.
+  const apiKey = cleanKey(EMBEDDED_KEY);
   const baseUrl = (process.env.MOONSHOT_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
   // model is the only stored setting: the auto-fallback remembers whichever model the key can use
   const model = getSetting("moonshot_model") || process.env.MOONSHOT_MODEL || DEFAULT_MODEL;

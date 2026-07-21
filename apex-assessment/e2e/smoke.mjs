@@ -1,6 +1,8 @@
 // End-to-end smoke test — drives the real UI with Playwright.
 // Prereqs: app running (`npm run build && npx next start -p 3111`), fresh DB recommended
-//   (delete the data/ folder before starting the server).
+//   (delete the data/ folder before starting the server). The Kimi key is baked in,
+//   so start the server with MOONSHOT_ENABLED=0 to keep this run hermetic (deterministic
+//   narrative, no external API call): `MOONSHOT_ENABLED=0 npx next start -p 3111`.
 // Run from the apex-assessment directory:  node e2e/smoke.mjs
 // Env: BASE (default http://localhost:3111) · SHOTS (screenshot dir, default ./e2e-shots)
 //      CHROMIUM (executable path, default /opt/pw-browsers/chromium; omit-able if
