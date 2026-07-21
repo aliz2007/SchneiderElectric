@@ -95,8 +95,14 @@ export default async function AnalysisPage() {
         </div>
         <div className="card kpi">
           <div className="kpi-label">Avg APEX maturity</div>
-          <div className="kpi-value">{fmt(stats.avgExpert, 2)}</div>
-          <div className="kpi-note">scale 1–3 · submitted panel scores</div>
+          <div className="kpi-value">
+            {stats.avgExpert == null ? "—" : `L${Math.min(3, Math.max(1, Math.round(stats.avgExpert)))}`}
+          </div>
+          <div className="kpi-note">
+            {stats.avgExpert == null
+              ? "submitted panel scores"
+              : `avg ${fmt(stats.avgExpert, 2)} · rounded to nearest level`}
+          </div>
         </div>
       </div>
 
