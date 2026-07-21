@@ -366,11 +366,7 @@ export default function Wizard({
                   Prefer the keyboard? Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level, and use
                   the arrows or the dots below to move between capabilities.
                 </li>
-                <li>
-                  Use the <b>Notes</b> box on any theme to explain or justify your ratings — for
-                  example why you scored yourself a certain way. It is optional, and one note covers
-                  the whole theme.
-                </li>
+                <li>If needed, share any comments, feedback or achievements related to this capability.</li>
                 <li>
                   Everything saves automatically. Once all {caps.length} are rated, open{" "}
                   <b>Review &amp; submit</b>. Submitting locks your assessment.
@@ -378,18 +374,12 @@ export default function Wizard({
               </>
             ) : (
               <>
-                <li>
-                  Rate the Account Manager on each capability against the three levels. The target
-                  each track expects is deliberately hidden here, so your scoring stays unbiased.
-                </li>
+                <li>Rate the Account Manager on each capability against the three levels.</li>
                 <li>
                   Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level, and use the arrows or the
                   dots below to move between capabilities.
                 </li>
-                <li>
-                  Add one <b>Theme note</b> per cluster to record the reasoning behind your scores —
-                  these appear on the individual report and PDF.
-                </li>
+                <li>If needed, share any comments, feedback or achievements related to this capability.</li>
                 <li>
                   Ratings save automatically. When all {caps.length} are rated, open{" "}
                   <b>Review &amp; submit</b>; submitting locks the assessment.
