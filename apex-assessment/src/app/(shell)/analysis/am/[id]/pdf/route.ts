@@ -95,6 +95,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // write the three prose sections; otherwise keep the deterministic narrative. Any
   // failure returns null and we simply keep the deterministic prose — the PDF never
   // depends on the external call.
+  let narrativeSource: "kimi" | "auto" = "auto";
   if (aiNarrativeEnabled() && hasPanelData) {
     const ai = await generateAiNarrative({
       amName: am.name,
@@ -121,6 +122,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       narrative.strengths = ai.strength;
       narrative.development = ai.development;
       narrative.perception = ai.perception;
+      narrativeSource = "kimi";
     }
   }
 
@@ -144,6 +146,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       perceptionGaps,
       clusters,
       narrative,
+      narrativeSource,
       hasPanelData,
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );

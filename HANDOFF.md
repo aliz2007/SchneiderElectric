@@ -200,6 +200,13 @@ development / self-perception vs panel). It is a pure enhancement with a hard fa
     `apex-assessment/.env.local`, which is git-ignored and must never be committed. (The
     platform's safety tooling also blocks pushing secrets.) To enable:
     `cp apex-assessment/.env.example apex-assessment/.env.local` then set the key.
+- Keys are sanitized on save and on use (non-printable/non-ASCII characters such as a
+  pasted bullet are stripped) so a stray character can never crash the HTTP request.
+- Visibility: the PDF narrative page is stamped with its source ("Written by Kimi (Moonshot
+  AI)" vs "Generated automatically from the assessment data"), and the Export PDF control is
+  a client button (`export-pdf-button.tsx`) that shows a "Kimi is writing…" state while the
+  server renders — so it is obvious whether the AI actually ran. AI is used only when it is
+  enabled AND the panel has scored the person; otherwise the deterministic narrative is used.
 
 ## 7. Key files
 

@@ -24,8 +24,15 @@ const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
 const DEFAULT_MODEL = "moonshot-v1-8k";
 
 /** Resolve config from the in-app settings first, then the environment, then defaults. */
+/** API keys must be plain ASCII to travel in an HTTP header. Strip whitespace and any
+ *  non-printable-ASCII characters (bullets, smart quotes, non-breaking spaces) that
+ *  commonly sneak in when a key is pasted, so a stray character can never crash the call. */
+function cleanKey(raw: string): string {
+  return raw.replace(/[^\x21-\x7e]/g, "");
+}
+
 export function aiConfig(): AiConfig {
-  const apiKey = (getSetting("moonshot_api_key") ?? process.env.MOONSHOT_API_KEY ?? "").trim();
+  const apiKey = cleanKey(getSetting("moonshot_api_key") ?? process.env.MOONSHOT_API_KEY ?? "");
   const baseUrl = (
     getSetting("moonshot_base_url") ||
     process.env.MOONSHOT_BASE_URL ||

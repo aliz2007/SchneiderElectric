@@ -11,7 +11,9 @@ import {
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { gapClass } from "@/lib/heat";
+import { aiNarrativeEnabled } from "@/lib/ai-narrative";
 import { reopen } from "./actions";
+import ExportPdfButton from "./export-pdf-button";
 
 function Chip({ level }: { level: number | null | undefined }) {
   return (
@@ -99,13 +101,11 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
             </div>
             <h1 className="page-title">{am.name}</h1>
           </div>
-          <a
-            href={`/analysis/am/${am.id}/pdf`}
-            className="btn btn-sm btn-outline"
-            style={{ flexShrink: 0, marginTop: 4, textDecoration: "none" }}
-          >
-            Export PDF
-          </a>
+          <ExportPdfButton
+            amId={am.id}
+            amName={am.name}
+            aiActive={aiNarrativeEnabled() && levels.expert.size > 0}
+          />
         </div>
         <div className="am-meta" style={{ marginTop: 6 }}>
           <span className="badge badge-zone">{am.zone}</span>

@@ -198,7 +198,8 @@ export async function createSandboxAssessors() {
 /** Persist the AI settings form. An empty key field leaves the stored key unchanged, so
  *  base URL / model can be edited without re-typing it. */
 function persistAiSettings(formData: FormData) {
-  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  // strip whitespace and non-ASCII (bullets, smart quotes, nbsp) that break the HTTP header
+  const apiKey = String(formData.get("apiKey") ?? "").replace(/[^\x21-\x7e]/g, "");
   const baseUrl = String(formData.get("baseUrl") ?? "").trim();
   const model = String(formData.get("model") ?? "").trim();
   const enabled = formData.get("enabled") != null ? "1" : "0";

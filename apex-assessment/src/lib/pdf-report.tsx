@@ -34,6 +34,7 @@ export type AmReportProps = {
   perceptionGaps: { name: string; perception: number; self?: number; expert?: number }[];
   clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[];
   narrative: Narrative;
+  narrativeSource: "kimi" | "auto";
   hasPanelData: boolean;
 };
 
@@ -218,6 +219,15 @@ const s = StyleSheet.create({
   defCluster: { flexGrow: 1, fontSize: 7.2, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 },
   defLevel: { fontSize: 7, fontFamily: "Helvetica-Bold", color: GREEN_DEEP, letterSpacing: 0.6 },
   defText: { fontSize: 9, color: "#3c4760", lineHeight: 1.45 },
+  sourceTag: {
+    fontSize: 7.5,
+    color: GREEN_DEEP,
+    fontFamily: "Helvetica-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: -4,
+    marginBottom: 10,
+  },
 });
 
 function Lvl({ level }: { level?: number }) {
@@ -322,6 +332,9 @@ function NarrativePage(p: AmReportProps) {
         title="Strengths & development summary"
         sub="A narrative read of the APEX Panel scores and self-perception"
       />
+      <Text style={s.sourceTag}>
+        {p.narrativeSource === "kimi" ? "Written by Kimi (Moonshot AI)" : "Generated automatically from the assessment data"}
+      </Text>
       <Text style={s.para}>{n.summary}</Text>
 
       <Text style={s.paraHead}>Strengths</Text>

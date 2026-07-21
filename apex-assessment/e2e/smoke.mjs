@@ -76,7 +76,7 @@ try {
     pdfBuf.subarray(0, 5).toString() === "%PDF-" &&
     pdfBuf.length > 5000;
   pdfOk ? ok(`PDF export downloads (${pdfBuf.length} bytes)`) : fail("PDF export", `status ${pdfResp.status()}`);
-  (await page.locator('a:has-text("Export PDF")').count()) > 0
+  (await page.locator('button:has-text("Export PDF")').count()) > 0
     ? ok("Export PDF button on profile page")
     : fail("Export PDF button", "not found");
 
