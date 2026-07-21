@@ -13,7 +13,7 @@ import {
   toggleActive,
   updateAssignments,
 } from "./actions";
-import { aiConfig } from "@/lib/ai-narrative";
+import { aiConfig, lastAiResult } from "@/lib/ai-narrative";
 import CreateUserForm from "./create-user-form";
 
 export default async function UsersPage({
@@ -26,6 +26,7 @@ export default async function UsersPage({
   const users = listUsers();
   const ams = listAMs();
   const ai = aiConfig();
+  const aiLast = lastAiResult();
   const db = getDb();
 
   const assignmentRows = db.prepare("SELECT user_id, am_id FROM assignments").all() as {
@@ -267,7 +268,12 @@ export default async function UsersPage({
             </div>
           </div>
           <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, marginBottom: 12 }}>
-            <input type="checkbox" name="enabled" defaultChecked={ai.enabled} style={{ accentColor: "var(--se-green)" }} />
+            <input
+              type="checkbox"
+              name="enabled"
+              defaultChecked={!ai.explicitlyDisabled}
+              style={{ accentColor: "var(--se-green)" }}
+            />
             Use Kimi for the PDF feedback
           </label>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -277,7 +283,7 @@ export default async function UsersPage({
             </button>
           </div>
         </form>
-        <p className="card-sub" style={{ marginTop: 12, marginBottom: 0 }}>
+        <p className="card-sub" style={{ marginTop: 12, marginBottom: aiLast ? 4 : 0 }}>
           Status:{" "}
           {ai.enabled
             ? `on · model ${ai.model}`
@@ -285,6 +291,11 @@ export default async function UsersPage({
               ? "key set but currently disabled"
               : "no key set — using the built-in narrative"}
         </p>
+        {aiLast && (
+          <p className="card-sub" style={{ marginTop: 0, marginBottom: 0 }}>
+            Last PDF export: <span style={{ color: aiLast.includes("OK —") ? "#5fe57d" : "var(--amber)" }}>{aiLast}</span>
+          </p>
+        )}
       </div>
     </div>
   );

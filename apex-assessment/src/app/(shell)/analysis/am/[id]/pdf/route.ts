@@ -13,7 +13,7 @@ import {
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
 import { buildNarrative } from "@/lib/report-narrative";
-import { aiNarrativeEnabled, generateAiNarrative } from "@/lib/ai-narrative";
+import { aiNarrativeEnabled, generateAiNarrative, recordAiResult } from "@/lib/ai-narrative";
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -124,6 +124,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       narrative.perception = ai.perception;
       narrativeSource = "kimi";
     }
+  } else if (aiNarrativeEnabled()) {
+    recordAiResult(`not attempted: no submitted APEX Panel scores for ${am.name} (the panel lens must be submitted)`);
   }
 
   const buffer = await renderToBuffer(

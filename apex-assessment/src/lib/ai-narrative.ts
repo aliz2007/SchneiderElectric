@@ -10,15 +10,29 @@
 //   MOONSHOT_MODEL     — default moonshot-v1-8k (try kimi-k2-0711-preview / kimi-latest)
 //   MOONSHOT_TIMEOUT_MS, MOONSHOT_ENABLED=0 to force-disable
 
-import { getSetting } from "./queries";
+import { getSetting, setSetting } from "./queries";
 
 export type AiConfig = {
   apiKey: string;
   baseUrl: string;
   model: string;
   enabled: boolean;
+  explicitlyDisabled: boolean;
   timeoutMs: number;
 };
+
+/** Records why the last PDF export did or did not use AI, shown on the AI settings card. */
+export function recordAiResult(msg: string) {
+  try {
+    setSetting("moonshot_last_result", `${new Date().toLocaleString("en-GB")} — ${msg}`);
+  } catch {
+    /* diagnostics must never break a render */
+  }
+}
+
+export function lastAiResult(): string | null {
+  return getSetting("moonshot_last_result");
+}
 
 const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
 const DEFAULT_MODEL = "moonshot-v1-8k";
@@ -42,7 +56,14 @@ export function aiConfig(): AiConfig {
   const enabledSetting = getSetting("moonshot_enabled");
   const disabled = enabledSetting === "0" || (enabledSetting == null && process.env.MOONSHOT_ENABLED === "0");
   const timeoutMs = Number(getSetting("moonshot_timeout_ms") || process.env.MOONSHOT_TIMEOUT_MS || 20000);
-  return { apiKey, baseUrl, model, enabled: !disabled && apiKey !== "", timeoutMs };
+  return {
+    apiKey,
+    baseUrl,
+    model,
+    enabled: !disabled && apiKey !== "",
+    explicitlyDisabled: enabledSetting === "0",
+    timeoutMs,
+  };
 }
 
 /** AI feedback is attempted only when a key is present and it isn't force-disabled. */
@@ -124,7 +145,10 @@ function extractSections(content: string): AiNarrativeSections | null {
  */
 export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNarrativeSections | null> {
   const { apiKey, baseUrl, model, enabled, timeoutMs } = aiConfig();
-  if (!enabled) return null;
+  if (!enabled) {
+    recordAiResult(apiKey === "" ? "not attempted: no API key set" : "not attempted: AI feedback is turned off");
+    return null;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -138,6 +162,7 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
       body: JSON.stringify({
         model,
         temperature: 0.3,
+        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: "Assessment data (JSON):\n" + JSON.stringify(input) },
@@ -145,12 +170,31 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { choices?: { message?: { content?: unknown } }[] };
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content !== "string") return null;
-    return extractSections(content);
-  } catch {
+    const bodyText = await res.text();
+    if (!res.ok) {
+      recordAiResult(`HTTP ${res.status} from ${baseUrl}: ${bodyText.slice(0, 180)}`);
+      return null;
+    }
+    let content: unknown;
+    try {
+      content = (JSON.parse(bodyText) as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]
+        ?.message?.content;
+    } catch {
+      content = undefined;
+    }
+    if (typeof content !== "string") {
+      recordAiResult(`unexpected response shape: ${bodyText.slice(0, 180)}`);
+      return null;
+    }
+    const sections = extractSections(content);
+    if (!sections) {
+      recordAiResult(`model replied but not parseable JSON: ${content.slice(0, 180)}`);
+      return null;
+    }
+    recordAiResult(`OK — Kimi wrote the feedback (model ${model})`);
+    return sections;
+  } catch (e) {
+    recordAiResult(`request failed: ${e instanceof Error ? `${e.name}: ${e.message}` : "unknown error"}`.slice(0, 200));
     return null;
   } finally {
     clearTimeout(timer);
