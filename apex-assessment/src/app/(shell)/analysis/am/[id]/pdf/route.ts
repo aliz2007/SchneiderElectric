@@ -17,15 +17,20 @@ import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
 import { buildNarrative } from "@/lib/report-narrative";
 import { aiNarrativeEnabled, generateAiNarrative, recordAiResult, lastAiResult } from "@/lib/ai-narrative";
+import { SHOW_LOGO, LOGO_MARK_PUBLIC_PATH } from "@/lib/brand";
 
-// the brand mark, embedded once as a data URI so @react-pdf can draw it
+// The brand mark, embedded once as a data URI so @react-pdf can draw it. Only
+// read when the logo is switched on (see src/lib/brand.tsx); otherwise the
+// report falls back to the "SE" text mark.
 let LOGO_DATA_URI = "";
-try {
-  LOGO_DATA_URI =
-    "data:image/png;base64," +
-    fs.readFileSync(path.join(process.cwd(), "public", "mark.png")).toString("base64");
-} catch {
-  /* no logo file — the report falls back to the "SE" text mark */
+if (SHOW_LOGO) {
+  try {
+    LOGO_DATA_URI =
+      "data:image/png;base64," +
+      fs.readFileSync(path.join(process.cwd(), "public", LOGO_MARK_PUBLIC_PATH)).toString("base64");
+  } catch {
+    /* asset missing — fall back to the "SE" text mark */
+  }
 }
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */

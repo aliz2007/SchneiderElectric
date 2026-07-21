@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
+import { BrandMark } from "@/lib/brand";
 import { login } from "./actions";
 
 export default async function LoginPage({
@@ -15,8 +16,7 @@ export default async function LoginPage({
     <div className="login-wrap">
       <div className="login-card">
         <div className="login-brand">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-logo" src="/mark.png" alt="Schneider Electric" width={42} height={42} />
+          <BrandMark />
           <div>
             <div className="brand-name" style={{ color: "var(--ink)" }}>
               APEX Assessment

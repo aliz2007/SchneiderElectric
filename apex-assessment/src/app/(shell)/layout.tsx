@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/session";
 import { LENS_LABELS } from "@/lib/seed-data";
+import { BrandMark } from "@/lib/brand";
 import NavLinks, { type NavItem } from "./nav-links";
 import { logout } from "./actions";
 
@@ -35,8 +36,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-logo" src="/mark.png" alt="Schneider Electric" width={42} height={42} />
+          <BrandMark />
           <div>
             <div className="brand-name">APEX Assessment</div>
             <div className="brand-sub">Schneider Electric</div>
