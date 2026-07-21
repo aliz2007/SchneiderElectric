@@ -228,7 +228,40 @@ const s = StyleSheet.create({
     marginTop: -4,
     marginBottom: 10,
   },
+  listRow: { flexDirection: "row", marginBottom: 7 },
+  listMarker: { width: 11, fontSize: 9.5, color: GREEN_DEEP, fontFamily: "Helvetica-Bold" },
+  listItemText: { flex: 1, fontSize: 9.5, color: "#31405e", lineHeight: 1.5 },
 });
+
+/**
+ * Renders a narrative section. Lines the model returned as "- ..." list items become
+ * clean hanging-indent rows; everything else renders as a paragraph. Works for both the
+ * AI output (lists) and the deterministic fallback (plain paragraphs).
+ */
+function NarrativeBody({ text }: { text: string }) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return (
+    <View>
+      {lines.map((line, i) => {
+        const isItem = /^[-*]\s+/.test(line);
+        const clean = line.replace(/^[-*]\s+/, "");
+        return isItem ? (
+          <View key={i} style={s.listRow}>
+            <Text style={s.listMarker}>-</Text>
+            <Text style={s.listItemText}>{clean}</Text>
+          </View>
+        ) : (
+          <Text key={i} style={[s.para, { marginBottom: 7 }]}>
+            {clean}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
 
 function Lvl({ level }: { level?: number }) {
   if (!level) return <Text style={s.na}>—</Text>;
@@ -338,15 +371,15 @@ function NarrativePage(p: AmReportProps) {
       <Text style={s.para}>{n.summary}</Text>
 
       <Text style={s.paraHead}>Strengths</Text>
-      <Text style={s.para}>{n.strengths}</Text>
+      <NarrativeBody text={n.strengths} />
 
-      <Text style={s.paraHead}>Development areas</Text>
-      <Text style={s.para}>{n.development}</Text>
+      <Text style={s.paraHead} wrap={false}>Development areas</Text>
+      <NarrativeBody text={n.development} />
 
       {n.perception ? (
         <>
-          <Text style={s.paraHead}>Self-perception vs panel</Text>
-          <Text style={s.para}>{n.perception}</Text>
+          <Text style={s.paraHead} wrap={false}>Self-perception vs panel</Text>
+          <NarrativeBody text={n.perception} />
         </>
       ) : null}
 

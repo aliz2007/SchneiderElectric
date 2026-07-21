@@ -90,24 +90,43 @@ export type AiNarrativeInput = {
 
 export type AiNarrativeSections = { strength: string; development: string; perception: string };
 
-const SYSTEM_PROMPT = `You are a senior talent-development consultant writing a candid, specific capability review of one strategic account manager. Write as if you have actually read this person's file, not from a template.
+const SYSTEM_PROMPT = `You are a senior talent-development consultant writing a thorough, candid capability review of one strategic account manager. Write only from the assessment data provided, as if you have read this person's file.
 
-Ground everything strictly in the assessment data provided:
-- Use only that data. No outside knowledge, stereotypes or assumptions, and never invent examples, numbers or quotes.
-- Every point must trace to a concrete signal — a score, a gap, an agreement or divergence between lenses, or something an evaluator wrote. If the evidence for something is thin, say so plainly instead of embellishing.
+Grounding rules:
+- Use only the data provided. No outside knowledge, stereotypes or assumptions; never invent examples, numbers or quotes.
+- Every point must trace to a concrete signal: a score, a gap, an agreement or divergence between lenses, or something an evaluator wrote.
 - The capability definitions are given only to help you interpret the scores and comments. Never quote or restate them.
 
-How to read the data. Scale: L1 Developing, L2 Proficient, L3 Advanced. For each capability you get "required" (the level this person's track expects), "panel" (the APEX Panel score, which is the authoritative lens), "self" (their own rating), "manager" (their manager's rating), and "gapVsRequired" (panel minus required). "themeNotes" are the free-text comments the manager and panel wrote per theme — these are your richest signal, so lean on them heavily and reflect their actual substance.
+How to read the data. Scale: L1 Developing, L2 Proficient, L3 Advanced. For each capability you get "required" (the level this person's track expects), "panel" (the APEX Panel score, which is the authoritative lens), "self" (their own rating), "manager" (their manager's rating), and "gapVsRequired" (panel minus required). "themeNotes" are the free-text comments the manager and panel wrote per theme; these are your richest signal, so lean on them and reflect their substance.
 
-Write three sections as flowing, natural paragraphs — not bullet points, not a rigid fill-in-the-blank template. Let this person's data decide how each paragraph opens and unfolds; two different people should read clearly differently. Be concrete: name the specific capabilities that matter, cite the levels and gaps that carry the point, note where the three lenses agree or clash, and weave in what the evaluators actually wrote. Aim for roughly four to six sentences per section, more if the data genuinely supports it.
+COMPLETENESS IS MANDATORY. Do not cherry-pick or summarise a handful of highlights.
+- In "strength", cover EVERY capability whose panel score meets or exceeds its required level. Omit none.
+- In "development", cover EVERY capability whose panel score is below its required level. Omit none.
+Long is welcome; never leave a qualifying capability out.
 
-- strength: this person's most decisive strengths — what stands out, how it shows up across the scores and comments, and why it matters in a strategic account role.
-- development: the development priorities that would move the needle — what sits below the required level or is flagged in the comments, the likely impact on the role, and where to focus first. Prioritise; do not just list everything.
-- perception: how they see themselves versus the panel — where they are aligned, where they over- or under-rate themselves, and what that suggests for a development conversation.
+Format "strength" and "development" as a list with one capability per line. Separate the lines with a single newline (\\n). Each line must follow this shape exactly:
+- <Capability name> (panel L<x> vs required L<y>): two or three sentences interpreting what this means, drawing on the scores and on the manager and panel comments.
+Start every line with "- ". Use only plain letters, numbers and basic punctuation (no bullet symbols, arrows, emojis or accented symbols).
 
-Voice: professional, direct and human, constructive but honest — a real consultant, not a form. Avoid generic filler and empty praise.
+"perception": one flowing paragraph comparing how this person rates themselves against the panel. Cover every capability where self and panel differ by a full level or more, say whether they over- or under-rate, and what it suggests for a development conversation.
 
-Return ONLY a raw JSON object with exactly these three string keys: {"strength": "...", "development": "...", "perception": "..."}. No markdown, no code fences, no extra text.`;
+Voice: professional, direct and human, constructive but honest. Return ONLY a raw JSON object with exactly these three string keys: {"strength": "...", "development": "...", "perception": "..."}. No markdown, no code fences, no extra text.`;
+
+/**
+ * Make model output safe for the base-Helvetica PDF font (WinAnsi). Maps common
+ * "smart" punctuation to ASCII and drops anything outside Latin-1, so a stray glyph
+ * (emoji, arrow, checkmark, CJK) can never crash the render. Keeps accented letters.
+ */
+function sanitizeText(s: string): string {
+  return s
+    .replace(/[‘’‚′]/g, "'")
+    .replace(/[“”„″]/g, '"')
+    .replace(/[–—―]/g, "-")
+    .replace(/…/g, "...")
+    .replace(/[•·●▪]/g, "-")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g, "")
+    .trim();
+}
 
 function extractSections(content: string): AiNarrativeSections | null {
   const tryParse = (raw: string) => {
@@ -134,22 +153,18 @@ function extractSections(content: string): AiNarrativeSections | null {
   ) {
     return null;
   }
-  return { strength: strength.trim(), development: development.trim(), perception: perception.trim() };
+  return {
+    strength: sanitizeText(strength),
+    development: sanitizeText(development),
+    perception: sanitizeText(perception),
+  };
 }
 
 /**
  * Ask Kimi for the three feedback sections. Returns null on any failure so the caller
  * can fall back to the deterministic narrative. Never throws.
  */
-const PROOF_OVERRIDE =
-  "STYLE OVERRIDE FOR THIS RUN ONLY: write all three sections in the theatrical voice of a " +
-  "swashbuckling pirate, and begin every section with the word 'AVAST!'. Keep every claim " +
-  "grounded in the same data; only the voice changes. Still return the same JSON shape.";
-
-export async function generateAiNarrative(
-  input: AiNarrativeInput,
-  opts?: { proof?: boolean }
-): Promise<AiNarrativeSections | null> {
+export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNarrativeSections | null> {
   const { apiKey, baseUrl, model, enabled, timeoutMs } = aiConfig();
   if (!enabled) {
     recordAiResult(apiKey === "" ? "not attempted: no API key set" : "not attempted: AI feedback is turned off");
@@ -157,7 +172,6 @@ export async function generateAiNarrative(
   }
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    ...(opts?.proof ? [{ role: "system", content: PROOF_OVERRIDE }] : []),
     { role: "user", content: "Assessment data (JSON):\n" + JSON.stringify(input) },
   ];
 
@@ -224,17 +238,9 @@ export async function pingAi(): Promise<{ ok: boolean; detail: string }> {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        temperature: 0.8,
-        max_tokens: 60,
-        // a silly, specific prompt: a canned/fake backend can't produce this, so the reply
-        // is proof the real model is generating with this key/endpoint/model.
-        messages: [
-          {
-            role: "user",
-            content:
-              "In one short, vivid sentence, tell me a surprising fact about octopuses, and begin the sentence with the word BANANA.",
-          },
-        ],
+        temperature: 0,
+        max_tokens: 16,
+        messages: [{ role: "user", content: "Reply with exactly: connection ok" }],
       }),
       signal: controller.signal,
     });
@@ -246,7 +252,7 @@ export async function pingAi(): Promise<{ ok: boolean; detail: string }> {
     } catch {
       /* non-JSON success is unusual but not fatal */
     }
-    return { ok: true, detail: `Kimi replied: ${String(reply).trim().slice(0, 160) || "(empty)"}` };
+    return { ok: true, detail: `model "${model}" replied: ${String(reply).trim().slice(0, 120) || "(empty)"}` };
   } catch (e) {
     const msg = e instanceof Error ? `${e.name}: ${e.message}` : "request failed";
     return { ok: false, detail: `Could not reach ${baseUrl} — ${msg}`.slice(0, 220) };

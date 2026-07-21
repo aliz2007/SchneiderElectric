@@ -8,10 +8,7 @@ type Result = { source: string | null; reason: string } | null;
  * Downloads the individual PDF via fetch so we can (a) show a live loading state while the
  * server renders it (and, when AI feedback is on, calls Kimi), and (b) read the
  * X-AI-Source / X-AI-Reason response headers and show, right here, whether Kimi actually
- * wrote the narrative or exactly why it fell back.
- *
- * The "Prove it" button requests ?prove=1, which makes Kimi write the three sections in
- * pirate voice — so if page 3 of the PDF talks like a pirate, Kimi genuinely wrote it.
+ * wrote the narrative or exactly why it fell back. Falls back to a plain navigation on error.
  */
 export default function ExportPdfButton({
   amId,
@@ -22,15 +19,15 @@ export default function ExportPdfButton({
   amName: string;
   aiActive: boolean;
 }) {
-  const [loading, setLoading] = useState<"" | "normal" | "proof">("");
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result>(null);
 
-  const download = async (proof: boolean) => {
+  const download = async () => {
     if (loading) return;
-    setLoading(proof ? "proof" : "normal");
+    setLoading(true);
     setResult(null);
     try {
-      const res = await fetch(`/analysis/am/${amId}/pdf${proof ? "?prove=1" : ""}`);
+      const res = await fetch(`/analysis/am/${amId}/pdf`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const source = res.headers.get("X-AI-Source");
@@ -47,15 +44,15 @@ export default function ExportPdfButton({
       const slug = amName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "");
       const a = document.createElement("a");
       a.href = url;
-      a.download = `APEX-Assessment-${slug || "report"}${proof ? "-PROOF" : ""}.pdf`;
+      a.download = `APEX-Assessment-${slug || "report"}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      window.location.href = `/analysis/am/${amId}/pdf${proof ? "?prove=1" : ""}`;
+      window.location.href = `/analysis/am/${amId}/pdf`;
     } finally {
-      setLoading("");
+      setLoading(false);
     }
   };
 
@@ -64,22 +61,9 @@ export default function ExportPdfButton({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0, marginTop: 4 }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        {aiActive && (
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={() => download(true)}
-            disabled={!!loading}
-            title="Exports a copy where Kimi writes in pirate voice — proof it really ran"
-          >
-            {loading === "proof" ? "Testing…" : "Prove Kimi"}
-          </button>
-        )}
-        <button type="button" className="btn btn-sm btn-outline" onClick={() => download(false)} disabled={!!loading}>
-          {loading === "normal" ? (aiActive ? "Kimi is writing…" : "Generating…") : "Export PDF"}
-        </button>
-      </div>
+      <button type="button" className="btn btn-sm btn-outline" onClick={download} disabled={loading}>
+        {loading ? (aiActive ? "Kimi is writing…" : "Generating…") : "Export PDF"}
+      </button>
       {result && (
         <span
           style={{
