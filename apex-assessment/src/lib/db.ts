@@ -98,6 +98,13 @@ function migrate(db: Database.Database) {
       note TEXT,
       PRIMARY KEY (assessment_id, cluster)
     );
+
+    -- Simple key/value store for runtime settings (e.g. the Kimi/Moonshot AI config
+    -- entered in the app instead of via .env.local).
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
 
   const capCount = (db.prepare("SELECT COUNT(*) AS n FROM capabilities").get() as { n: number }).n;

@@ -10,14 +10,37 @@
 //   MOONSHOT_MODEL     — default moonshot-v1-8k (try kimi-k2-0711-preview / kimi-latest)
 //   MOONSHOT_TIMEOUT_MS, MOONSHOT_ENABLED=0 to force-disable
 
-const API_KEY = process.env.MOONSHOT_API_KEY ?? "";
-const BASE_URL = (process.env.MOONSHOT_BASE_URL ?? "https://api.moonshot.ai/v1").replace(/\/+$/, "");
-const MODEL = process.env.MOONSHOT_MODEL ?? "moonshot-v1-8k";
-const TIMEOUT_MS = Number(process.env.MOONSHOT_TIMEOUT_MS ?? 20000);
+import { getSetting } from "./queries";
+
+export type AiConfig = {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  enabled: boolean;
+  timeoutMs: number;
+};
+
+const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
+const DEFAULT_MODEL = "moonshot-v1-8k";
+
+/** Resolve config from the in-app settings first, then the environment, then defaults. */
+export function aiConfig(): AiConfig {
+  const apiKey = (getSetting("moonshot_api_key") ?? process.env.MOONSHOT_API_KEY ?? "").trim();
+  const baseUrl = (
+    getSetting("moonshot_base_url") ||
+    process.env.MOONSHOT_BASE_URL ||
+    DEFAULT_BASE_URL
+  ).replace(/\/+$/, "");
+  const model = getSetting("moonshot_model") || process.env.MOONSHOT_MODEL || DEFAULT_MODEL;
+  const enabledSetting = getSetting("moonshot_enabled");
+  const disabled = enabledSetting === "0" || (enabledSetting == null && process.env.MOONSHOT_ENABLED === "0");
+  const timeoutMs = Number(getSetting("moonshot_timeout_ms") || process.env.MOONSHOT_TIMEOUT_MS || 20000);
+  return { apiKey, baseUrl, model, enabled: !disabled && apiKey !== "", timeoutMs };
+}
 
 /** AI feedback is attempted only when a key is present and it isn't force-disabled. */
 export function aiNarrativeEnabled(): boolean {
-  return process.env.MOONSHOT_ENABLED !== "0" && API_KEY.trim() !== "";
+  return aiConfig().enabled;
 }
 
 export type AiNarrativeInput = {
@@ -93,19 +116,20 @@ function extractSections(content: string): AiNarrativeSections | null {
  * can fall back to the deterministic narrative. Never throws.
  */
 export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNarrativeSections | null> {
-  if (!aiNarrativeEnabled()) return null;
+  const { apiKey, baseUrl, model, enabled, timeoutMs } = aiConfig();
+  if (!enabled) return null;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${BASE_URL}/chat/completions`, {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         temperature: 0.3,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
@@ -121,6 +145,44 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
     return extractSections(content);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Live check used by the "Test connection" button. Sends a tiny request and reports
+ * exactly what happened, so a misconfigured key / model / endpoint is easy to diagnose.
+ */
+export async function pingAi(): Promise<{ ok: boolean; detail: string }> {
+  const { apiKey, baseUrl, model, timeoutMs } = aiConfig();
+  if (apiKey === "") return { ok: false, detail: "No API key is set." };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, 15000));
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: 8,
+        messages: [{ role: "user", content: "Reply with the single word OK." }],
+      }),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, detail: `HTTP ${res.status} from ${baseUrl}: ${text.slice(0, 220)}` };
+    let reply = "";
+    try {
+      reply = JSON.parse(text)?.choices?.[0]?.message?.content ?? "";
+    } catch {
+      /* non-JSON success is unusual but not fatal */
+    }
+    return { ok: true, detail: `Model "${model}" replied: ${String(reply).trim().slice(0, 80) || "(empty)"}` };
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.name}: ${e.message}` : "request failed";
+    return { ok: false, detail: `Could not reach ${baseUrl} — ${msg}`.slice(0, 220) };
   } finally {
     clearTimeout(timer);
   }

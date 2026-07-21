@@ -155,12 +155,36 @@ export function isAssigned(userId: number, amId: number): boolean {
 
 export function setAssignments(userId: number, amIds: number[]) {
   const db = getDb();
+  // A self-assessor is linked to exactly one Account Manager — themselves. Enforce that
+  // invariant here so it holds no matter which form calls this.
+  const u = db.prepare("SELECT lens FROM users WHERE id = ?").get(userId) as { lens: string | null } | undefined;
+  const ids = u?.lens === "self" ? amIds.slice(0, 1) : amIds;
   const tx = db.transaction(() => {
     db.prepare("DELETE FROM assignments WHERE user_id = ?").run(userId);
     const ins = db.prepare("INSERT INTO assignments (user_id, am_id) VALUES (?, ?)");
-    for (const id of amIds) ins.run(userId, id);
+    for (const id of ids) ins.run(userId, id);
   });
   tx();
+}
+
+// ---------- app settings (key/value) ----------
+
+export function getSetting(key: string): string | null {
+  const row = getDb().prepare("SELECT value FROM app_settings WHERE key = ?").get(key) as
+    | { value: string | null }
+    | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string | null) {
+  const db = getDb();
+  if (value == null) {
+    db.prepare("DELETE FROM app_settings WHERE key = ?").run(key);
+  } else {
+    db.prepare(
+      "INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value"
+    ).run(key, value);
+  }
 }
 
 // ---------- users ----------

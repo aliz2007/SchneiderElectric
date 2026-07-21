@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requireSuperadmin } from "@/lib/session";
-import { listAMs, listCapabilities, setAssignments } from "@/lib/queries";
+import { listAMs, listCapabilities, setAssignments, setSetting } from "@/lib/queries";
+import { pingAi } from "@/lib/ai-narrative";
 
 function amIdsFrom(formData: FormData): number[] {
   return formData.getAll("am").map(Number).filter((n) => Number.isInteger(n) && n > 0);
@@ -192,6 +193,35 @@ export async function createSandboxAssessors() {
         `Sandbox ready. Sign in as self.demo, manager.demo or panel.demo (password ${password}) — all set to assess ${am!.name} (${am!.code}) with a blank assessment. Then return here as superadmin to open Individuals → ${am!.name} and export the PDF.`
       )
   );
+}
+
+/** Persist the AI settings form. An empty key field leaves the stored key unchanged, so
+ *  base URL / model can be edited without re-typing it. */
+function persistAiSettings(formData: FormData) {
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  const baseUrl = String(formData.get("baseUrl") ?? "").trim();
+  const model = String(formData.get("model") ?? "").trim();
+  const enabled = formData.get("enabled") != null ? "1" : "0";
+  if (apiKey !== "") setSetting("moonshot_api_key", apiKey);
+  setSetting("moonshot_base_url", baseUrl === "" ? null : baseUrl);
+  setSetting("moonshot_model", model === "" ? null : model);
+  setSetting("moonshot_enabled", enabled);
+}
+
+export async function saveAiSettings(formData: FormData) {
+  await requireSuperadmin();
+  persistAiSettings(formData);
+  redirect("/admin/users?ok=" + encodeURIComponent("AI feedback settings saved."));
+}
+
+/** Saves the current form values, then does a live "Test connection" and reports the
+ *  exact result or error so a bad key / model / endpoint is easy to diagnose. */
+export async function testAiConnection(formData: FormData) {
+  await requireSuperadmin();
+  persistAiSettings(formData);
+  const r = await pingAi();
+  const key = r.ok ? "ok" : "err";
+  redirect(`/admin/users?${key}=` + encodeURIComponent((r.ok ? "Kimi connected. " : "Kimi test failed. ") + r.detail));
 }
 
 /** Delete every assessment & rating. Structure (AMs, capabilities, users) is kept. */

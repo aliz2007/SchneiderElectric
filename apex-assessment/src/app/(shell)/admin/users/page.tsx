@@ -8,9 +8,12 @@ import {
   deleteUser,
   loadDemoData,
   resetPassword,
+  saveAiSettings,
+  testAiConnection,
   toggleActive,
   updateAssignments,
 } from "./actions";
+import { aiConfig } from "@/lib/ai-narrative";
 import CreateUserForm from "./create-user-form";
 
 export default async function UsersPage({
@@ -22,6 +25,7 @@ export default async function UsersPage({
   const { ok, err } = await searchParams;
   const users = listUsers();
   const ams = listAMs();
+  const ai = aiConfig();
   const db = getDb();
 
   const assignmentRows = db.prepare("SELECT user_id, am_id FROM assignments").all() as {
@@ -93,26 +97,58 @@ export default async function UsersPage({
                     <td>{u.lens ? LENS_LABELS[u.lens as Lens] : "—"}</td>
                     <td>
                       <details className="details-box" style={{ marginTop: 0 }}>
-                        <summary>{assigned.size} assigned</summary>
+                        <summary>
+                          {u.lens === "self"
+                            ? assigned.size === 1
+                              ? "Own profile"
+                              : "Not linked"
+                            : `${assigned.size} assigned`}
+                        </summary>
                         <div className="details-inner">
-                          <form action={updateAssignments.bind(null, u.id)}>
-                            <div className="check-grid">
-                              {ams.map((am) => (
-                                <label key={am.id}>
-                                  <input
-                                    type="checkbox"
-                                    name="am"
-                                    value={am.id}
-                                    defaultChecked={assigned.has(am.id)}
-                                  />
-                                  {am.code} · {am.name}
-                                </label>
-                              ))}
-                            </div>
-                            <button className="btn btn-sm btn-outline" type="submit">
-                              Save assignments
-                            </button>
-                          </form>
+                          {u.lens === "self" ? (
+                            <form action={updateAssignments.bind(null, u.id)}>
+                              <label className="assign-label" style={{ display: "block", marginBottom: 6 }}>
+                                This person&apos;s own Account Manager profile
+                              </label>
+                              <select
+                                className="input"
+                                name="am"
+                                defaultValue={[...assigned][0] ?? ""}
+                                style={{ maxWidth: 280 }}
+                              >
+                                <option value="">— none —</option>
+                                {ams.map((am) => (
+                                  <option key={am.id} value={am.id}>
+                                    {am.code} · {am.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div>
+                                <button className="btn btn-sm btn-outline" type="submit" style={{ marginTop: 8 }}>
+                                  Save
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <form action={updateAssignments.bind(null, u.id)}>
+                              <div className="check-grid">
+                                {ams.map((am) => (
+                                  <label key={am.id}>
+                                    <input
+                                      type="checkbox"
+                                      name="am"
+                                      value={am.id}
+                                      defaultChecked={assigned.has(am.id)}
+                                    />
+                                    {am.code} · {am.name}
+                                  </label>
+                                ))}
+                              </div>
+                              <button className="btn btn-sm btn-outline" type="submit">
+                                Save assignments
+                              </button>
+                            </form>
+                          )}
                         </div>
                       </details>
                     </td>
@@ -198,6 +234,57 @@ export default async function UsersPage({
             <button className="btn btn-danger" type="submit">Clear all ratings</button>
           </form>
         </div>
+      </div>
+
+      <div className="card card-pad" style={{ marginTop: 22 }}>
+        <h2 className="card-title">AI feedback (Kimi)</h2>
+        <p className="card-sub">
+          Optional. When a Moonshot (Kimi) key is set, the PDF narrative page is written by the model
+          from each person&apos;s scores and notes. Without it, the built-in narrative is used. Paste
+          your key, then use <strong>Test connection</strong> to confirm it works before relying on
+          it.
+        </p>
+        <form action={saveAiSettings}>
+          <div className="form-grid">
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label>Moonshot API key</label>
+              <input
+                className="input"
+                name="apiKey"
+                type="text"
+                defaultValue={ai.apiKey}
+                placeholder="sk-..."
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label>Base URL</label>
+              <input className="input" name="baseUrl" type="text" defaultValue={ai.baseUrl} />
+            </div>
+            <div className="field">
+              <label>Model</label>
+              <input className="input" name="model" type="text" defaultValue={ai.model} />
+            </div>
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, marginBottom: 12 }}>
+            <input type="checkbox" name="enabled" defaultChecked={ai.enabled} style={{ accentColor: "var(--se-green)" }} />
+            Use Kimi for the PDF feedback
+          </label>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" type="submit">Save AI settings</button>
+            <button className="btn btn-outline" type="submit" formAction={testAiConnection}>
+              Test connection
+            </button>
+          </div>
+        </form>
+        <p className="card-sub" style={{ marginTop: 12, marginBottom: 0 }}>
+          Status:{" "}
+          {ai.enabled
+            ? `on · model ${ai.model}`
+            : ai.apiKey
+              ? "key set but currently disabled"
+              : "no key set — using the built-in narrative"}
+        </p>
       </div>
     </div>
   );

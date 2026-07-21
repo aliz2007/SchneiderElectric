@@ -106,6 +106,13 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   written by the wizard; notes are now per-theme (see `theme_notes`).
 - `theme_notes` (assessment_id, cluster, note). PK (assessment_id, cluster). One free-text
   note per theme, written only by Manager / APEX Panel.
+- `app_settings` (key PK, value) — runtime key/value store. Currently holds the in-app Kimi
+  config (`moonshot_api_key`, `moonshot_base_url`, `moonshot_model`, `moonshot_enabled`).
+
+A self-assessor is always linked to exactly ONE Account Manager (themselves).
+`setAssignments` enforces this (it caps a self user's assignments to one), and both the
+create-user form and the Users-table assignment editor use a single-select for the self
+lens rather than a multi-checkbox.
 
 ## 4. Features and routes
 
@@ -154,6 +161,9 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
     flow from every lens; idempotent), **Load demo dataset (submitted)** (fills all 75
     assessments with plausible submitted scores for the dashboards; replaces existing
     ratings), and **Clear all ratings**.
+  - **AI feedback (Kimi) card**: enter/save the Moonshot key, base URL, model and an on/off
+    toggle (stored in `app_settings`), with a live **Test connection** button. This is the
+    in-app alternative to editing `.env.local` (see §6).
 
 ## 5. The PDF narrative (deterministic)
 
@@ -178,7 +188,10 @@ development / self-perception vs panel). It is a pure enhancement with a hard fa
   scores, theme-note comments and definitions, to never quote the definitions, and to return
   strict JSON `{strength, development, perception}`. Capability definitions on the page stay
   deterministic (rubric-based) regardless.
-- Config comes from the environment; the code reads it and never hardcodes a key:
+- Config resolves from the **in-app AI settings** first (stored in `app_settings`, edited on
+  the Users & Access page in the "AI feedback (Kimi)" card, which has a **Test connection**
+  button that reports the exact success/error so a bad key, model or endpoint is easy to
+  diagnose), then from environment variables, then defaults. The code never hardcodes a key:
   - `MOONSHOT_API_KEY` (required to enable AI), `MOONSHOT_BASE_URL`
     (default `https://api.moonshot.ai/v1`; use `.cn` for the China platform),
     `MOONSHOT_MODEL` (default `moonshot-v1-8k`; can be `kimi-k2-0711-preview` / `kimi-latest`),
