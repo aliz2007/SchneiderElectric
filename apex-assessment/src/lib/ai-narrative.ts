@@ -8,7 +8,9 @@
 //   MOONSHOT_API_KEY   — required to enable AI feedback
 //   MOONSHOT_BASE_URL  — default https://api.moonshot.ai/v1
 //   MOONSHOT_MODEL     — default moonshot-v1-8k (try kimi-k2-0711-preview / kimi-latest)
-//   MOONSHOT_TIMEOUT_MS, MOONSHOT_ENABLED=0 to force-disable
+//   MOONSHOT_MAX_TOKENS — default 8000 (room for a full report covering every capability)
+//   MOONSHOT_TIMEOUT_MS — default 90000 (a complete report takes a while to write)
+//   MOONSHOT_ENABLED=0  — force-disable
 
 import { getSetting, setSetting } from "./queries";
 
@@ -19,6 +21,7 @@ export type AiConfig = {
   enabled: boolean;
   explicitlyDisabled: boolean;
   timeoutMs: number;
+  maxTokens: number;
 };
 
 /** Records why the last PDF export did or did not use AI, shown on the AI settings card. */
@@ -57,7 +60,8 @@ export function aiConfig(): AiConfig {
   const model = getSetting("moonshot_model") || process.env.MOONSHOT_MODEL || DEFAULT_MODEL;
   const enabledSetting = getSetting("moonshot_enabled");
   const disabled = enabledSetting === "0" || (enabledSetting == null && process.env.MOONSHOT_ENABLED === "0");
-  const timeoutMs = Number(getSetting("moonshot_timeout_ms") || process.env.MOONSHOT_TIMEOUT_MS || 20000);
+  const timeoutMs = Number(getSetting("moonshot_timeout_ms") || process.env.MOONSHOT_TIMEOUT_MS) || 90000;
+  const maxTokens = Number(getSetting("moonshot_max_tokens") || process.env.MOONSHOT_MAX_TOKENS) || 8000;
   return {
     apiKey,
     baseUrl,
@@ -65,6 +69,7 @@ export function aiConfig(): AiConfig {
     enabled: !disabled && apiKey !== "",
     explicitlyDisabled: enabledSetting === "0",
     timeoutMs,
+    maxTokens,
   };
 }
 
@@ -130,6 +135,64 @@ function sanitizeText(s: string): string {
     .trim();
 }
 
+/**
+ * Best-effort repair of the almost-JSON a model sometimes returns. Two things go
+ * wrong in practice: a raw control character (a literal newline or tab) left
+ * unescaped inside a string value, and a reply cut off by the token limit that
+ * leaves a string and its enclosing braces unterminated. This walks the text
+ * once, escaping stray control characters inside strings and closing whatever
+ * string / object / array is still open at the end, so a long or slightly
+ * malformed report still parses.
+ */
+function repairJson(raw: string): string {
+  let out = "";
+  let inStr = false;
+  let escaped = false;
+  const stack: string[] = [];
+  for (const ch of raw) {
+    if (inStr) {
+      if (escaped) {
+        out += ch;
+        escaped = false;
+      } else if (ch === "\\") {
+        out += ch;
+        escaped = true;
+      } else if (ch === '"') {
+        out += ch;
+        inStr = false;
+      } else if (ch === "\n") {
+        out += "\\n";
+      } else if (ch === "\r") {
+        out += "\\r";
+      } else if (ch === "\t") {
+        out += "\\t";
+      } else {
+        out += ch;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      out += ch;
+    } else if (ch === "{" || ch === "[") {
+      stack.push(ch === "{" ? "}" : "]");
+      out += ch;
+    } else if (ch === "}" || ch === "]") {
+      if (stack.length) stack.pop();
+      out += ch;
+    } else {
+      out += ch;
+    }
+  }
+  // finish anything a cut-off reply left open
+  if (inStr) {
+    if (escaped) out = out.slice(0, -1); // drop a dangling backslash
+    out += '"';
+  }
+  while (stack.length) out += stack.pop();
+  return out;
+}
+
 function extractSections(content: string): AiNarrativeSections | null {
   const tryParse = (raw: string) => {
     try {
@@ -138,10 +201,17 @@ function extractSections(content: string): AiNarrativeSections | null {
       return null;
     }
   };
-  let obj = tryParse(content);
+  const trimmed = content.trim();
+  // 1) straight parse  2) the first {...} block  3) repaired: escape stray control
+  //    characters and close a reply a token limit cut off, so a long report still lands
+  let obj = tryParse(trimmed);
   if (!obj) {
-    const m = content.match(/\{[\s\S]*\}/);
+    const m = trimmed.match(/\{[\s\S]*\}/);
     if (m) obj = tryParse(m[0]);
+  }
+  if (!obj) {
+    const start = trimmed.indexOf("{");
+    if (start >= 0) obj = tryParse(repairJson(trimmed.slice(start)));
   }
   if (!obj) return null;
   const { strength, development, perception } = obj as Record<string, unknown>;
@@ -167,7 +237,7 @@ function extractSections(content: string): AiNarrativeSections | null {
  * can fall back to the deterministic narrative. Never throws.
  */
 export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNarrativeSections | null> {
-  const { apiKey, baseUrl, model, enabled, timeoutMs } = aiConfig();
+  const { apiKey, baseUrl, model, enabled, timeoutMs, maxTokens } = aiConfig();
   if (!enabled) {
     recordAiResult(apiKey === "" ? "not attempted: no API key set" : "not attempted: AI feedback is turned off");
     return null;
@@ -189,6 +259,7 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
       body: JSON.stringify({
         model,
         temperature: 0.65,
+        max_tokens: maxTokens,
         response_format: { type: "json_object" },
         messages,
       }),
@@ -212,7 +283,9 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
     }
     const sections = extractSections(content);
     if (!sections) {
-      recordAiResult(`model replied but not parseable JSON: ${content.slice(0, 180)}`);
+      const head = content.slice(0, 90).replace(/\s+/g, " ");
+      const tail = content.slice(-60).replace(/\s+/g, " ");
+      recordAiResult(`model replied but the JSON did not parse (length ${content.length}). starts: ${head} ... ends: ${tail}`);
       return null;
     }
     recordAiResult(`OK — Kimi wrote the feedback (model ${model})`);
