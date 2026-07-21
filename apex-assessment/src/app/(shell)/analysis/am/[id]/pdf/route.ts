@@ -13,6 +13,7 @@ import {
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
 import { buildNarrative } from "@/lib/report-narrative";
+import { aiNarrativeEnabled, generateAiNarrative } from "@/lib/ai-narrative";
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -89,6 +90,39 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     development,
     perceptionGaps,
   });
+
+  // When Kimi (Moonshot) is configured and there is panel data to reason from, let it
+  // write the three prose sections; otherwise keep the deterministic narrative. Any
+  // failure returns null and we simply keep the deterministic prose — the PDF never
+  // depends on the external call.
+  if (aiNarrativeEnabled() && hasPanelData) {
+    const ai = await generateAiNarrative({
+      amName: am.name,
+      track: am.track,
+      capabilities: rows
+        .filter((r) => r.req != null)
+        .map((r) => ({
+          name: r.name,
+          cluster: r.cluster,
+          required: r.req,
+          self: r.self ?? null,
+          manager: r.manager ?? null,
+          panel: r.expert ?? null,
+          gapVsRequired: r.gap,
+        })),
+      themeNotes: themeNotes.map((n) => ({
+        lens: LENS_LABELS[n.lens],
+        cluster: n.cluster,
+        note: n.note,
+      })),
+      definitions: narrative.definitions.map((d) => ({ name: d.name, level: d.level, text: d.text })),
+    });
+    if (ai) {
+      narrative.strengths = ai.strength;
+      narrative.development = ai.development;
+      narrative.perception = ai.perception;
+    }
+  }
 
   const buffer = await renderToBuffer(
     createElement(AmReportPdf, {
