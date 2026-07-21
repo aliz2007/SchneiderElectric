@@ -16,9 +16,10 @@ import { buildNarrative } from "@/lib/report-narrative";
 import { aiNarrativeEnabled, generateAiNarrative, recordAiResult, lastAiResult } from "@/lib/ai-narrative";
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireSuperadmin();
   const { id } = await params;
+  const prove = new URL(req.url).searchParams.get("prove") === "1"; // pirate-voice proof mode
   const am = getAM(Number(id));
   if (!am) notFound();
 
@@ -121,7 +122,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         note: n.note,
       })),
       definitions: narrative.definitions.map((d) => ({ name: d.name, level: d.level, text: d.text })),
-    });
+    }, { proof: prove });
     if (ai) {
       narrative.strengths = ai.strength;
       narrative.development = ai.development;

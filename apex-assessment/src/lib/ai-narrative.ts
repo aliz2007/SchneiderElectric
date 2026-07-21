@@ -143,12 +143,25 @@ function extractSections(content: string): AiNarrativeSections | null {
  * Ask Kimi for the three feedback sections. Returns null on any failure so the caller
  * can fall back to the deterministic narrative. Never throws.
  */
-export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNarrativeSections | null> {
+const PROOF_OVERRIDE =
+  "STYLE OVERRIDE FOR THIS RUN ONLY: write all three sections in the theatrical voice of a " +
+  "swashbuckling pirate, and begin every section with the word 'AVAST!'. Keep every claim " +
+  "grounded in the same data; only the voice changes. Still return the same JSON shape.";
+
+export async function generateAiNarrative(
+  input: AiNarrativeInput,
+  opts?: { proof?: boolean }
+): Promise<AiNarrativeSections | null> {
   const { apiKey, baseUrl, model, enabled, timeoutMs } = aiConfig();
   if (!enabled) {
     recordAiResult(apiKey === "" ? "not attempted: no API key set" : "not attempted: AI feedback is turned off");
     return null;
   }
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...(opts?.proof ? [{ role: "system", content: PROOF_OVERRIDE }] : []),
+    { role: "user", content: "Assessment data (JSON):\n" + JSON.stringify(input) },
+  ];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -163,10 +176,7 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
         model,
         temperature: 0.3,
         response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: "Assessment data (JSON):\n" + JSON.stringify(input) },
-        ],
+        messages,
       }),
       signal: controller.signal,
     });
@@ -216,9 +226,17 @@ export async function pingAi(): Promise<{ ok: boolean; detail: string }> {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        temperature: 0,
-        max_tokens: 8,
-        messages: [{ role: "user", content: "Reply with the single word OK." }],
+        temperature: 0.8,
+        max_tokens: 60,
+        // a silly, specific prompt: a canned/fake backend can't produce this, so the reply
+        // is proof the real model is generating with this key/endpoint/model.
+        messages: [
+          {
+            role: "user",
+            content:
+              "In one short, vivid sentence, tell me a surprising fact about octopuses, and begin the sentence with the word BANANA.",
+          },
+        ],
       }),
       signal: controller.signal,
     });
@@ -230,7 +248,7 @@ export async function pingAi(): Promise<{ ok: boolean; detail: string }> {
     } catch {
       /* non-JSON success is unusual but not fatal */
     }
-    return { ok: true, detail: `Model "${model}" replied: ${String(reply).trim().slice(0, 80) || "(empty)"}` };
+    return { ok: true, detail: `Kimi replied: ${String(reply).trim().slice(0, 160) || "(empty)"}` };
   } catch (e) {
     const msg = e instanceof Error ? `${e.name}: ${e.message}` : "request failed";
     return { ok: false, detail: `Could not reach ${baseUrl} — ${msg}`.slice(0, 220) };
