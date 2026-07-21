@@ -16,7 +16,7 @@ export default async function LoginPage({
       <div className="login-card">
         <div className="login-brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-logo" src="/se-logo.svg" alt="Schneider Electric" width={42} height={42} />
+          <img className="brand-logo" src="/mark.png" alt="Schneider Electric" width={42} height={42} />
           <div>
             <div className="brand-name" style={{ color: "var(--ink)" }}>
               APEX Assessment

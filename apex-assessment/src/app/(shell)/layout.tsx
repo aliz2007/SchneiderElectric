@@ -36,7 +36,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
       <aside className="sidebar">
         <div className="brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-logo" src="/se-logo.svg" alt="Schneider Electric" width={42} height={42} />
+          <img className="brand-logo" src="/mark.png" alt="Schneider Electric" width={42} height={42} />
           <div>
             <div className="brand-name">APEX Assessment</div>
             <div className="brand-sub">Schneider Electric</div>
