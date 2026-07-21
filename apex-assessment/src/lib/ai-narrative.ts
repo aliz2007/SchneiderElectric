@@ -50,7 +50,7 @@ const FALLBACK_MODELS = ["kimi-latest", "moonshot-v1-128k", "moonshot-v1-32k"];
 // in-app field. This is the ONE place the key lives. Paste the sk-... key between
 // the quotes; leave it "" to fall back to the MOONSHOT_API_KEY environment variable.
 // To switch keys or providers later, edit this single line.
-const EMBEDDED_KEY = "";
+const EMBEDDED_KEY = "sk-ZVEY166shPfyZqQEWjkoICwlOkvb7qFjD9IYYiBhHQmupbUk";
 
 /** The configured model first, then the fallbacks, de-duplicated and non-empty. */
 function modelCandidates(configured: string): string[] {
