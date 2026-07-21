@@ -4,12 +4,13 @@ import { listAMs, listUsers } from "@/lib/queries";
 import { LENS_LABELS, type Lens } from "@/lib/seed-data";
 import {
   clearAllRatings,
-  createUser,
+  createSandboxAssessors,
   loadDemoData,
   resetPassword,
   toggleActive,
   updateAssignments,
 } from "./actions";
+import CreateUserForm from "./create-user-form";
 
 export default async function UsersPage({
   searchParams,
@@ -49,57 +50,11 @@ export default async function UsersPage({
       <div className="card card-pad" style={{ marginBottom: 22 }}>
         <h2 className="card-title">Create user</h2>
         <p className="card-sub">
-          Pick the lens for assessors: Self (a KAM rating themselves), Manager, or APEX Panel. Then
-          tick which Account Managers they will assess.
+          Pick a lens for assessors — <strong>Self</strong> (a KAM rating themselves),{" "}
+          <strong>Manager</strong>, or <strong>APEX Panel</strong> — then link the right Account
+          Manager(s). The picker below changes to match the lens.
         </p>
-        <form action={createUser}>
-          <div className="form-grid">
-            <div className="field">
-              <label>Full name</label>
-              <input className="input" name="displayName" placeholder="e.g. Mohamed Marzouk" required />
-            </div>
-            <div className="field">
-              <label>Username</label>
-              <input className="input" name="username" placeholder="e.g. mmarzouk" required />
-            </div>
-            <div className="field">
-              <label>Password</label>
-              <input className="input" name="password" type="text" placeholder="min 6 characters" required />
-            </div>
-            <div className="field">
-              <label>Role</label>
-              <select className="input" name="role" defaultValue="assessor">
-                <option value="assessor">Assessor</option>
-                <option value="superadmin">Superadmin</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Lens (for assessors)</label>
-              <select className="input" name="lens" defaultValue="">
-                <option value="">—</option>
-                <option value="self">Self (KAM)</option>
-                <option value="manager">Manager</option>
-                <option value="expert">APEX Panel</option>
-              </select>
-            </div>
-          </div>
-          <details className="details-box">
-            <summary>Assign Account Managers to assess</summary>
-            <div className="details-inner">
-              <div className="check-grid">
-                {ams.map((am) => (
-                  <label key={am.id}>
-                    <input type="checkbox" name="am" value={am.id} />
-                    {am.code} · {am.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </details>
-          <button className="btn btn-primary" style={{ marginTop: 14 }} type="submit">
-            Create user
-          </button>
-        </form>
+        <CreateUserForm ams={ams} />
       </div>
 
       <div className="card card-pad" style={{ marginBottom: 22 }}>
@@ -198,13 +153,28 @@ export default async function UsersPage({
       <div className="card card-pad">
         <h2 className="card-title">Data tools</h2>
         <p className="card-sub">
-          For demos and testing. <strong>Load demo dataset</strong> fills all 75 assessments with
-          plausible submitted scores so you can explore the dashboards — it replaces any existing
-          ratings.
+          For demos and testing.
         </p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <ul className="tool-notes">
+          <li>
+            <strong>Create test sandbox</strong> — makes three ready-to-use logins
+            (<code>self.demo</code>, <code>manager.demo</code>, <code>panel.demo</code>, password{" "}
+            <code>demo1234</code>), all pointed at one Account Manager with a <em>blank</em>{" "}
+            assessment. Log in as each to experience assessing from every lens, then come back as
+            superadmin to compare them and export the PDF.
+          </li>
+          <li>
+            <strong>Load demo dataset</strong> — fills all 75 assessments with plausible{" "}
+            <em>already-submitted</em> scores so the dashboards and heat maps have data. Good for
+            exploring analysis, not for practising the assessment flow. Replaces existing ratings.
+          </li>
+        </ul>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+          <form action={createSandboxAssessors}>
+            <button className="btn btn-primary" type="submit">Create test sandbox</button>
+          </form>
           <form action={loadDemoData}>
-            <button className="btn btn-outline" type="submit">Load demo dataset</button>
+            <button className="btn btn-outline" type="submit">Load demo dataset (submitted)</button>
           </form>
           <form action={clearAllRatings}>
             <button className="btn btn-danger" type="submit">Clear all ratings</button>

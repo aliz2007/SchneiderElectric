@@ -86,8 +86,13 @@ Next.js 15 (App Router, server actions) · React 19 · better-sqlite3 ·
   change-after-first-login).
 - **Superadmin:** Users & Access page — create users, set role (superadmin/assessor),
   set assessor lens (self/manager/expert), assign AMs, enable/disable, reset
-  passwords. Data tools: **Load demo dataset** (fills all 75 assessments with
-  plausible submitted scores) and **Clear all ratings**.
+  passwords. The create-user AM picker is **lens-aware** (`create-user-form.tsx`): Self
+  → single-select "which AM is this person" (their own profile); Manager/Panel → a
+  checkbox grid of who they assess; Superadmin → none. Data tools:
+  **Create test sandbox** (three blank-draft logins — `self.demo` / `manager.demo` /
+  `panel.demo`, pw `demo1234` — all on the first AM, for trying the assessment flow from
+  every lens), **Load demo dataset** (fills all 75 assessments with plausible *submitted*
+  scores for the dashboards) and **Clear all ratings**.
 - **Assessors** (Manager / APEX Panel) self-assign AMs by typing a name on My
   Assessments (admin can also pre-assign). One evaluator per AM per lens.
   **Self-assessors are the exception**: they only ever assess themselves, so `/rate`

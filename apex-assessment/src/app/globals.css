@@ -736,6 +736,14 @@ select.input option { background: #0e1729; color: var(--ink); }
 .check-grid label:hover { background: rgba(61, 205, 88, 0.09); }
 .check-grid input[type="checkbox"] { accent-color: var(--se-green); }
 
+.tool-notes { margin: 0 0 14px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+.tool-notes li { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.tool-notes code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  background: rgba(61, 205, 88, 0.12); color: #9be8ab;
+  padding: 1px 5px; border-radius: 5px;
+}
+
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 
 hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }

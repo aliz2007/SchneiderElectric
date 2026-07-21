@@ -86,13 +86,13 @@ try {
   ok("zone MEA heat map renders");
 
   // ---- 6. create an assessor (manager lens, assigned AM02) ----
+  // Manager lens → the AM picker renders as a checkbox grid inside the create card.
   await page.goto(`${BASE}/admin/users`);
   await page.fill('input[name="displayName"]', "Test Manager");
   await page.fill('input[name="username"]', "tmanager");
   await page.fill('input[name="password"]', "secret123");
   await page.selectOption('select[name="lens"]', "manager");
-  await page.locator(".card form details summary").first().click();
-  await page.locator('form input[name="am"][value="2"]').first().check();
+  await page.locator('.card:has-text("Create user") input[name="am"][value="2"]').check();
   await page.locator('button:has-text("Create user")').click();
   await page.waitForURL(/\/admin\/users\?ok=/);
   ok("assessor created with 1 assignment");
@@ -186,13 +186,13 @@ try {
     : fail("PDF with theme note", `status ${pdf2.status()}`);
 
   // ---- 10. self-assessor lands straight on their own assessment (no picking, no notes) ----
+  // Self lens → the AM picker becomes a single-select "which AM is this person".
   await page.goto(`${BASE}/admin/users`);
   await page.fill('input[name="displayName"]', "Self KAM");
   await page.fill('input[name="username"]', "selfkam");
   await page.fill('input[name="password"]', "secret123");
   await page.selectOption('select[name="lens"]', "self");
-  await page.locator(".card form details summary").first().click();
-  await page.locator('form input[name="am"][value="4"]').first().check();
+  await page.selectOption('.card:has-text("Create user") select[name="am"]', "4");
   await page.locator('button:has-text("Create user")').click();
   await page.waitForURL(/\/admin\/users\?ok=/);
   ok("self-assessor created (linked to AM04)");
@@ -219,6 +219,32 @@ try {
   await page.waitForURL("**/rate/4");
   ok("self-assessor /rate redirects to own assessment (no picking others)");
   await page.screenshot({ path: `${SHOTS}/6-self-assessor.png` });
+
+  // ---- 11. one-click test sandbox: 3 lenses on one AM, blank drafts ----
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "vladimir");
+  await page.fill("#password", "apex2026");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/analysis");
+  await page.goto(`${BASE}/admin/users`);
+  await page.locator('button:has-text("Create test sandbox")').click();
+  await page.waitForURL(/\/admin\/users\?ok=/);
+  const sandboxMsg = await page.locator(".form-ok").textContent();
+  sandboxMsg?.includes("self.demo")
+    ? ok("test sandbox provisions demo assessors")
+    : fail("sandbox banner", sandboxMsg ?? "");
+
+  // self.demo (linked to AM01) logs in → blank self-assessment, straight away
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "self.demo");
+  await page.fill("#password", "demo1234");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/rate/1");
+  ok("sandbox self.demo lands on their own assessment");
+  const sandboxAnswered = await page.locator(".dot.answered").count();
+  sandboxAnswered === 0 ? ok("sandbox self-assessment starts blank") : fail("sandbox not blank", `${sandboxAnswered}`);
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});

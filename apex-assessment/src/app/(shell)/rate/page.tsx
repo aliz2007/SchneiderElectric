@@ -42,8 +42,10 @@ export default async function RatePage({
           <h1 className="page-title">My Self-Assessment</h1>
         </div>
         <div className="banner banner-info">
-          Your self-assessment isn&apos;t set up yet. Ask your administrator to link your Account
-          Manager profile to your account so it can appear here.
+          No self-assessment is linked to your account yet. An administrator needs to connect your
+          account to your own Account Manager profile — in <strong>Users &amp; Access</strong>, set
+          your lens to <strong>Self</strong> and pick your name under &ldquo;which Account Manager is
+          this person&rdquo;. It will then open here automatically.
         </div>
       </div>
     );

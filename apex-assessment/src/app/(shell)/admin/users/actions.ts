@@ -8,7 +8,7 @@ import { requireSuperadmin } from "@/lib/session";
 import { listAMs, listCapabilities, setAssignments } from "@/lib/queries";
 
 function amIdsFrom(formData: FormData): number[] {
-  return formData.getAll("am").map(Number).filter(Number.isInteger);
+  return formData.getAll("am").map(Number).filter((n) => Number.isInteger(n) && n > 0);
 }
 
 export async function createUser(formData: FormData) {
@@ -109,6 +109,64 @@ export async function loadDemoData() {
   });
   tx();
   redirect("/admin/users?ok=" + encodeURIComponent("Demo dataset loaded — see the Dashboard."));
+}
+
+/**
+ * Provision a ready-to-use sandbox for trying the assessment flow from every lens:
+ * three assessor logins (self / manager / APEX Panel) all linked to one Account
+ * Manager, whose assessments are wiped to blank drafts so each wizard opens empty.
+ * Idempotent — re-running resets the same three accounts and clears that AM again.
+ */
+export async function createSandboxAssessors() {
+  await requireSuperadmin();
+  const db = getDb();
+  const am = db
+    .prepare("SELECT id, code, name FROM account_managers ORDER BY code LIMIT 1")
+    .get() as { id: number; code: string; name: string } | undefined;
+  if (!am) redirect("/admin/users?err=" + encodeURIComponent("No Account Managers exist to assess."));
+
+  const password = "demo1234";
+  const hash = hashPassword(password);
+  const accounts = [
+    { username: "self.demo", displayName: "Demo Self (KAM)", lens: "self" },
+    { username: "manager.demo", displayName: "Demo Manager", lens: "manager" },
+    { username: "panel.demo", displayName: "Demo APEX Panel", lens: "expert" },
+  ];
+
+  const tx = db.transaction(() => {
+    // blank slate for this AM so every lens opens an empty assessment
+    db.prepare("DELETE FROM assessments WHERE am_id = ?").run(am!.id);
+    for (const a of accounts) {
+      const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(a.username) as
+        | { id: number }
+        | undefined;
+      let userId: number;
+      if (existing) {
+        userId = existing.id;
+        db.prepare(
+          "UPDATE users SET password_hash = ?, display_name = ?, role = 'assessor', lens = ?, active = 1 WHERE id = ?"
+        ).run(hash, a.displayName, a.lens, userId);
+      } else {
+        userId = Number(
+          db
+            .prepare("INSERT INTO users (username, password_hash, display_name, role, lens) VALUES (?, ?, ?, 'assessor', ?)")
+            .run(a.username, hash, a.displayName, a.lens).lastInsertRowid
+        );
+      }
+      // link all three to the same Account Manager, and drop stale sessions
+      db.prepare("DELETE FROM assignments WHERE user_id = ?").run(userId);
+      db.prepare("INSERT OR IGNORE INTO assignments (user_id, am_id) VALUES (?, ?)").run(userId, am!.id);
+      db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    }
+  });
+  tx();
+
+  redirect(
+    "/admin/users?ok=" +
+      encodeURIComponent(
+        `Sandbox ready. Sign in as self.demo, manager.demo or panel.demo (password ${password}) — all set to assess ${am!.name} (${am!.code}) with a blank assessment. Then return here as superadmin to open Individuals → ${am!.name} and export the PDF.`
+      )
+  );
 }
 
 /** Delete every assessment & rating. Structure (AMs, capabilities, users) is kept. */
