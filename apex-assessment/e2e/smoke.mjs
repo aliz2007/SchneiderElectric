@@ -188,7 +188,7 @@ try {
     ? ok("PDF with theme note renders")
     : fail("PDF with theme note", `status ${pdf2.status()}`);
 
-  // ---- 10. self-assessor lands straight on their own assessment (no picking, no notes) ----
+  // ---- 10. self-assessor lands straight on their own assessment (no picking; can add own notes) ----
   // Self lens → the AM picker becomes a single-select "which AM is this person".
   await page.goto(`${BASE}/admin/users`);
   await page.fill('input[name="displayName"]', "Self KAM");
@@ -215,8 +215,19 @@ try {
   ok("self-assessor lands directly on their own self-assessment");
   const ownName = await page.locator(".wizard-top .page-title").textContent();
   ownName?.includes("Biju Mathew") ? ok("self-assessor sees their own profile") : fail("self profile", ownName ?? "");
-  const selfNotes = await page.locator("textarea").count();
-  selfNotes === 0 ? ok("self-assessor has no note fields") : fail("self notes hidden", `${selfNotes}`);
+  // the assessment page carries a how-to help block
+  const helpShown = await page.locator(".wizard-help").count();
+  helpShown > 0 ? ok("assessment how-to help shown") : fail("how-to help block", `${helpShown}`);
+  // self-assessors CAN now add notes to justify their own ratings, and they persist
+  const selfNoteFields = await page.locator(".theme-note-field textarea").count();
+  selfNoteFields > 0 ? ok("self-assessor has note fields to justify themselves") : fail("self note fields", `${selfNoteFields}`);
+  const SELF_NOTE = "Self-justification: recent stretch assignments back this rating.";
+  await page.locator(".theme-note-field textarea").first().fill(SELF_NOTE);
+  await page.waitForTimeout(1100); // debounced autosave (700ms) + server round-trip
+  await page.reload();
+  await page.waitForTimeout(400);
+  const selfSaved = await page.locator(".theme-note-field textarea").first().inputValue();
+  selfSaved === SELF_NOTE ? ok("self note saved (server accepts self notes)") : fail("self note persistence", selfSaved);
 
   // the pick-someone list is out of reach — /rate redirects them onto their own assessment
   await page.goto(`${BASE}/rate`);

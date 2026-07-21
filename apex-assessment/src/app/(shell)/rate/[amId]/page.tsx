@@ -43,20 +43,19 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
   const initial: WizardInitial = {};
   for (const r of ratings) initial[r.capability_id] = { level: r.level };
 
-  // Manager / APEX Panel capture one note per theme; self-assessments carry no notes.
-  const themeNotesEnabled = user.lens !== "self";
+  // Every lens captures one note per theme. Managers and the APEX Panel record their
+  // reasoning; self-assessors use it to justify or add context to their own ratings.
   const initialThemeNotes: Record<string, string> = {};
-  if (themeNotesEnabled) {
-    for (const t of getThemeNotes(assessment.id)) initialThemeNotes[t.cluster] = t.note;
-  }
+  for (const t of getThemeNotes(assessment.id)) initialThemeNotes[t.cluster] = t.note;
 
   return (
     <Wizard
       am={{ id: am.id, name: am.name, account: am.account, zone: am.zone, track: am.track }}
       lensLabel={LENS_LABELS[user.lens]}
+      isSelf={user.lens === "self"}
       caps={caps}
       initial={initial}
-      themeNotesEnabled={themeNotesEnabled}
+      themeNotesEnabled
       initialThemeNotes={initialThemeNotes}
       submitted={assessment.status === "submitted"}
     />

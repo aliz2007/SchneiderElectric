@@ -642,6 +642,18 @@ select.input option { background: #0e1729; color: var(--ink); }
 .key-hint { font-size: 10.5px; color: #5c6a82; font-weight: 650; }
 
 .wizard-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+.wizard-help {
+  margin-top: 30px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.wizard-help-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px; letter-spacing: -0.01em; }
+.wizard-help-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
+.wizard-help-list li { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.wizard-help-list li::marker { color: var(--se-green-bright, #3dcd58); }
+.wizard-help-list b { color: var(--ink-2); font-weight: 650; }
 .dots { display: flex; gap: 5px; flex-wrap: wrap; }
 .dot {
   width: 13px; height: 13px; border-radius: 5px; background: rgba(255, 255, 255, 0.13); border: none; padding: 0;

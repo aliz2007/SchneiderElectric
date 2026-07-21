@@ -43,7 +43,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const caps = listCapabilities();
   const levels = submittedLevels(am.id);
 
-  // Manager / APEX Panel theme notes, grouped by cluster and ordered by lens.
+  // Theme notes (Self / Manager / APEX Panel), grouped by cluster and ordered by lens.
   const themeNotes = submittedThemeNotes(am.id);
   const notesByCluster = new Map<string, { lens: string; note: string }[]>();
   for (const n of themeNotes) {

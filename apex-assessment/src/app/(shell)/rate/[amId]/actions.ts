@@ -34,12 +34,12 @@ export async function saveRating(amId: number, capabilityId: number, level: numb
 }
 
 /**
- * Save a Manager / APEX Panel note for one theme (capability cluster). Self-assessors
- * do not capture notes, so the self lens is rejected server-side.
+ * Save one note per theme (capability cluster) for the caller's lens. Managers and the
+ * APEX Panel record their reasoning; self-assessors justify or add context to their own
+ * ratings. Every lens may capture notes.
  */
 export async function saveThemeNote(amId: number, cluster: string, note: string) {
-  const { user, assessment } = await guard(amId);
-  if (user.lens === "self") throw new Error("Self-assessments do not capture notes.");
+  const { assessment } = await guard(amId);
   if (assessment.status === "submitted") throw new Error("Assessment already submitted.");
   const clusters = new Set(listCapabilities().map((c) => c.cluster));
   if (!clusters.has(cluster)) throw new Error("Invalid theme.");

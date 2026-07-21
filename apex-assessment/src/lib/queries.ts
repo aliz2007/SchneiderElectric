@@ -278,7 +278,7 @@ export function submittedThemeNotes(amId: number): { lens: Lens; cluster: string
     .prepare(
       `SELECT a.lens, t.cluster, t.note
        FROM assessments a JOIN theme_notes t ON t.assessment_id = a.id
-       WHERE a.am_id = ? AND a.status = 'submitted' AND a.lens IN ('manager','expert')
+       WHERE a.am_id = ? AND a.status = 'submitted' AND a.lens IN ('self','manager','expert')
          AND t.note IS NOT NULL AND TRIM(t.note) != ''`
     )
     .all(amId) as { lens: Lens; cluster: string; note: string }[];

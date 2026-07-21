@@ -31,7 +31,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
   const caps = listCapabilities();
   const levels = submittedLevels(am.id);
 
-  // Theme notes (Manager / APEX Panel) grouped by cluster, shown inside the
+  // Theme notes (Self / Manager / APEX Panel) grouped by cluster, shown inside the
   // capability detail so each theme's commentary sits with its ratings.
   const themeNotes = submittedThemeNotes(am.id);
   const notesByCluster = new Map<string, { lens: Lens; note: string }[]>();

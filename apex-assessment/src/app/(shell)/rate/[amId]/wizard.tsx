@@ -24,6 +24,7 @@ const LEVEL_META = [
 export default function Wizard({
   am,
   lensLabel,
+  isSelf,
   caps,
   initial,
   themeNotesEnabled,
@@ -32,6 +33,7 @@ export default function Wizard({
 }: {
   am: { id: number; name: string; account: string; zone: string; track: string };
   lensLabel: string;
+  isSelf: boolean;
   caps: WizardCap[];
   initial: WizardInitial;
   themeNotesEnabled: boolean;
@@ -187,14 +189,22 @@ export default function Wizard({
           {themeNotesEnabled && (
             <div className="field theme-note-field" style={{ marginBottom: 0 }}>
               <label htmlFor={`theme-note-${idx}`}>
-                Theme notes · <span className="theme-note-name">{cap.cluster}</span>
-                <span className="theme-note-hint"> — one note for this theme, shared across its capabilities</span>
+                {isSelf ? "Notes" : "Theme notes"} · <span className="theme-note-name">{cap.cluster}</span>
+                <span className="theme-note-hint">
+                  {isSelf
+                    ? " — optional: explain or justify your ratings for this theme"
+                    : " — one note for this theme, shared across its capabilities"}
+                </span>
               </label>
               <textarea
                 id={`theme-note-${idx}`}
                 className="input"
                 rows={2}
-                placeholder={`Overall observations on ${cap.cluster}…`}
+                placeholder={
+                  isSelf
+                    ? `Why you rated yourself this way on ${cap.cluster}… (optional)`
+                    : `Overall observations on ${cap.cluster}…`
+                }
                 value={themeNotes[cap.cluster] ?? ""}
                 onChange={(e) => setThemeNote(cap.cluster, e.target.value)}
                 disabled={submitted}
@@ -234,10 +244,12 @@ export default function Wizard({
           {themeNotesEnabled && (
             <div className="theme-notes-review">
               <h3 className="card-title" style={{ fontSize: 15, marginTop: 22 }}>
-                Theme notes
+                {isSelf ? "Your notes" : "Theme notes"}
               </h3>
               <p className="card-sub" style={{ marginBottom: 12 }}>
-                One note per theme — these appear on the individual report and PDF.
+                {isSelf
+                  ? "Optional — one note per theme to justify or add context to your ratings. These appear on your report."
+                  : "One note per theme — these appear on the individual report and PDF."}
               </p>
               {themes.map((t) => (
                 <div key={t} className="field theme-note-field">
@@ -337,6 +349,56 @@ export default function Wizard({
           {saveState === "error" && <span style={{ color: "var(--red)" }}>Save failed</span>}
         </div>
       </div>
+
+      {!submitted && (
+        <aside className="wizard-help">
+          <h3 className="wizard-help-title">
+            {isSelf ? "How to complete your self-assessment" : "How to run this assessment"}
+          </h3>
+          <ul className="wizard-help-list">
+            {isSelf ? (
+              <>
+                <li>
+                  Rate yourself on each capability: read the three levels and pick the one that best
+                  matches how you work today. Be candid — there are no right or wrong answers.
+                </li>
+                <li>
+                  Prefer the keyboard? Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level, and use
+                  the arrows or the dots below to move between capabilities.
+                </li>
+                <li>
+                  Use the <b>Notes</b> box on any theme to explain or justify your ratings — for
+                  example why you scored yourself a certain way. It is optional, and one note covers
+                  the whole theme.
+                </li>
+                <li>
+                  Everything saves automatically. Once all {caps.length} are rated, open{" "}
+                  <b>Review &amp; submit</b>. Submitting locks your assessment.
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  Rate the Account Manager on each capability against the three levels. The target
+                  each track expects is deliberately hidden here, so your scoring stays unbiased.
+                </li>
+                <li>
+                  Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level, and use the arrows or the
+                  dots below to move between capabilities.
+                </li>
+                <li>
+                  Add one <b>Theme note</b> per cluster to record the reasoning behind your scores —
+                  these appear on the individual report and PDF.
+                </li>
+                <li>
+                  Ratings save automatically. When all {caps.length} are rated, open{" "}
+                  <b>Review &amp; submit</b>; submitting locks the assessment.
+                </li>
+              </>
+            )}
+          </ul>
+        </aside>
+      )}
     </div>
   );
 }
