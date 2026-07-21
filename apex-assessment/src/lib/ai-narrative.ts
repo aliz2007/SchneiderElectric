@@ -7,7 +7,7 @@
 // Config comes from the environment (see apex-assessment/.env.local):
 //   MOONSHOT_API_KEY   — required to enable AI feedback
 //   MOONSHOT_BASE_URL  — default https://api.moonshot.ai/v1
-//   MOONSHOT_MODEL     — default moonshot-v1-8k (try kimi-k2-0711-preview / kimi-latest)
+//   MOONSHOT_MODEL     — default kimi-latest; auto-falls back to moonshot-v1-128k / -32k if the key can't use it
 //   MOONSHOT_MAX_TOKENS — default 8000 (room for a full report covering every capability)
 //   MOONSHOT_TIMEOUT_MS — default 90000 (a complete report takes a while to write)
 //   MOONSHOT_ENABLED=0  — force-disable
@@ -38,9 +38,55 @@ export function lastAiResult(): string | null {
 }
 
 const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
-// Moonshot's strongest general model for writing quality. If an account lacks access the
-// Test-connection / export diagnostic shows a 404 and the model can be changed in the app.
-const DEFAULT_MODEL = "kimi-k2-0711-preview";
+// Try Moonshot's always-current Kimi first (best writing quality, 128k context).
+// Not every API key can use every model, so if the configured model is not
+// available the call falls through this list and uses — and remembers — the first
+// model the key CAN access. All have room for the large prompt plus a full report.
+const DEFAULT_MODEL = "kimi-latest";
+const FALLBACK_MODELS = ["kimi-latest", "moonshot-v1-128k", "moonshot-v1-32k"];
+
+/** The configured model first, then the fallbacks, de-duplicated and non-empty. */
+function modelCandidates(configured: string): string[] {
+  return [configured, ...FALLBACK_MODELS].filter((m, i, a) => !!m && a.indexOf(m) === i);
+}
+
+/** Moonshot answers 404 resource_not_found when the key cannot use a given model. */
+function isModelUnavailable(status: number, body: string): boolean {
+  return status === 404 && /resource_not_found|not found the model|permission denied/i.test(body);
+}
+
+/** Remember the model that actually worked, so later calls skip the probing. */
+function rememberModel(model: string) {
+  try {
+    setSetting("moonshot_model", model);
+  } catch {
+    /* persistence must never break a render */
+  }
+}
+
+/** One chat call. Returns the HTTP status + raw body, or an { error } on network/timeout. */
+async function moonshotChat(
+  cfg: AiConfig,
+  model: string,
+  body: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<{ status: number; text: string } | { error: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
+      body: JSON.stringify({ model, ...body }),
+      signal: controller.signal,
+    });
+    return { status: res.status, text: await res.text() };
+  } catch (e) {
+    return { error: e instanceof Error ? `${e.name}: ${e.message}` : "request failed" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** Resolve config from the in-app settings first, then the environment, then defaults. */
 /** API keys must be plain ASCII to travel in an HTTP header. Strip whitespace and any
@@ -273,65 +319,62 @@ function extractSections(content: string): AiNarrativeSections | null {
  * can fall back to the deterministic narrative. Never throws.
  */
 export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNarrativeSections | null> {
-  const { apiKey, baseUrl, model, enabled, timeoutMs, maxTokens } = aiConfig();
+  const cfg = aiConfig();
+  const { apiKey, baseUrl, model, enabled, timeoutMs, maxTokens } = cfg;
   if (!enabled) {
     recordAiResult(apiKey === "" ? "not attempted: no API key set" : "not attempted: AI feedback is turned off");
     return null;
   }
-  const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: "Assessment data (JSON):\n" + JSON.stringify(input) },
-  ];
+  const body = {
+    temperature: 0.65,
+    max_tokens: maxTokens,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: "Assessment data (JSON):\n" + JSON.stringify(input) },
+    ],
+  };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.65,
-        max_tokens: maxTokens,
-        response_format: { type: "json_object" },
-        messages,
-      }),
-      signal: controller.signal,
-    });
-    const bodyText = await res.text();
-    if (!res.ok) {
-      recordAiResult(`HTTP ${res.status} from ${baseUrl}: ${bodyText.slice(0, 180)}`);
+  // Try the configured model, then fall through the fallbacks if the key can't use it.
+  const candidates = modelCandidates(model);
+  const tried: string[] = [];
+  for (const m of candidates) {
+    tried.push(m);
+    const r = await moonshotChat(cfg, m, body, timeoutMs);
+    if ("error" in r) {
+      // a network/timeout failure won't be fixed by trying another model
+      recordAiResult(`request failed (model ${m}): ${r.error}`.slice(0, 200));
+      return null;
+    }
+    if (isModelUnavailable(r.status, r.text)) continue; // this key can't use m — try the next
+    if (r.status < 200 || r.status >= 300) {
+      recordAiResult(`HTTP ${r.status} from ${baseUrl} (model ${m}): ${r.text.slice(0, 160)}`);
       return null;
     }
     let content: unknown;
     try {
-      content = (JSON.parse(bodyText) as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]
-        ?.message?.content;
+      content = (JSON.parse(r.text) as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]?.message
+        ?.content;
     } catch {
       content = undefined;
     }
     if (typeof content !== "string") {
-      recordAiResult(`unexpected response shape: ${bodyText.slice(0, 180)}`);
+      recordAiResult(`unexpected response shape (model ${m}): ${r.text.slice(0, 160)}`);
       return null;
     }
     const sections = extractSections(content);
     if (!sections) {
       const head = content.slice(0, 90).replace(/\s+/g, " ");
       const tail = content.slice(-60).replace(/\s+/g, " ");
-      recordAiResult(`model replied but the JSON did not parse (length ${content.length}). starts: ${head} ... ends: ${tail}`);
+      recordAiResult(`model ${m} replied but the JSON did not parse (length ${content.length}). starts: ${head} ... ends: ${tail}`);
       return null;
     }
-    recordAiResult(`OK — Kimi wrote the feedback (model ${model})`);
+    if (m !== model) rememberModel(m);
+    recordAiResult(`OK — Kimi wrote the feedback (model ${m}${m !== model ? `, auto-selected because ${model} was unavailable` : ""})`);
     return sections;
-  } catch (e) {
-    recordAiResult(`request failed: ${e instanceof Error ? `${e.name}: ${e.message}` : "unknown error"}`.slice(0, 200));
-    return null;
-  } finally {
-    clearTimeout(timer);
   }
+  recordAiResult(`no usable model — this key cannot access any of: ${tried.join(", ")}. Set the model in AI settings to one your Moonshot key allows.`);
+  return null;
 }
 
 /**
@@ -339,35 +382,42 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
  * exactly what happened, so a misconfigured key / model / endpoint is easy to diagnose.
  */
 export async function pingAi(): Promise<{ ok: boolean; detail: string }> {
-  const { apiKey, baseUrl, model, timeoutMs } = aiConfig();
+  const cfg = aiConfig();
+  const { apiKey, baseUrl, model, timeoutMs } = cfg;
   if (apiKey === "") return { ok: false, detail: "No API key is set." };
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, 15000));
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: 16,
-        messages: [{ role: "user", content: "Reply with exactly: connection ok" }],
-      }),
-      signal: controller.signal,
-    });
-    const text = await res.text();
-    if (!res.ok) return { ok: false, detail: `HTTP ${res.status} from ${baseUrl}: ${text.slice(0, 220)}` };
+  const body = {
+    temperature: 0,
+    max_tokens: 16,
+    messages: [{ role: "user", content: "Reply with exactly: connection ok" }],
+  };
+  const timeout = Math.min(timeoutMs, 20000);
+  const candidates = modelCandidates(model);
+  const tried: string[] = [];
+  let networkErr = "";
+  for (const m of candidates) {
+    tried.push(m);
+    const r = await moonshotChat(cfg, m, body, timeout);
+    if ("error" in r) {
+      networkErr = r.error;
+      break; // network/timeout — another model won't help
+    }
+    if (isModelUnavailable(r.status, r.text)) continue; // try the next model
+    if (r.status < 200 || r.status >= 300) {
+      return { ok: false, detail: `HTTP ${r.status} from ${baseUrl} (model ${m}): ${r.text.slice(0, 200)}` };
+    }
     let reply = "";
     try {
-      reply = JSON.parse(text)?.choices?.[0]?.message?.content ?? "";
+      reply = JSON.parse(r.text)?.choices?.[0]?.message?.content ?? "";
     } catch {
       /* non-JSON success is unusual but not fatal */
     }
-    return { ok: true, detail: `model "${model}" replied: ${String(reply).trim().slice(0, 120) || "(empty)"}` };
-  } catch (e) {
-    const msg = e instanceof Error ? `${e.name}: ${e.message}` : "request failed";
-    return { ok: false, detail: `Could not reach ${baseUrl} — ${msg}`.slice(0, 220) };
-  } finally {
-    clearTimeout(timer);
+    if (m !== model) rememberModel(m);
+    const note = m !== model ? ` — auto-selected and saved, because "${model}" is not available on your key` : "";
+    return { ok: true, detail: `model "${m}" replied: ${String(reply).trim().slice(0, 100) || "(empty)"}${note}` };
   }
+  if (networkErr) return { ok: false, detail: `Could not reach ${baseUrl} — ${networkErr}`.slice(0, 220) };
+  return {
+    ok: false,
+    detail: `Your Moonshot key cannot access any of these models: ${tried.join(", ")}. Enter a model your key allows in AI settings.`,
+  };
 }
