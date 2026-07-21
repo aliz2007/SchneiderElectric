@@ -97,4 +97,6 @@ HANDOFF.md            full project context and history
 
 ## Documentation
 
+`docs/ACCOUNT-GUIDE.md` is a short, practical guide for administrators on creating logins and assigning them to people.
+
 `HANDOFF.md` at the repository root is the complete context archive. It explains the assessment model, the product rules, every feature, and the decisions behind them, in enough detail to continue the project from this repository alone.
