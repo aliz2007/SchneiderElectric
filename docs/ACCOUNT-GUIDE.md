@@ -34,12 +34,16 @@ assessor is always linked to exactly one Account Manager.
 2. Fill in **Full name**, **Username**, and a **Password** (at least 6 characters).
 3. Leave **Role** as **Assessor**.
 4. Set **Lens** to **Self**.
-5. A single dropdown appears: **Which Account Manager is this person?** Pick the one that
-   is them (their own profile).
+5. Choose one:
+   - **A new person** (default): the app creates their profile from their name, and the
+     person fills in the rest (region, account, track) themselves on their first sign-in.
+     Use this to build your own roster.
+   - **An existing Account Manager**: pick someone already in the system.
 6. Click **Create user**.
 
-When that person signs in, they land straight on their own self-assessment. They cannot
-pick or see anyone else.
+When that person signs in for the first time, a **new person** is asked to complete their
+profile (name, account, region, track), then lands on their own self-assessment. After that
+they always land straight on their assessment. They cannot pick or see anyone else.
 
 ## Creating a Manager assessor
 
