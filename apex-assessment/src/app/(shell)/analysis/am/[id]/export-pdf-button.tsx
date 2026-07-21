@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 
+type Result = { source: string | null; reason: string } | null;
+
 /**
- * Downloads the individual PDF via fetch so we can show a live loading state while the
- * server renders it (and, when AI feedback is on, calls Kimi). Falls back to a plain
- * navigation if anything about the fetch/blob path fails.
+ * Downloads the individual PDF via fetch so we can (a) show a live loading state while the
+ * server renders it (and, when AI feedback is on, calls Kimi) and (b) read the X-AI-Source /
+ * X-AI-Reason response headers and show, right here, whether Kimi actually wrote the
+ * narrative or exactly why it fell back. Falls back to a plain navigation on any error.
  */
 export default function ExportPdfButton({
   amId,
@@ -17,13 +20,25 @@ export default function ExportPdfButton({
   aiActive: boolean;
 }) {
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<Result>(null);
 
   const download = async () => {
     if (loading) return;
     setLoading(true);
+    setResult(null);
     try {
       const res = await fetch(`/analysis/am/${amId}/pdf`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const source = res.headers.get("X-AI-Source");
+      let reason = res.headers.get("X-AI-Reason") ?? "";
+      try {
+        reason = decodeURIComponent(reason);
+      } catch {
+        /* keep raw */
+      }
+      setResult({ source, reason });
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const slug = amName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "");
@@ -41,15 +56,33 @@ export default function ExportPdfButton({
     }
   };
 
+  const usedKimi = result?.source === "kimi";
+  // strip the leading "dd/mm/yyyy, hh:mm:ss — " timestamp for a tidy inline message
+  const reasonText = (result?.reason ?? "").split(" — ").slice(1).join(" — ") || result?.reason || "";
+
   return (
-    <button
-      type="button"
-      className="btn btn-sm btn-outline"
-      onClick={download}
-      disabled={loading}
-      style={{ flexShrink: 0, marginTop: 4 }}
-    >
-      {loading ? (aiActive ? "Kimi is writing…" : "Generating…") : "Export PDF"}
-    </button>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0, marginTop: 4 }}>
+      <button
+        type="button"
+        className="btn btn-sm btn-outline"
+        onClick={download}
+        disabled={loading}
+      >
+        {loading ? (aiActive ? "Kimi is writing…" : "Generating…") : "Export PDF"}
+      </button>
+      {result && (
+        <span
+          style={{
+            fontSize: 11.5,
+            maxWidth: 340,
+            textAlign: "right",
+            lineHeight: 1.35,
+            color: usedKimi ? "#5fe57d" : "var(--amber)",
+          }}
+        >
+          {usedKimi ? "✓ Narrative written by Kimi" : `⚠ Kimi did not run — ${reasonText}`}
+        </span>
+      )}
+    </div>
   );
 }

@@ -13,7 +13,7 @@ import {
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
 import { buildNarrative } from "@/lib/report-narrative";
-import { aiNarrativeEnabled, generateAiNarrative, recordAiResult } from "@/lib/ai-narrative";
+import { aiNarrativeEnabled, generateAiNarrative, recordAiResult, lastAiResult } from "@/lib/ai-narrative";
 
 /** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -96,7 +96,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // failure returns null and we simply keep the deterministic prose — the PDF never
   // depends on the external call.
   let narrativeSource: "kimi" | "auto" = "auto";
-  if (aiNarrativeEnabled() && hasPanelData) {
+  if (!aiNarrativeEnabled()) {
+    recordAiResult("not attempted: AI feedback is off (no key set, or the toggle is off)");
+  } else if (!hasPanelData) {
+    recordAiResult(`not attempted: no submitted APEX Panel scores for ${am.name} — the APEX Panel assessment must be submitted first`);
+  } else {
     const ai = await generateAiNarrative({
       amName: am.name,
       track: am.track,
@@ -124,9 +128,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       narrative.perception = ai.perception;
       narrativeSource = "kimi";
     }
-  } else if (aiNarrativeEnabled()) {
-    recordAiResult(`not attempted: no submitted APEX Panel scores for ${am.name} (the panel lens must be submitted)`);
+    // generateAiNarrative records "OK" or the exact failure reason
   }
+  const aiReason = lastAiResult() ?? "";
 
   const buffer = await renderToBuffer(
     createElement(AmReportPdf, {
@@ -159,6 +163,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="APEX-Assessment-${slug}.pdf"`,
       "Cache-Control": "no-store",
+      // let the client show whether Kimi actually wrote the narrative, and why not
+      "X-AI-Source": narrativeSource,
+      "X-AI-Reason": encodeURIComponent(aiReason),
     },
   });
 }
