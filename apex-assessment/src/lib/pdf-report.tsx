@@ -28,7 +28,7 @@ export type AmReportProps = {
   zone: string;
   track: string;
   generatedAt: string;
-  lensStatus: { label: string; submitted: boolean }[];
+  lensStatus: { label: string; submitted: boolean; rater?: string }[];
   strengths: { name: string; expert: number; req: number | null }[];
   development: { name: string; expert: number; req: number | null }[];
   perceptionGaps: { name: string; perception: number; self?: number; expert?: number }[];
@@ -346,6 +346,7 @@ function CoverPage(p: AmReportProps) {
             <View key={l.label} style={s.chip}>
               <Text style={[s.chipText, l.submitted ? s.chipOk : s.chipPending]}>
                 {l.label}: {l.submitted ? "submitted" : "pending"}
+                {l.rater ? ` by ${l.rater}` : ""}
               </Text>
             </View>
           ))}
@@ -448,6 +449,7 @@ export function AmReportPdf(p: AmReportProps) {
             <View key={l.label} style={s.chip}>
               <Text style={[s.chipText, l.submitted ? s.chipOk : s.chipPending]}>
                 {l.label}: {l.submitted ? "submitted" : "pending"}
+                {l.rater ? ` by ${l.rater}` : ""}
               </Text>
             </View>
           ))}

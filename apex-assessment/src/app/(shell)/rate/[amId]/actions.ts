@@ -47,10 +47,10 @@ export async function saveThemeNote(amId: number, cluster: string, note: string)
 }
 
 export async function submit(amId: number) {
-  const { assessment } = await guard(amId);
+  const { user, assessment } = await guard(amId);
   if (assessment.status === "submitted") return;
   const total = listCapabilities().length;
   if (ratedCount(assessment.id) < total) throw new Error("All capabilities must be rated before submitting.");
-  submitAssessment(assessment.id);
+  submitAssessment(assessment.id, user.id);
   redirect("/rate?done=1");
 }

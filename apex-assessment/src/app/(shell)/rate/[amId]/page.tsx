@@ -23,6 +23,9 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
   const am = getAM(amId);
   if (!am) notFound();
 
+  // a self-assessor whose profile is not filled in yet must onboard first
+  if (user.lens === "self" && !am.profile_complete) redirect("/onboarding");
+
   const assessment = getOrCreateAssessment(amId, user.lens, user.id);
   const ratings = getRatings(assessment.id);
 

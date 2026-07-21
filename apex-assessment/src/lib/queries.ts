@@ -8,6 +8,7 @@ export type AM = {
   account: string;
   zone: (typeof ZONES)[number];
   track: "Acquisition" | "Saturation";
+  profile_complete: number; // 0 = created for a person who still needs to fill in their details
 };
 
 export type Capability = {
@@ -29,6 +30,47 @@ export function listAMs(): AM[] {
 
 export function getAM(id: number): AM | undefined {
   return getDb().prepare("SELECT * FROM account_managers WHERE id = ?").get(id) as AM | undefined;
+}
+
+/** Create a brand-new person (Account Manager) whose details are filled in on first sign-in.
+ *  Placeholder zone/track satisfy the schema until the person completes onboarding. */
+export function createAccountManager(name: string): AM {
+  const db = getDb();
+  const maxId = (db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM account_managers").get() as { m: number }).m;
+  const code = "AM" + String(maxId + 1).padStart(2, "0");
+  const info = db
+    .prepare(
+      "INSERT INTO account_managers (code, name, account, zone, track, profile_complete) VALUES (?, ?, '', 'MEA', 'Acquisition', 0)"
+    )
+    .run(code, name.trim());
+  return getAM(Number(info.lastInsertRowid))!;
+}
+
+/** Complete (or edit) an Account Manager's profile — used by first-sign-in onboarding. */
+export function updateAccountManagerProfile(
+  amId: number,
+  p: { name: string; account: string; zone: string; track: string }
+) {
+  getDb()
+    .prepare(
+      "UPDATE account_managers SET name = ?, account = ?, zone = ?, track = ?, profile_complete = 1 WHERE id = ?"
+    )
+    .run(p.name.trim(), p.account.trim(), p.zone, p.track, amId);
+}
+
+/** The display name of whoever submitted (or owns the draft of) each lens for an AM.
+ *  Superadmin-only surfaces use this; it does not break blind assessment between evaluators. */
+export function ratersByLens(amId: number): Partial<Record<Lens, string>> {
+  const rows = getDb()
+    .prepare(
+      `SELECT a.lens, u.display_name AS name
+       FROM assessments a JOIN users u ON u.id = a.rater_user_id
+       WHERE a.am_id = ?`
+    )
+    .all(amId) as { lens: Lens; name: string }[];
+  const out: Partial<Record<Lens, string>> = {};
+  for (const r of rows) out[r.lens] = r.name;
+  return out;
 }
 
 export function listCapabilities(): Capability[] {
@@ -113,12 +155,13 @@ export function upsertThemeNote(assessmentId: number, cluster: string, note: str
   db.prepare("UPDATE assessments SET updated_at = datetime('now') WHERE id = ?").run(assessmentId);
 }
 
-export function submitAssessment(assessmentId: number) {
+export function submitAssessment(assessmentId: number, raterUserId: number) {
+  // record who actually submitted, so the individual view/PDF names the right evaluator
   getDb()
     .prepare(
-      "UPDATE assessments SET status = 'submitted', submitted_at = datetime('now') WHERE id = ? AND status = 'draft'"
+      "UPDATE assessments SET status = 'submitted', submitted_at = datetime('now'), rater_user_id = ? WHERE id = ? AND status = 'draft'"
     )
-    .run(assessmentId);
+    .run(raterUserId, assessmentId);
 }
 
 export function reopenAssessment(assessmentId: number) {

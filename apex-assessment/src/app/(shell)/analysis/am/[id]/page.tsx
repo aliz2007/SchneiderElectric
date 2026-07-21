@@ -5,6 +5,7 @@ import {
   getAM,
   getAssessment,
   listCapabilities,
+  ratersByLens,
   requiredLevel,
   submittedLevels,
   submittedThemeNotes,
@@ -81,7 +82,8 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!));
 
-  const lensStatus = LENSES.map((lens) => ({ lens, a: getAssessment(am.id, lens) }));
+  const raters = ratersByLens(am.id);
+  const lensStatus = LENSES.map((lens) => ({ lens, a: getAssessment(am.id, lens), rater: raters[lens] }));
 
   // group rows per cluster
   const clusters: { name: string; rows: Row[] }[] = [];
@@ -111,9 +113,10 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
           <span className="badge badge-zone">{am.zone}</span>
           <span className="badge badge-track">{am.track} track</span>
           <span className="badge badge-gray">{am.account}</span>
-          {lensStatus.map(({ lens, a }) => (
+          {lensStatus.map(({ lens, a, rater }) => (
             <span key={lens} className={`badge ${a?.status === "submitted" ? "badge-green" : "badge-gray"}`}>
               {LENS_LABELS[lens]}: {a?.status === "submitted" ? "✓" : "pending"}
+              {rater ? ` · by ${rater}` : ""}
             </span>
           ))}
         </div>

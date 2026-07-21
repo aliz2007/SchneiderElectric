@@ -179,6 +179,9 @@ try {
     .locator(`.theme-note-block:has-text(${JSON.stringify(THEME_NOTE.slice(0, 24))})`)
     .count();
   noteInAnalysis > 0 ? ok("theme note surfaces in capability detail") : fail("theme note in analysis", `${noteInAnalysis}`);
+  (await page.locator('text=/by Test Manager/').count()) > 0
+    ? ok("submitter name shown on the individual view")
+    : fail("rater name", "not shown");
   const pdf2 = await page.context().request.get(`${BASE}/analysis/am/2/pdf`);
   const pdf2Buf = await pdf2.body();
   pdf2.status() === 200 && pdf2Buf.subarray(0, 5).toString() === "%PDF-" && pdf2Buf.length > 5000
@@ -192,6 +195,7 @@ try {
   await page.fill('input[name="username"]', "selfkam");
   await page.fill('input[name="password"]', "secret123");
   await page.selectOption('select[name="lens"]', "self");
+  await page.locator('.card:has-text("Create user") label:has-text("existing Account Manager") input[type="radio"]').check();
   await page.selectOption('.card:has-text("Create user") select[name="am"]', "4");
   await page.locator('button:has-text("Create user")').click();
   await page.waitForURL(/\/admin\/users\?ok=/);
@@ -219,6 +223,37 @@ try {
   await page.waitForURL("**/rate/4");
   ok("self-assessor /rate redirects to own assessment (no picking others)");
   await page.screenshot({ path: `${SHOTS}/6-self-assessor.png` });
+
+  // ---- 10b. new self-assessor (created as a new person) onboards on first sign-in ----
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "vladimir");
+  await page.fill("#password", "apex2026");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/analysis");
+  await page.goto(`${BASE}/admin/users`);
+  await page.fill('input[name="displayName"]', "New KAM");
+  await page.fill('input[name="username"]', "newkam");
+  await page.fill('input[name="password"]', "secret123");
+  await page.selectOption('select[name="lens"]', "self"); // "new person" is the default mode
+  await page.locator('button:has-text("Create user")').click();
+  await page.waitForURL(/\/admin\/users\?ok=/);
+  ok("new-person self account created");
+
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "newkam");
+  await page.fill("#password", "secret123");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/onboarding");
+  ok("new self-assessor lands on onboarding");
+  await page.fill('input[name="account"]', "Account 99");
+  await page.selectOption('select[name="zone"]', "India");
+  await page.selectOption('select[name="track"]', "Saturation");
+  await page.locator('button:has-text("Save and start")').click();
+  await page.waitForURL(/\/rate\/\d+/);
+  await page.waitForSelector(".wizard-top");
+  ok("onboarding completes and opens their own assessment");
 
   // ---- 11. one-click test sandbox: 3 lenses on one AM, blank drafts ----
   await page.click("text=Sign out");

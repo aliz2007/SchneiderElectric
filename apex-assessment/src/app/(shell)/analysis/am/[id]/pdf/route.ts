@@ -6,6 +6,7 @@ import {
   getAM,
   getAssessment,
   listCapabilities,
+  ratersByLens,
   requiredLevel,
   submittedLevels,
   submittedThemeNotes,
@@ -146,6 +147,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       lensStatus: LENSES.map((lens) => ({
         label: LENS_LABELS[lens],
         submitted: getAssessment(am.id, lens)?.status === "submitted",
+        rater: ratersByLens(am.id)[lens],
       })),
       strengths,
       development,

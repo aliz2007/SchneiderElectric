@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requireSuperadmin } from "@/lib/session";
-import { listAMs, listCapabilities, setAssignments, setSetting } from "@/lib/queries";
+import { createAccountManager, listAMs, listCapabilities, setAssignments, setSetting } from "@/lib/queries";
 import { pingAi } from "@/lib/ai-narrative";
 
 function amIdsFrom(formData: FormData): number[] {
@@ -36,8 +36,15 @@ export async function createUser(formData: FormData) {
   const info = db
     .prepare("INSERT INTO users (username, password_hash, display_name, role, lens) VALUES (?, ?, ?, ?, ?)")
     .run(username, hashPassword(password), displayName, role, lens);
+  const userId = Number(info.lastInsertRowid);
 
-  setAssignments(Number(info.lastInsertRowid), amIdsFrom(formData));
+  if (lens === "self" && formData.get("am_new")) {
+    // create this person as a new Account Manager; they complete their profile on first sign-in
+    const am = createAccountManager(displayName);
+    setAssignments(userId, [am.id]);
+  } else {
+    setAssignments(userId, amIdsFrom(formData));
+  }
   redirect("/admin/users?ok=" + encodeURIComponent(`User "${displayName}" created.`));
 }
 

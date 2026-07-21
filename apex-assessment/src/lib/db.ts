@@ -49,7 +49,9 @@ function migrate(db: Database.Database) {
       name TEXT NOT NULL,
       account TEXT NOT NULL,
       zone TEXT NOT NULL CHECK (zone IN ('MEA','SAM','India','Pacific')),
-      track TEXT NOT NULL CHECK (track IN ('Acquisition','Saturation'))
+      track TEXT NOT NULL CHECK (track IN ('Acquisition','Saturation')),
+      -- 0 = created for a person who still needs to fill in their details on first sign-in
+      profile_complete INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS capabilities (
@@ -106,6 +108,13 @@ function migrate(db: Database.Database) {
       value TEXT
     );
   `);
+
+  // add profile_complete to account_managers for databases created before onboarding existed
+  try {
+    db.exec("ALTER TABLE account_managers ADD COLUMN profile_complete INTEGER NOT NULL DEFAULT 1");
+  } catch {
+    /* column already exists */
+  }
 
   const capCount = (db.prepare("SELECT COUNT(*) AS n FROM capabilities").get() as { n: number }).n;
   if (capCount === 0) {

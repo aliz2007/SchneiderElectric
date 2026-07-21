@@ -35,7 +35,9 @@ export function lastAiResult(): string | null {
 }
 
 const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
-const DEFAULT_MODEL = "moonshot-v1-8k";
+// Moonshot's strongest general model for writing quality. If an account lacks access the
+// Test-connection / export diagnostic shows a 404 and the model can be changed in the app.
+const DEFAULT_MODEL = "kimi-k2-0711-preview";
 
 /** Resolve config from the in-app settings first, then the environment, then defaults. */
 /** API keys must be plain ASCII to travel in an HTTP header. Strip whitespace and any

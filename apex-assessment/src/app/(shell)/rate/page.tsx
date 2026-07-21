@@ -34,7 +34,10 @@ export default async function RatePage({
   // drop them straight onto their own self-assessment (their single linked profile).
   if (user.lens === "self") {
     const mine = assignedAMs(user.id);
-    if (mine.length > 0) redirect(`/rate/${mine[0].id}`);
+    if (mine.length > 0) {
+      if (!mine[0].profile_complete) redirect("/onboarding");
+      redirect(`/rate/${mine[0].id}`);
+    }
     return (
       <div>
         <div className="page-head">

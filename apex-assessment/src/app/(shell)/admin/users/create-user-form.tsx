@@ -6,19 +6,20 @@ import { createUser } from "./actions";
 type AmOption = { id: number; code: string; name: string };
 
 /**
- * Create-user form. The Account-Manager picker adapts to the chosen lens so the
- * meaning is unambiguous:
- *  - Self  → pick the ONE Account Manager that IS this person (their own profile).
+ * Create-user form. The Account-Manager picker adapts to the chosen lens:
+ *  - Self  → a brand-new person (they fill their own details on first sign-in), or link
+ *            an existing Account Manager.
  *  - Manager / APEX Panel → tick every Account Manager they will assess.
- *  - Superadmin → no picker (superadmins don't assess).
+ *  - Superadmin → may also take a lens, so an admin who also assesses gets the assessment
+ *    window; leave the lens blank for an admin who only manages and views analytics.
  */
 export default function CreateUserForm({ ams }: { ams: AmOption[] }) {
   const [role, setRole] = useState("assessor");
   const [lens, setLens] = useState("");
+  const [selfMode, setSelfMode] = useState<"new" | "existing">("new");
 
-  const isAssessor = role === "assessor";
-  const isSelf = isAssessor && lens === "self";
-  const isEvaluator = isAssessor && (lens === "manager" || lens === "expert");
+  const isSelf = lens === "self";
+  const isEvaluator = lens === "manager" || lens === "expert";
 
   return (
     <form action={createUser}>
@@ -42,50 +43,73 @@ export default function CreateUserForm({ ams }: { ams: AmOption[] }) {
             <option value="superadmin">Superadmin</option>
           </select>
         </div>
-        {isAssessor && (
-          <div className="field">
-            <label>Lens</label>
-            <select className="input" name="lens" value={lens} onChange={(e) => setLens(e.target.value)}>
-              <option value="">— choose a lens —</option>
-              <option value="self">Self (the KAM rating themselves)</option>
-              <option value="manager">Manager</option>
-              <option value="expert">APEX Panel</option>
-            </select>
-          </div>
-        )}
+        <div className="field">
+          <label>Lens{role === "superadmin" ? " (optional)" : ""}</label>
+          <select className="input" name="lens" value={lens} onChange={(e) => setLens(e.target.value)}>
+            <option value="">{role === "superadmin" ? "— none (admin only) —" : "— choose a lens —"}</option>
+            <option value="self">Self (the KAM rating themselves)</option>
+            <option value="manager">Manager</option>
+            <option value="expert">APEX Panel</option>
+          </select>
+        </div>
       </div>
 
-      {/* AM picker adapts to the lens */}
-      {!isAssessor && (
+      {role === "superadmin" && lens === "" && (
         <p className="card-sub" style={{ marginTop: 4 }}>
-          Superadmins manage the campaign and see analysis — they don&apos;t assess anyone, so no
-          Account Manager link is needed.
+          Superadmins manage the campaign and see analytics. Give a lens only if this admin will also
+          assess people.
         </p>
       )}
-
-      {isAssessor && lens === "" && (
+      {role === "assessor" && lens === "" && (
         <p className="card-sub" style={{ marginTop: 4 }}>
-          Choose a lens above to link this assessor to the right Account Manager(s).
+          Choose a lens to link this assessor to the right Account Manager(s).
         </p>
       )}
 
       {isSelf && (
-        <div className="field" style={{ marginTop: 4, maxWidth: 460 }}>
-          <label>Which Account Manager is this person? (their own profile)</label>
-          <select className="input" name="am" defaultValue="" required>
-            <option value="" disabled>
-              — select this person&apos;s own profile —
-            </option>
-            {ams.map((am) => (
-              <option key={am.id} value={am.id}>
-                {am.code} · {am.name}
+        <div style={{ marginTop: 4, maxWidth: 520 }}>
+          <label className="assign-label" style={{ display: "block", marginBottom: 8 }}>
+            This self-assessor is
+          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5 }}>
+              <input
+                type="radio"
+                name="selfmode"
+                checked={selfMode === "new"}
+                onChange={() => setSelfMode("new")}
+                style={{ accentColor: "var(--se-green)", marginTop: 3 }}
+              />
+              <span>
+                A <strong>new person</strong> — they fill in their region and other details themselves
+                on their first sign-in.
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5 }}>
+              <input
+                type="radio"
+                name="selfmode"
+                checked={selfMode === "existing"}
+                onChange={() => setSelfMode("existing")}
+                style={{ accentColor: "var(--se-green)", marginTop: 3 }}
+              />
+              <span>An existing Account Manager already in the system.</span>
+            </label>
+          </div>
+          {selfMode === "new" ? (
+            <input type="hidden" name="am_new" value="1" />
+          ) : (
+            <select className="input" name="am" defaultValue="" required style={{ maxWidth: 320 }}>
+              <option value="" disabled>
+                — select their profile —
               </option>
-            ))}
-          </select>
-          <p className="card-sub" style={{ marginTop: 6, marginBottom: 0 }}>
-            A self-assessor only ever fills in their own assessment, so they are linked to exactly one
-            Account Manager — themselves. On login they land straight on it.
-          </p>
+              {ams.map((am) => (
+                <option key={am.id} value={am.id}>
+                  {am.code} · {am.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
