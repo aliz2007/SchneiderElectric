@@ -54,6 +54,17 @@ export async function updateAssignments(userId: number, formData: FormData) {
   revalidatePath("/admin/users");
 }
 
+/** Set (or clear) a user's assessment lens after creation, e.g. to let a superadmin who
+ *  also assesses get their assessment window. Lens is read fresh each request, so the nav
+ *  and access update on the next page load. */
+export async function updateLens(userId: number, formData: FormData) {
+  await requireSuperadmin();
+  const lensRaw = String(formData.get("lens") ?? "");
+  const lens = ["self", "manager", "expert"].includes(lensRaw) ? lensRaw : null;
+  getDb().prepare("UPDATE users SET lens = ? WHERE id = ?").run(lens, userId);
+  redirect("/admin/users?ok=Lens+updated");
+}
+
 export async function toggleActive(userId: number) {
   const me = await requireSuperadmin();
   if (userId === me.id) redirect("/admin/users?err=" + encodeURIComponent("You cannot deactivate your own account."));

@@ -12,6 +12,7 @@ import {
   testAiConnection,
   toggleActive,
   updateAssignments,
+  updateLens,
 } from "./actions";
 import { aiConfig, lastAiResult } from "@/lib/ai-narrative";
 import CreateUserForm from "./create-user-form";
@@ -95,7 +96,28 @@ export default async function UsersPage({
                         <span className="badge badge-gray">Assessor</span>
                       )}
                     </td>
-                    <td>{u.lens ? LENS_LABELS[u.lens as Lens] : "—"}</td>
+                    <td>
+                      <details className="details-box" style={{ marginTop: 0 }}>
+                        <summary>{u.lens ? LENS_LABELS[u.lens as Lens] : "— none —"}</summary>
+                        <div className="details-inner">
+                          <form
+                            action={updateLens.bind(null, u.id)}
+                            style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
+                          >
+                            <select className="input" name="lens" defaultValue={u.lens ?? ""} style={{ maxWidth: 170 }}>
+                              <option value="">None (admin only)</option>
+                              <option value="self">Self</option>
+                              <option value="manager">Manager</option>
+                              <option value="expert">APEX Panel</option>
+                            </select>
+                            <button className="btn btn-sm btn-outline" type="submit">Save</button>
+                          </form>
+                          <p className="card-sub" style={{ marginTop: 8, marginBottom: 0 }}>
+                            Give a superadmin a lens so they can also assess people they are assigned.
+                          </p>
+                        </div>
+                      </details>
+                    </td>
                     <td>
                       <details className="details-box" style={{ marginTop: 0 }}>
                         <summary>
