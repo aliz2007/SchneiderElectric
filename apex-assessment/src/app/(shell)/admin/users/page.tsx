@@ -8,13 +8,10 @@ import {
   deleteUser,
   loadDemoData,
   resetPassword,
-  saveAiSettings,
-  testAiConnection,
   toggleActive,
   updateAssignments,
   updateLens,
 } from "./actions";
-import { aiConfig, lastAiResult } from "@/lib/ai-narrative";
 import CreateUserForm from "./create-user-form";
 
 export default async function UsersPage({
@@ -26,8 +23,6 @@ export default async function UsersPage({
   const { ok, err } = await searchParams;
   const users = listUsers();
   const ams = listAMs();
-  const ai = aiConfig();
-  const aiLast = lastAiResult();
   const db = getDb();
 
   const assignmentRows = db.prepare("SELECT user_id, am_id FROM assignments").all() as {
@@ -259,66 +254,6 @@ export default async function UsersPage({
         </div>
       </div>
 
-      <div className="card card-pad" style={{ marginTop: 22 }}>
-        <h2 className="card-title">AI feedback (Kimi)</h2>
-        <p className="card-sub">
-          Optional. When a Moonshot (Kimi) key is set, the PDF narrative page is written by the model
-          from each person&apos;s scores and notes. Without it, the built-in narrative is used. Paste
-          your key, then use <strong>Test connection</strong> to confirm it works before relying on
-          it.
-        </p>
-        <form action={saveAiSettings}>
-          <div className="form-grid">
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label>Moonshot API key</label>
-              <input
-                className="input"
-                name="apiKey"
-                type="text"
-                defaultValue={ai.apiKey}
-                placeholder="sk-..."
-                autoComplete="off"
-              />
-            </div>
-            <div className="field">
-              <label>Base URL</label>
-              <input className="input" name="baseUrl" type="text" defaultValue={ai.baseUrl} />
-            </div>
-            <div className="field">
-              <label>Model</label>
-              <input className="input" name="model" type="text" defaultValue={ai.model} />
-            </div>
-          </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, marginBottom: 12 }}>
-            <input
-              type="checkbox"
-              name="enabled"
-              defaultChecked={!ai.explicitlyDisabled}
-              style={{ accentColor: "var(--se-green)" }}
-            />
-            Use Kimi for the PDF feedback
-          </label>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-primary" type="submit">Save AI settings</button>
-            <button className="btn btn-outline" type="submit" formAction={testAiConnection}>
-              Test connection
-            </button>
-          </div>
-        </form>
-        <p className="card-sub" style={{ marginTop: 12, marginBottom: aiLast ? 4 : 0 }}>
-          Status:{" "}
-          {ai.enabled
-            ? `on · model ${ai.model}`
-            : ai.apiKey
-              ? "key set but currently disabled"
-              : "no key set — using the built-in narrative"}
-        </p>
-        {aiLast && (
-          <p className="card-sub" style={{ marginTop: 0, marginBottom: 0 }}>
-            Last PDF export: <span style={{ color: aiLast.includes("OK —") ? "#5fe57d" : "var(--amber)" }}>{aiLast}</span>
-          </p>
-        )}
-      </div>
     </div>
   );
 }

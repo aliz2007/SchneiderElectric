@@ -4,8 +4,9 @@
 // network blocked, bad response, timeout) it returns null and the caller falls back to
 // the deterministic narrative, so the PDF always renders.
 //
-// Config comes from the environment (see apex-assessment/.env.local):
-//   MOONSHOT_API_KEY   — required to enable AI feedback
+// The API key is baked in (see EMBEDDED_KEY below) — there is no in-app key field.
+// Everything else has a sensible default and can be overridden from the environment:
+//   MOONSHOT_API_KEY   — optional override for the baked-in key
 //   MOONSHOT_BASE_URL  — default https://api.moonshot.ai/v1
 //   MOONSHOT_MODEL     — default kimi-latest; auto-falls back to moonshot-v1-128k / -32k if the key can't use it
 //   MOONSHOT_MAX_TOKENS — default 8000 (room for a full report covering every capability)
@@ -44,6 +45,12 @@ const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
 // model the key CAN access. All have room for the large prompt plus a full report.
 const DEFAULT_MODEL = "kimi-latest";
 const FALLBACK_MODELS = ["kimi-latest", "moonshot-v1-128k", "moonshot-v1-32k"];
+
+// The Kimi (Moonshot) API key, baked in so AI feedback works with no setup and no
+// in-app field. This is the ONE place the key lives. Paste the sk-... key between
+// the quotes; leave it "" to fall back to the MOONSHOT_API_KEY environment variable.
+// To switch keys or providers later, edit this single line.
+const EMBEDDED_KEY = "";
 
 /** The configured model first, then the fallbacks, de-duplicated and non-empty. */
 function modelCandidates(configured: string): string[] {
@@ -97,23 +104,20 @@ function cleanKey(raw: string): string {
 }
 
 export function aiConfig(): AiConfig {
-  const apiKey = cleanKey(getSetting("moonshot_api_key") ?? process.env.MOONSHOT_API_KEY ?? "");
-  const baseUrl = (
-    getSetting("moonshot_base_url") ||
-    process.env.MOONSHOT_BASE_URL ||
-    DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
+  // Key is fixed: the baked-in constant (or MOONSHOT_API_KEY env override) — no in-app setting.
+  const apiKey = cleanKey(process.env.MOONSHOT_API_KEY || EMBEDDED_KEY);
+  const baseUrl = (process.env.MOONSHOT_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  // model is the only stored setting: the auto-fallback remembers whichever model the key can use
   const model = getSetting("moonshot_model") || process.env.MOONSHOT_MODEL || DEFAULT_MODEL;
-  const enabledSetting = getSetting("moonshot_enabled");
-  const disabled = enabledSetting === "0" || (enabledSetting == null && process.env.MOONSHOT_ENABLED === "0");
-  const timeoutMs = Number(getSetting("moonshot_timeout_ms") || process.env.MOONSHOT_TIMEOUT_MS) || 90000;
-  const maxTokens = Number(getSetting("moonshot_max_tokens") || process.env.MOONSHOT_MAX_TOKENS) || 8000;
+  const disabled = process.env.MOONSHOT_ENABLED === "0";
+  const timeoutMs = Number(process.env.MOONSHOT_TIMEOUT_MS) || 90000;
+  const maxTokens = Number(process.env.MOONSHOT_MAX_TOKENS) || 8000;
   return {
     apiKey,
     baseUrl,
     model,
     enabled: !disabled && apiKey !== "",
-    explicitlyDisabled: enabledSetting === "0",
+    explicitlyDisabled: disabled,
     timeoutMs,
     maxTokens,
   };
