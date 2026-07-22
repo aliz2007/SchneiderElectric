@@ -1094,3 +1094,58 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .zmap-select.zone-sort { min-width: 200px; }
 
 .zone-am-rank { display: block; margin-top: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+
+/* ---- self-assessor framework questions + mandatory theme justification ---- */
+.framework-block {
+  margin-top: 18px; padding: 18px 20px 6px;
+  border: 1px solid rgba(76, 226, 106, 0.28); border-radius: 16px;
+  background: rgba(76, 226, 106, 0.05);
+}
+.framework-block.done { border-color: var(--line); background: rgba(255, 255, 255, 0.02); }
+.framework-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.framework-kicker { font-size: 13px; font-weight: 750; color: var(--ink); letter-spacing: -0.01em; }
+.framework-status { font-size: 10.5px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+.framework-status.ok { color: var(--se-green-ink); background: var(--se-green-bright); }
+.framework-status.todo { color: #0b1424; background: var(--amber); }
+.framework-intro { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.5; }
+.framework-field { margin-bottom: 14px; }
+.framework-field > label { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+.framework-num {
+  width: 20px; height: 20px; flex-shrink: 0; border-radius: 6px; display: inline-grid; place-items: center;
+  font-size: 11px; font-weight: 800; color: var(--se-green-ink); background: var(--se-green-bright);
+}
+.framework-label { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.framework-prompt { font-size: 12px; color: var(--muted); }
+.framework-field textarea, .framework-note { width: 100%; resize: vertical; }
+.framework-note { margin-bottom: 12px; }
+
+/* ---- centralized dashboard filter window ---- */
+.filter-bar { position: relative; display: inline-block; }
+.filter-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); color: var(--ink);
+  font-size: 13px; font-weight: 650; padding: 9px 16px; border-radius: 11px; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.filter-toggle:hover { border-color: rgba(61, 205, 88, 0.5); background: rgba(255, 255, 255, 0.08); }
+.filter-toggle.open { border-color: var(--se-green); background: rgba(61, 205, 88, 0.1); }
+.filter-toggle-ico { font-size: 14px; line-height: 1; }
+.filter-caret { font-size: 9px; color: var(--muted); }
+.filter-badge {
+  display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px;
+  border-radius: 999px; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--se-green-ink); background: var(--se-green-bright);
+}
+.filter-panel {
+  position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; min-width: 280px;
+  display: flex; flex-direction: column; gap: 16px; padding: 18px 18px 20px;
+  border: 1px solid var(--line); border-radius: 16px; background: #0e1729;
+  box-shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.7);
+}
+.filter-group { display: flex; flex-direction: column; gap: 8px; }
+.filter-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+.filter-panel .zmap-select { width: 100%; min-width: 0; }
+.filter-panel .seg { align-self: flex-start; }
+
+.zmap-active-cap { font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
+.zmap-active-cap.muted { color: var(--muted); font-weight: 500; }

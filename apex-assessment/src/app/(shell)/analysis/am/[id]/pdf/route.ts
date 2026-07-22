@@ -14,6 +14,7 @@ import {
   requiredLevel,
   submittedLevels,
   submittedThemeNotes,
+  themeJustificationText,
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { AmReportPdf, type ReportRow } from "@/lib/pdf-report";
@@ -58,8 +59,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const themeNotes = submittedThemeNotes(am.id);
   const notesByCluster = new Map<string, { lens: string; note: string }[]>();
   for (const n of themeNotes) {
+    const text = themeJustificationText(n);
+    if (!text) continue;
     if (!notesByCluster.has(n.cluster)) notesByCluster.set(n.cluster, []);
-    notesByCluster.get(n.cluster)!.push({ lens: n.lens, note: n.note });
+    notesByCluster.get(n.cluster)!.push({ lens: n.lens, note: text });
   }
   for (const list of notesByCluster.values()) {
     list.sort((a, b) => LENSES.indexOf(a.lens as Lens) - LENSES.indexOf(b.lens as Lens));
@@ -118,7 +121,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     strengths,
     development,
     perceptionGaps,
-    themeNotes: themeNotes.map((n) => ({ lens: LENS_LABELS[n.lens], cluster: n.cluster, note: n.note })),
+    themeNotes: themeNotes.map((n) => ({ lens: LENS_LABELS[n.lens], cluster: n.cluster, note: themeJustificationText(n) })),
   });
 
   // When Kimi (Moonshot) is configured and there is panel data to reason from, let it
@@ -148,7 +151,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       themeNotes: themeNotes.map((n) => ({
         lens: LENS_LABELS[n.lens],
         cluster: n.cluster,
-        note: n.note,
+        note: themeJustificationText(n),
       })),
       definitions: narrative.definitions.map((d) => ({ name: d.name, level: d.level, text: d.text })),
     });

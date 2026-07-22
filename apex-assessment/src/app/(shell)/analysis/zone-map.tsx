@@ -85,9 +85,17 @@ const clampView = (v: View): View => {
   return { k, x: Math.min(0, Math.max(W * (1 - k), v.x)), y: Math.min(0, Math.max(H * (1 - k), v.y)) };
 };
 
-type Filter = "all" | number;
-
-export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: MapCap[]; canDrill: boolean }) {
+export default function ZoneMap({
+  ams,
+  caps,
+  canDrill,
+  capFilter,
+}: {
+  ams: MapAM[];
+  caps: MapCap[];
+  canDrill: boolean;
+  capFilter: number | null; // selected capability id from the centralized Filters window (null = all)
+}) {
   const router = useRouter();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -95,7 +103,6 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
   const drag = useRef<{ id: number; cx: number; cy: number; moved: number } | null>(null);
   const suppressClick = useRef(false);
 
-  const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<View>({ k: 1, x: 0, y: 0 });
   const [anim, setAnim] = useState(true);
   const [selected, setSelected] = useState<MapZone | null>(null);
@@ -108,7 +115,7 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
   } | null>(null);
 
   const capById = useMemo(() => new Map(caps.map((c) => [c.id, c])), [caps]);
-  const filterCap = filter === "all" ? null : (capById.get(filter) ?? null);
+  const filterCap = capFilter == null ? null : (capById.get(capFilter) ?? null);
 
   const req = (cap: MapCap, track: MapAM["track"]) => (track === "Acquisition" ? cap.reqAcq : cap.reqSat);
 
@@ -336,36 +343,14 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
   const tipHubAMs = tip?.hub ? (hubAMs.get(tip.hub) ?? []) : [];
   const selStat = selected ? zoneStats.get(selected) : null;
 
-  const clusters = useMemo(() => {
-    const out: { name: string; caps: MapCap[] }[] = [];
-    for (const cap of caps) {
-      const last = out[out.length - 1];
-      if (!last || last.name !== cap.cluster) out.push({ name: cap.cluster, caps: [cap] });
-      else last.caps.push(cap);
-    }
-    return out;
-  }, [caps]);
-
   return (
     <div>
       <div className="zmap-toolbar">
-        <select
-          className="zmap-select"
-          value={filter === "all" ? "all" : String(filter)}
-          onChange={(e) => setFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
-          aria-label="Filter the thermal map by capability"
-        >
-          <option value="all">All 22 capabilities</option>
-          {clusters.map((cl) => (
-            <optgroup key={cl.name} label={cl.name}>
-              {cl.caps.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        {filterCap ? (
+          <span className="zmap-active-cap">Capability: {filterCap.name}</span>
+        ) : (
+          <span className="zmap-active-cap muted">All capabilities</span>
+        )}
         <div className="zmap-scale">
           <span>On target</span>
           <span className="zmap-scale-bar" />

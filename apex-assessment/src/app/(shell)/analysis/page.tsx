@@ -10,29 +10,33 @@ import {
   zoneHeatmap,
 } from "@/lib/queries";
 import { gapClass, fmt } from "@/lib/heat";
-import { ZONES } from "@/lib/seed-data";
+import { SEGMENTS, ZONES } from "@/lib/seed-data";
 import ZoneMap, { type MapAM, type MapCap } from "./zone-map";
-import TrackFilter from "./track-filter";
+import FilterBar from "./filter-bar";
 
 export default async function AnalysisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ track?: string }>;
+  searchParams: Promise<{ track?: string; segment?: string; cap?: string }>;
 }) {
   // the aggregated dashboard is open to every signed-in user; drill-down into
   // individual ratings stays superadmin-only
   const user = await requireUser();
   const isAdmin = user.role === "superadmin";
 
-  // All / Acquisition / Saturation filter (see TrackFilter) — scopes every analytics view
-  const { track: trackRaw } = await searchParams;
+  // Centralized filters (see FilterBar) — the track, segment and map-capability
+  // URL params scope every analytics view at once.
+  const { track: trackRaw, segment: segmentRaw, cap: capRaw } = await searchParams;
   const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
+  const segment = segmentRaw && (SEGMENTS as readonly string[]).includes(segmentRaw) ? segmentRaw : undefined;
+  const selectedCapId = capRaw && /^\d+$/.test(capRaw) ? Number(capRaw) : null;
 
   const stats = overviewStats();
-  const { zones, rows } = zoneHeatmap(track);
-  const priorities = trainingPriorities(6, track);
+  const { zones, rows } = zoneHeatmap(track, segment);
+  const priorities = trainingPriorities(6, track, segment);
   const statuses = assessmentStatuses();
-  const ams = listAMs().filter((am) => !track || am.track === track);
+  const ams = listAMs().filter((am) => (!track || am.track === track) && (!segment || am.segment === segment));
+  const capOptions = listCapabilities().map((c) => ({ id: c.id, name: c.name, cluster: c.cluster }));
 
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
   const completionPct = Math.round((submittedTotal / (stats.amCount * 3)) * 100);
@@ -122,9 +126,22 @@ export default async function AnalysisPage({
       </div>
 
       <div className="analytics-filter-row">
-        <span className="analytics-filter-label">Track</span>
-        <TrackFilter current={track ?? "all"} />
-        {track && <span className="analytics-filter-note">Showing {ams.length} {track} Account Managers</span>}
+        <FilterBar
+          current={{
+            track: track ?? "all",
+            segment: segment ?? "all",
+            cap: selectedCapId ? String(selectedCapId) : "all",
+          }}
+          caps={capOptions}
+          showCapability={isAdmin}
+        />
+        {(track || segment) && (
+          <span className="analytics-filter-note">
+            Showing {ams.length} Account Manager{ams.length === 1 ? "" : "s"}
+            {track ? ` · ${track}` : ""}
+            {segment ? ` · ${segment}` : ""}
+          </span>
+        )}
       </div>
 
       {isAdmin && (
@@ -135,7 +152,7 @@ export default async function AnalysisPage({
             blue is on target, red is a critical gap. Filter by capability, hover the hubs,
             click a zone to focus.
           </p>
-          <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} />
+          <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} capFilter={selectedCapId} />
         </div>
       )}
 

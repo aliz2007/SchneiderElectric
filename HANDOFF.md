@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-21.
+Last updated: 2026-07-22.
 
 ---
 
@@ -16,9 +16,18 @@ Last updated: 2026-07-21.
   infrastructure required.
 - Repo: `https://github.com/aliz2007/SchneiderElectric.git`.
 - Active development branch: `claude/self-assessor-assessment-notes-en8uo1`.
-- `npm run build` passes and the Playwright suite `e2e/smoke.mjs` is at **36/36**.
+- `npm run build` passes and the Playwright suite `e2e/smoke.mjs` is green (see §9 for the
+  current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
+- Most recent additions (2026-07-22): the **five APEX framework questions** as the
+  self-assessor's mandatory per-theme justification; a **mandatory one-note-per-theme**
+  justification for Manager / APEX Panel; a **business Segment** attribute on every account
+  (picked at creation/onboarding) usable as an analytics filter; a single **centralized
+  Filters window** on the dashboard holding Track + Segment + map Capability; a **My Feedback**
+  tab that releases each assessed person's own report once all three lenses have submitted;
+  and strengths/development redefined strictly (strength = strictly above required,
+  development = anything below). See the relevant sections below and §14 (the parcours).
 
 ## 2. The project
 
@@ -59,18 +68,47 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   tracks), Pipeline Shaping (Acquisition), and Share of Wallet Expansion (Saturation).
 - **25 AMs across 4 zones**: MEA (AM01–06), SAM (AM07–12), India (AM13–18),
   Pacific (AM19–25). Roster in `src/lib/seed-data.ts`.
+- Each AM also belongs to a **business segment**: Power & Grid, Energy & Chemicals,
+  CS&P - Cloud & Service Providers, or Multi-segment (`SEGMENTS` in `seed-data.ts`). Segment
+  is chosen when an account is created (self-assessor onboarding, or the admin create flow),
+  so the original Excel roster has none; the demo-dataset loader backfills a deterministic
+  spread across the four values so the segment filter has data to show. Segment is a
+  reporting/filter dimension only — it does NOT change required levels (track does that).
 - **11 of 25 names are placeholders** ("Account Manager 1", 13–18, 22–25) because the Excel
   itself had placeholder tabs. Real names exist for AM02–AM12 and AM19–AM21. The user has
   not yet provided the missing names.
+
+### The five APEX framework questions (self-assessor justification)
+
+Self-assessors justify their ratings with the five APEX framework questions, asked once per
+theme (cluster) and ALL mandatory before they can submit (`FRAMEWORK_QUESTIONS` in
+`seed-data.ts`):
+
+1. **Situation** — the context, challenge or opportunity.
+2. **Actions** — what the person personally did, decided, or influenced.
+3. **Results** — the measurable outcomes; what changed.
+4. **Impact** — impact on the customer, the account, SE, or the long-term strategy.
+5. **Replication** — whether it was applied elsewhere / is repeatable or scalable.
+
+(The source guide marks Replication "optional"; at the user's explicit instruction all five
+are enforced as mandatory.) Manager and APEX Panel do NOT answer the five questions — they
+write ONE free-text justification note per theme, also now mandatory before submitting. Both
+kinds live in the same `theme_notes` row (see the data model); `themeJustificationText(row)`
+renders whichever is present (the five labelled framework parts if any, else the note).
 
 ### Hard product rules (enforced server-side — keep them)
 
 1. Evaluators must NEVER see other evaluators' scores (blind assessment).
 2. Required levels are HIDDEN during rating to avoid anchoring bias; shown only in analysis.
 3. Individual results and analysis are superadmin-only. The shared dashboard (zone-level,
-   no individuals) is visible to any signed-in user.
+   no individuals) is visible to any signed-in user. EXCEPTION: the **My Feedback** tab lets
+   an assessed self-assessor see their OWN consolidated report, but only after all three
+   lenses have submitted (nothing about anyone else is exposed).
 4. The app is the system of record. Rubric + roster were seeded once from the Excel; all
    ratings are created in the app. The Excel is retired.
+5. Every theme must be justified before an assessment can be submitted: a self-assessor must
+   answer all five framework questions per theme; a Manager / APEX Panel evaluator must write
+   one note per theme. Enforced server-side in `unjustifiedThemes()` (called by `submit`).
 
 ## 3. Architecture
 
@@ -95,7 +133,8 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   ['superadmin'|'assessor'], lens ['self'|'manager'|'expert'|null], active, created_at).
 - `sessions` (token PK, user_id, expires_at).
 - `account_managers` (id, code unique, name, account, zone ['MEA'|'SAM'|'India'|'Pacific'],
-  track ['Acquisition'|'Saturation']).
+  track ['Acquisition'|'Saturation'], profile_complete, segment [one of `SEGMENTS`, nullable
+  — null for the seeded Excel roster until backfilled/onboarded]).
 - `capabilities` (id, ord, name, cluster, src, req_acq, req_sat, l1, l2, l3).
 - `assignments` (user_id, am_id) — which AMs a user is linked to. For self assessors this is
   the one AM that IS them; for manager/panel it is who they evaluate. PK (user_id, am_id).
@@ -104,10 +143,17 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
 - `ratings` (assessment_id, capability_id, level [1|2|3|null], note). PK (assessment_id,
   capability_id). NOTE: the per-capability `note` column still exists but is no longer
   written by the wizard; notes are now per-theme (see `theme_notes`).
-- `theme_notes` (assessment_id, cluster, note). PK (assessment_id, cluster). One free-text
-  note per theme, written only by Manager / APEX Panel.
-- `app_settings` (key PK, value) — runtime key/value store. Currently holds the in-app Kimi
-  config (`moonshot_api_key`, `moonshot_base_url`, `moonshot_model`, `moonshot_enabled`).
+- `theme_notes` (assessment_id, cluster, note, situation, actions, results, impact,
+  replication). PK (assessment_id, cluster). ONE row per theme per assessment. Manager /
+  APEX Panel fill `note`; self-assessors fill the five framework columns
+  (situation/actions/results/impact/replication). Columns are added by idempotent
+  `ALTER TABLE … ADD COLUMN` migrations in `db.ts`. A row that becomes entirely empty is
+  deleted (`saveThemeField`). Read helpers: `getThemeNotesFull`, `themeJustificationText`,
+  `unjustifiedThemes`.
+- `app_settings` (key PK, value) — runtime key/value store. Now holds only `moonshot_model`
+  (the auto-selected working model) and `moonshot_last_result` (last PDF-AI outcome). The
+  Kimi API key is HARDCODED in `ai-narrative.ts` (`EMBEDDED_KEY`), not stored here; there is
+  no in-app AI settings card anymore.
 
 A self-assessor is always linked to exactly ONE Account Manager (themselves).
 `setAssignments` enforces this (it caps a self user's assignments to one), and both the
@@ -130,20 +176,41 @@ lens rather than a multi-checkbox.
     dots, a review screen, then submit which locks the assessment. Required levels are never
     sent to the client. Superadmin can reopen a submitted assessment from the individual
     analysis page.
-  - **Theme notes**: Manager and APEX Panel capture one note per theme (cluster), editable
-    in-context on each capability screen and all together on the review screen. Self
-    assessments capture no notes (enforced in `saveThemeNote`).
+  - **Per-theme justification (mandatory)**: below the level cards, each capability screen
+    shows the justification block for that capability's theme (cluster). For a
+    **self-assessor** it is the five framework questions (Situation, Actions, Results, Impact,
+    Replication), rendered bigger/wider as numbered fields — all five required. For a
+    **Manager / APEX Panel** evaluator it is a single required note. Autosaved (700 ms
+    debounce) via `saveThemeNote → saveThemeField`. The review screen shows a completion badge
+    per theme, and **Submit is disabled** until every capability is rated AND every theme is
+    justified; the server re-checks with `unjustifiedThemes()` and rejects an early submit.
 - **Analysis**:
   - `/analysis` (any signed-in user): completion KPIs including "Avg APEX maturity" shown as
     a rounded level (L1/L2/L3) with the exact average in the sub-note; an interactive
-    geographic zone performance map; a thermal zone map with a capability filter; a
-    recommended training focus; and a capability x zone heat map (avg APEX Panel score minus
-    required level).
-  - `/analysis/zone/[zone]` (superadmin): AM x capability heat maps, track-aware.
+    geographic zone performance map (superadmin only — it carries per-AM data); a recommended
+    training focus; and a capability x zone heat map (avg APEX Panel score minus required
+    level).
+  - **Centralized Filters window** (`filter-bar.tsx`): one togglable "☰ Filters" button opens
+    a panel with **Track** (All / Acquisition / Saturation), **Segment** (All + the four
+    segments) and, for superadmins, the **map Capability** filter. All three drive URL search
+    params (`track`, `segment`, `cap`), so the server re-scopes the zone map, training focus,
+    heat map and roster together. An active-count badge and "Clear all" round it out. The old
+    standalone track dropdown and the in-map capability dropdown were folded into this one
+    window (the capability filter now re-colours the thermal map via the `capFilter` prop).
+  - `/analysis/zone/[zone]` (superadmin): AM x capability heat maps, track-aware; the zone
+    benchmark ranking can sort AMs and (for admins) shows each AM's name in a low-opacity font
+    under their AM number.
   - `/analysis/individuals` + `/analysis/am/[id]` (superadmin): Self vs Manager vs Panel per
-    capability, gap-to-required, strengths, development areas, perception gaps
-    (|self - panel| >= 1), and the Manager/Panel theme notes shown under each theme inside
-    the capability detail. An **Export PDF** button.
+    capability, gap-to-required, **strengths (panel STRICTLY above required)**, **development
+    areas (panel BELOW required — all of them, uncapped)**, perception gaps (|self - panel| >=
+    1), and the theme justifications shown under each theme inside the capability detail. An
+    **Export PDF** button. (A capability merely AT required is on the baseline — never a
+    strength.)
+  - **My Feedback** (`/feedback`, self-assessors only): the assessed person's own report —
+    strengths, development areas, self-vs-panel perception gaps, a three-lens capability table
+    with the theme justifications, and a **Download PDF** (the same PDF as the admin export).
+    Gated by `allLensesSubmitted(am.id)`: until Self + Manager + APEX Panel have all submitted
+    it shows a status checklist instead. The nav tab only appears for a linked self-assessor.
 - **PDF report** (`GET /analysis/am/[id]/pdf`, superadmin-only): a styled 4-page report
   (`src/lib/pdf-report.tsx`): (1) cover, (2) overview = profile + strengths/development +
   perception gaps, (3) narrative = per-person strengths/weaknesses prose + a definition of
@@ -159,11 +226,10 @@ lens rather than a multi-checkbox.
   - Data tools: **Create test sandbox** (three blank-draft logins `self.demo` /
     `manager.demo` / `panel.demo`, password `demo1234`, all on the first AM, for trying the
     flow from every lens; idempotent), **Load demo dataset (submitted)** (fills all 75
-    assessments with plausible submitted scores for the dashboards; replaces existing
-    ratings), and **Clear all ratings**.
-  - **AI feedback (Kimi) card**: enter/save the Moonshot key, base URL, model and an on/off
-    toggle (stored in `app_settings`), with a live **Test connection** button. This is the
-    in-app alternative to editing `.env.local` (see §6).
+    assessments with plausible submitted scores for the dashboards; replaces existing ratings;
+    also backfills a deterministic segment on each AM so the segment filter has data), and
+    **Clear all ratings**.
+  - There is NO in-app AI settings card: the Kimi key is hardcoded (see §6).
 
 ## 5. The PDF narrative (deterministic)
 
@@ -186,10 +252,13 @@ a hard fallback:
 - Sections are `{strengths, development, comments}`. Strengths and development are organised
   BY CAPABILITY CLUSTER: one tight paragraph per cluster, led by the exact cluster name and
   a colon (the PDF bolds that lead — see `ClusterNarrative` in `pdf-report.tsx`). `comments`
-  is a single paragraph synthesising the evaluators' theme notes, and is empty (section
-  hidden) when no notes exist. The model is prompted (see `SYSTEM_PROMPT`) to ground every
-  statement in the provided data, never quote the rubric definitions, cover every qualifying
-  capability, and stay concise.
+  is a single paragraph synthesising the evaluators' theme justifications, and is empty
+  (section hidden) when none exist. The model is prompted (see `SYSTEM_PROMPT`) to ground
+  every statement in the provided data, never quote the rubric definitions, cover every
+  qualifying capability, and stay concise. The prompt tells it that Manager/Panel notes are
+  free text while a Self-Assessment note is the five framework answers (Situation, Actions,
+  Results, Impact, Replication) — the person's own evidence, to be weighed as their view, not
+  the verdict. (`themeJustificationText` is what feeds these notes to the model.)
 - THE KEY IS HARDCODED at the repo owner's explicit direction: `EMBEDDED_KEY` in
   `ai-narrative.ts` is the single place it lives, and it is read directly (no env fallback).
   There is no in-app AI settings card. Optional env overrides: `MOONSHOT_BASE_URL`,
@@ -224,11 +293,14 @@ users ask quick questions over the live data ("which skill gaps repeat most in I
 - `src/lib/chat-data.ts` — `buildChatSnapshot(viewer)` rebuilds a fresh JSON snapshot of
   the database on EVERY question, so answers always reflect current data.
 - ACCESS MIRRORS THE APP (hard rule): a superadmin's snapshot has everything (all lenses,
-  required levels, gaps, notes, users and assignments). An assessor's snapshot contains ONLY
-  their own work (their assigned people, their own ratings and notes, drafts included) plus
-  the dashboard's completion counts; required levels and other evaluators' scores are ABSENT
-  from the payload, so the model cannot leak what it never receives. The system prompt also
-  instructs the restricted variant to refuse such questions.
+  required levels, gaps, theme justifications, segment, users and assignments). An assessor's
+  snapshot contains ONLY their own work (their assigned people, their own ratings and
+  justifications, drafts included) plus the dashboard's completion counts; required levels and
+  other evaluators' scores are ABSENT from the payload, so the model cannot leak what it never
+  receives. The system prompt also instructs the restricted variant to refuse such questions.
+- The prompt is kept in step with the model: it explains segment as a dimension, and that
+  per-theme justifications are the five framework answers (self) or a single note
+  (manager/panel), to be quoted as evidence for "why" questions and never fabricated.
 - Uses `kimiChat()` in `ai-narrative.ts` — same hardcoded key, same model auto-fallback.
 
 ## 7. Key files
@@ -244,13 +316,18 @@ src/lib/ai-narrative.ts      optional Kimi (Moonshot) feedback, with graceful fa
 src/lib/pdf-report.tsx       4-page @react-pdf report (cover / overview / narrative / detail)
 src/lib/heat.ts              heat-map colour helpers
 src/app/login/               login page + action
-src/app/(shell)/rate/        rating list + wizard + actions (ratings, theme notes, submit)
-src/app/(shell)/analysis/    dashboard, zone view, individuals, am/[id], am/[id]/pdf route
-src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (incl. delete, sandbox)
+src/lib/chat-data.ts         role-scoped live snapshot for the APEX Assistant chatbot
+src/app/(shell)/rate/        rating list + wizard (framework/notes) + actions (ratings, theme fields, submit)
+src/app/(shell)/analysis/    dashboard, filter-bar, zone-map, zone view, individuals, am/[id], am/[id]/pdf
+src/app/(shell)/feedback/    My Feedback tab (self-assessor's own report + PDF download)
+src/app/(shell)/onboarding/  new self-assessor profile form (name/account/zone/track/segment)
+src/app/(shell)/chat-widget.tsx  floating APEX Assistant bubble + panel
+src/app/api/chat/route.ts    chatbot endpoint (role-scoped snapshot + Kimi)
+src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (delete, sandbox, demo)
 src/app/globals.css          all styling (semantic class names)
 src/app/fx.tsx               client-side scroll/hover effects
-e2e/smoke.mjs                Playwright smoke suite (36 checks)
-.env.example                 template for the optional AI key (.env.local is git-ignored)
+e2e/smoke.mjs                Playwright smoke suite (see §9 for the check count)
+.env.example                 optional AI overrides (the key itself is hardcoded, not in env)
 ```
 
 ## 8. How to run
@@ -268,17 +345,21 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 ## 9. How to test
 
 ```bash
-npm run build                         # production build + full type check
-rm -rf data && npx next start -p 3111 # fresh DB, production server
-node e2e/smoke.mjs                     # in a second shell — currently 36/36
+npm run build                                    # production build + full type check
+rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
+MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
+node e2e/smoke.mjs                                # in a second shell — currently 49/49
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
-individual analysis, PDF export, zone view, assessor creation and confidentiality, the
-rating wizard, theme notes end-to-end (wizard -> analysis -> PDF), the self-assessor direct
-landing, the test sandbox, and account deletion. The e2e header comments explain the
-`CHROMIUM` / `BASE` env vars. In this sandbox the Moonshot API is unreachable, so the PDF
-tests exercise the deterministic fallback.
+the centralized Filters window, the APEX Assistant round-trip, individual analysis, PDF
+export, zone view, assessor creation and confidentiality, the rating wizard, the mandatory
+per-theme justification for BOTH the Manager note (walking every theme) and the self-assessor
+five framework questions, justification end-to-end (wizard -> analysis -> PDF), the
+self-assessor direct landing, onboarding (now incl. segment), the test sandbox, and account
+deletion. Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
+narrative, the chatbot returns its fixed "turned off" reply, no external call). The e2e header
+comments explain the `CHROMIUM` / `BASE` env vars.
 
 ## 10. Path to production (not built, informational)
 
@@ -307,11 +388,19 @@ The app is fully functional but three things stand between it and a company-wide
 
 - SQLite is deliberate (zero infra); move to Postgres only if asked.
 - v1 auth is username/password managed by the superadmin; SSO is a later concern.
-- Theme notes (one per cluster, Manager/Panel only) **replaced** the old per-capability
-  evidence note. Self assessments have no notes.
+- Justification is per-theme (one row per cluster), **replacing** the old per-capability
+  evidence note. It is now MANDATORY for all three lenses: self-assessors answer the five
+  framework questions per theme; Manager/APEX Panel write one note per theme.
+- Strength vs development is strict: a strength is a capability where the panel is STRICTLY
+  above required; anything below required is a development area (uncapped, all shown); AT
+  required is the baseline and is neither.
+- Segment is a filter/reporting dimension chosen at account creation; it does not affect
+  required levels. All dashboard filters live in one centralized Filters window.
 - The PDF narrative is deterministic by default and reproducible; Kimi is an optional
   enhancement layered on top, never a hard dependency.
-- The AI key lives only in a git-ignored `.env.local`; it is never committed.
+- The Kimi API key is HARDCODED in `ai-narrative.ts` (`EMBEDDED_KEY`) at the repo owner's
+  explicit, repeated direction, and read directly with no env fallback. (Earlier the key was
+  env-only; that decision was overridden by the user.)
 
 ## 13. History (branches and the Windows demo)
 
@@ -323,12 +412,58 @@ The app is fully functional but three things stand between it and a company-wide
   under the older version). If doing visual work, the look lives in `globals.css` (semantic
   class names) + `fx.tsx`; keep class names and visible text labels stable so `e2e/smoke.mjs`
   keeps passing, and rerun the suite after any redesign.
-- Current branch `claude/self-assessor-assessment-notes-en8uo1` added: self-assessor direct
-  landing, per-theme notes (wizard + analysis + PDF), the 4-page PDF (cover + narrative +
-  definitions), the deterministic narrative and the optional Kimi integration, the lens-aware
+- Current branch `claude/self-assessor-assessment-notes-en8uo1` added, in order: self-assessor
+  direct landing, per-theme notes (wizard + analysis + PDF), the 4-page PDF (cover + narrative
+  + definitions), the deterministic narrative and the optional Kimi integration, the lens-aware
   create-user form, the test sandbox, user account deletion, the dev port move to 3010, the
-  "Avg APEX maturity" KPI as a rounded level, and this repo's README.
+  "Avg APEX maturity" KPI as a rounded level, this repo's README, the floating APEX Assistant
+  chatbot (role-scoped), uniform-per-region zone colouring, the zone-benchmark AM names + track
+  ranking, the strict strengths/development redefinition, the My Feedback tab, and — most
+  recently — the five framework questions + mandatory per-theme justification, the Segment
+  attribute + filter, and the centralized Filters window.
 - `demo.bat` (repo root) is a double-click Windows launcher: installs Node LTS via winget if
   missing, downloads a branch zip, runs `npm ci` + `npm run build` when the zip changed, then
   `npm start -- -p 3000` and opens the browser. If you change which branch the demo ships,
   update the zip URL inside `demo.bat`.
+
+## 14. Parcours (end-to-end user journeys)
+
+How each kind of user moves through the app, start to finish. Use this as the quick mental
+model; the sections above give the mechanics.
+
+**A. Administrator (superadmin — `vladimir` / `apex2026`)**
+1. Sign in → lands on **`/analysis`** (the dashboard).
+2. First-time setup: **Users & Access** → *Load demo dataset* to populate the dashboards (or
+   *Create test sandbox* to trial the flow), then create the real assessor logins with the
+   lens-aware form (Self → single-select the account that IS the person; Manager / APEX Panel
+   → check who they evaluate).
+3. Monitor progress on the dashboard: completion KPIs, the **Filters** window (Track / Segment
+   / map Capability), the zone performance map, training-focus list, and capability×zone heat
+   map — all re-scope together from the filter URL params.
+4. Drill in: **Individuals → an AM** for the three-lens comparison, strengths (strictly above
+   required), development areas (all below), perception gaps and the per-theme justifications;
+   **Export PDF** for the written report (Kimi-written when reachable, deterministic otherwise).
+   Reopen a submitted assessment here if someone needs to edit it.
+5. Ask the **APEX Assistant** (floating bubble) free-form questions over the full live data.
+
+**B. Self-assessor (the KAM being assessed)**
+1. Sign in. If their profile is not yet complete → **`/onboarding`**: name, account, region,
+   track, and **segment**. Otherwise they go straight to their own assessment.
+2. **`/rate/[their AM]`** opens directly (no picking anyone else; `/rate` just redirects here).
+   For each of the 22 capabilities they pick L1/L2/L3 (required levels are hidden), and for
+   each of the 6 themes they answer the **five framework questions** (Situation, Actions,
+   Results, Impact, Replication) — all mandatory. Everything autosaves.
+3. The review screen shows a completion badge per theme; **Submit** unlocks only once all 22
+   are rated and all 6 themes are fully answered, then the assessment locks.
+4. Once their Manager and the APEX Panel have also submitted, a **My Feedback** tab appears:
+   their strengths, development areas, self-vs-panel perception gaps, the three-lens table with
+   everyone's justifications, and a **Download PDF**. They can also use the Assistant, but it
+   only ever sees their own scoped data.
+
+**C. Manager / APEX Panel evaluator**
+1. Sign in → **`/rate`**. Build the task list by typing a name to self-assign (or the admin
+   pre-assigned them). One evaluator per AM per lens.
+2. **`/rate/[amId]`**: rate the 22 capabilities and write ONE **mandatory justification note**
+   per theme. Review → **Submit** (blocked until every theme has a note); the assessment locks.
+3. They can view the shared dashboard, but never other evaluators' scores or individual
+   results (those stay superadmin-only). The Assistant is fed only their own scoped data.

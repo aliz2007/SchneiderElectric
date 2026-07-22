@@ -62,6 +62,16 @@ try {
   completion?.trim() === "100%" ? ok("completion KPI = 100% after demo load") : fail("completion KPI", completion ?? "");
   await page.screenshot({ path: `${SHOTS}/2-dashboard.png`, fullPage: false });
 
+  // ---- 3a. centralized filters window (track / segment / capability in one panel) ----
+  await page.locator(".filter-toggle").click();
+  await page.waitForSelector(".filter-panel");
+  ok("filters window opens");
+  await page.locator(".filter-panel .seg-btn", { hasText: "Acquisition" }).click();
+  await page.waitForFunction(() => location.search.includes("track=Acquisition"));
+  ok("track filter scopes the dashboard via URL");
+  await page.goto(`${BASE}/analysis`); // reset filters for the following steps
+  await page.waitForSelector(".hm");
+
   // ---- 3b. APEX Assistant (floating chatbot) ----
   (await page.locator(".chat-fab").count()) === 1
     ? ok("assistant bubble shown (superadmin)")
@@ -163,11 +173,20 @@ try {
   await page.waitForSelector("text=Saved ✓");
   ok("rating change autosaves");
 
-  // manager/panel capture ONE note per theme (self-assessors get none — checked in step 10)
-  const noteFields = await page.locator(".theme-note-field textarea").count();
+  // manager/panel justify EVERY theme with ONE mandatory note; exactly one note field
+  // shows at a time (for the current theme). Self-assessors get the 5-question framework
+  // instead — checked in step 10.
+  const noteFields = await page.locator(".framework-note").count();
   noteFields === 1 ? ok("manager sees a per-theme note field") : fail("manager theme note field", `${noteFields}`);
-  await page.fill(".theme-note-field textarea", THEME_NOTE);
-  await page.waitForTimeout(1100); // debounce (700ms) + save
+  // a justification is now required for every theme before submitting: walk the capability
+  // dots and fill the note for each theme (the field belongs to the current cap's cluster;
+  // the client keeps the value on revisit, so this fills all six distinct clusters).
+  for (let i = 0; i < 22; i++) {
+    await page.locator(".dots .dot").nth(i).click();
+    await page.waitForSelector(".framework-note");
+    if (!(await page.locator(".framework-note").inputValue())) await page.fill(".framework-note", THEME_NOTE);
+  }
+  await page.waitForTimeout(1200); // let the last debounced note save reach the server
   await page.screenshot({ path: `${SHOTS}/5-wizard.png` });
 
   // reload → draft persisted with all 22 still answered + our edit + the theme note
@@ -177,8 +196,9 @@ try {
   answered === 22 ? ok("draft persists across reload (22 answered)") : fail("draft persistence", `${answered}`);
   const firstChip = (await page.locator(".review-row .lvl-chip").first().textContent())?.trim();
   firstChip === "L1" ? ok("edited level persisted (L1)") : fail("edited level", firstChip ?? "");
-  const savedNote = await page.locator(".theme-notes-review textarea").first().inputValue();
-  savedNote === THEME_NOTE ? ok("theme note persists across reload") : fail("theme note persistence", savedNote);
+  // the review screen shows a completion badge per theme; all six now justified
+  const themesComplete = await page.locator(".theme-notes-review .badge-green").count();
+  themesComplete === 6 ? ok("all six themes justified (complete badges persist)") : fail("theme justification badges", `${themesComplete}`);
 
   // submit the manager assessment so the note feeds analysis (all 22 rated → allowed)
   await page.locator('button:has-text("Submit assessment")').click();
@@ -243,16 +263,29 @@ try {
   (await page.locator(".chat-fab").count()) === 1
     ? ok("assistant bubble also shown for assessors")
     : fail("assessor assistant bubble", "not found");
-  // self-assessors CAN now add notes to justify their own ratings, and they persist
-  const selfNoteFields = await page.locator(".theme-note-field textarea").count();
-  selfNoteFields > 0 ? ok("self-assessor has note fields to justify themselves") : fail("self note fields", `${selfNoteFields}`);
-  const SELF_NOTE = "Self-justification: recent stretch assignments back this rating.";
-  await page.locator(".theme-note-field textarea").first().fill(SELF_NOTE);
-  await page.waitForTimeout(1100); // debounced autosave (700ms) + server round-trip
+  // self-assessors justify with the FIVE APEX framework questions per theme (mandatory).
+  // AM04 is fully rated so the wizard opens on review — open a theme to reach the questions.
+  await page.locator(".dots .dot").first().click();
+  await page.waitForSelector(".framework-block");
+  const selfFields = await page.locator(".framework-field textarea").count();
+  selfFields === 5 ? ok("self-assessor sees the 5 framework questions") : fail("self framework fields", `${selfFields}`);
+  const FW = [
+    "Context: took over a stalled strategic account.",
+    "Actions: rebuilt the executive relationship map.",
+    "Results: reopened two dormant opportunities.",
+    "Impact: protected the multi-year renewal.",
+    "Replication: rolled the playbook out to two peers.",
+  ];
+  for (let i = 0; i < 5; i++) await page.locator(".framework-field textarea").nth(i).fill(FW[i]);
+  await page.waitForTimeout(1400); // five debounced autosaves (700ms) + server round-trips
+  const themeDone = await page.locator(".framework-status.ok").count();
+  themeDone >= 1 ? ok("theme marks complete once all five are answered") : fail("theme completion", `${themeDone}`);
   await page.reload();
-  await page.waitForTimeout(400);
-  const selfSaved = await page.locator(".theme-note-field textarea").first().inputValue();
-  selfSaved === SELF_NOTE ? ok("self note saved (server accepts self notes)") : fail("self note persistence", selfSaved);
+  await page.waitForSelector(".level-cards, .review-list");
+  await page.locator(".dots .dot").first().click();
+  await page.waitForSelector(".framework-block");
+  const firstFw = await page.locator(".framework-field textarea").first().inputValue();
+  firstFw === FW[0] ? ok("self framework answers persist (server accepts them)") : fail("self framework persistence", firstFw);
 
   // the pick-someone list is out of reach — /rate redirects them onto their own assessment
   await page.goto(`${BASE}/rate`);
@@ -286,6 +319,7 @@ try {
   await page.fill('input[name="account"]', "Account 99");
   await page.selectOption('select[name="zone"]', "India");
   await page.selectOption('select[name="track"]', "Saturation");
+  await page.selectOption('select[name="segment"]', "Power & Grid");
   await page.locator('button:has-text("Save and start")').click();
   await page.waitForURL(/\/rate\/\d+/);
   await page.waitForSelector(".wizard-top");

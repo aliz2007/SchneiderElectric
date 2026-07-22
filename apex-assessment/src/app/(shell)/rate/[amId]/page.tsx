@@ -4,12 +4,12 @@ import {
   getAM,
   getOrCreateAssessment,
   getRatings,
-  getThemeNotes,
+  getThemeNotesFull,
   isAssigned,
   listCapabilities,
 } from "@/lib/queries";
 import { LENS_LABELS } from "@/lib/seed-data";
-import Wizard, { type WizardCap, type WizardInitial } from "./wizard";
+import Wizard, { type ThemeData, type WizardCap, type WizardInitial } from "./wizard";
 
 export default async function RateAmPage({ params }: { params: Promise<{ amId: string }> }) {
   const user = await requireUser();
@@ -43,10 +43,19 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
   const initial: WizardInitial = {};
   for (const r of ratings) initial[r.capability_id] = { level: r.level };
 
-  // Every lens captures one note per theme. Managers and the APEX Panel record their
-  // reasoning; self-assessors use it to justify or add context to their own ratings.
-  const initialThemeNotes: Record<string, string> = {};
-  for (const t of getThemeNotes(assessment.id)) initialThemeNotes[t.cluster] = t.note;
+  // Per-theme justification: self-assessors answer the five framework questions;
+  // Manager / APEX Panel write one note. Both are mandatory to submit.
+  const initialThemeData: ThemeData = {};
+  for (const t of getThemeNotesFull(assessment.id)) {
+    initialThemeData[t.cluster] = {
+      note: t.note ?? "",
+      situation: t.situation ?? "",
+      actions: t.actions ?? "",
+      results: t.results ?? "",
+      impact: t.impact ?? "",
+      replication: t.replication ?? "",
+    };
+  }
 
   return (
     <Wizard
@@ -55,8 +64,7 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
       isSelf={user.lens === "self"}
       caps={caps}
       initial={initial}
-      themeNotesEnabled
-      initialThemeNotes={initialThemeNotes}
+      initialThemeData={initialThemeData}
       submitted={assessment.status === "submitted"}
     />
   );

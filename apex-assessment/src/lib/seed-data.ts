@@ -297,6 +297,27 @@ export const ROSTER: SeedAM[] = [
 
 export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 
+// Business segments an account belongs to (picked when the account is created).
+export const SEGMENTS = [
+  "Power & Grid",
+  "Energy & Chemicals",
+  "CS&P - Cloud & Service Providers",
+  "Multi-segment",
+] as const;
+export type Segment = (typeof SEGMENTS)[number];
+
+// The five APEX framework questions a self-assessor answers per theme to justify
+// their ratings (from the APEX discussion guide). Situation/Actions/Results/Impact/
+// Replication — the flow that separates knowledge, execution and strategic mastery.
+export const FRAMEWORK_QUESTIONS = [
+  { key: "situation", label: "Situation", prompt: "What was the context, challenge, or opportunity?" },
+  { key: "actions", label: "Actions", prompt: "What did you personally do? What decisions? How did you influence?" },
+  { key: "results", label: "Results", prompt: "What measurable outcomes? What changed?" },
+  { key: "impact", label: "Impact", prompt: "Impact on the customer, the account, SE, or the long-term strategy?" },
+  { key: "replication", label: "Replication", prompt: "Applied elsewhere? Is it repeatable or scalable?" },
+] as const;
+export type FrameworkKey = (typeof FRAMEWORK_QUESTIONS)[number]["key"];
+
 export const LENSES = ["self", "manager", "expert"] as const;
 export type Lens = (typeof LENSES)[number];
 

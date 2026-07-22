@@ -8,6 +8,7 @@ export type AM = {
   account: string;
   zone: (typeof ZONES)[number];
   track: "Acquisition" | "Saturation";
+  segment: string | null; // business segment (Power & Grid / Energy & Chemicals / CS&P / Multi-segment)
   profile_complete: number; // 0 = created for a person who still needs to fill in their details
 };
 
@@ -34,28 +35,28 @@ export function getAM(id: number): AM | undefined {
 
 /** Create a brand-new person (Account Manager) whose details are filled in on first sign-in.
  *  Placeholder zone/track satisfy the schema until the person completes onboarding. */
-export function createAccountManager(name: string): AM {
+export function createAccountManager(name: string, segment?: string | null): AM {
   const db = getDb();
   const maxId = (db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM account_managers").get() as { m: number }).m;
   const code = "AM" + String(maxId + 1).padStart(2, "0");
   const info = db
     .prepare(
-      "INSERT INTO account_managers (code, name, account, zone, track, profile_complete) VALUES (?, ?, '', 'MEA', 'Acquisition', 0)"
+      "INSERT INTO account_managers (code, name, account, zone, track, profile_complete, segment) VALUES (?, ?, '', 'MEA', 'Acquisition', 0, ?)"
     )
-    .run(code, name.trim());
+    .run(code, name.trim(), segment && segment.trim() !== "" ? segment.trim() : null);
   return getAM(Number(info.lastInsertRowid))!;
 }
 
 /** Complete (or edit) an Account Manager's profile — used by first-sign-in onboarding. */
 export function updateAccountManagerProfile(
   amId: number,
-  p: { name: string; account: string; zone: string; track: string }
+  p: { name: string; account: string; zone: string; track: string; segment: string }
 ) {
   getDb()
     .prepare(
-      "UPDATE account_managers SET name = ?, account = ?, zone = ?, track = ?, profile_complete = 1 WHERE id = ?"
+      "UPDATE account_managers SET name = ?, account = ?, zone = ?, track = ?, segment = ?, profile_complete = 1 WHERE id = ?"
     )
-    .run(p.name.trim(), p.account.trim(), p.zone, p.track, amId);
+    .run(p.name.trim(), p.account.trim(), p.zone, p.track, p.segment, amId);
 }
 
 /** The display name of whoever submitted (or owns the draft of) each lens for an AM.
@@ -130,29 +131,73 @@ export function upsertRating(assessmentId: number, capabilityId: number, level: 
 
 // ---------- theme (cluster) notes ----------
 
-export type ThemeNoteRow = { cluster: string; note: string };
+export type ThemeNoteFull = {
+  cluster: string;
+  note: string | null; // Manager / APEX Panel single justification
+  situation: string | null; // the five self-assessor framework answers
+  actions: string | null;
+  results: string | null;
+  impact: string | null;
+  replication: string | null;
+};
 
-/** All theme notes captured on a single assessment (draft or submitted). */
-export function getThemeNotes(assessmentId: number): ThemeNoteRow[] {
+const THEME_FIELDS = ["note", "situation", "actions", "results", "impact", "replication"] as const;
+export type ThemeField = (typeof THEME_FIELDS)[number];
+
+/** Every theme row on one assessment (draft or submitted), all fields — for the wizard's initial state. */
+export function getThemeNotesFull(assessmentId: number): ThemeNoteFull[] {
   return getDb()
     .prepare(
-      "SELECT cluster, note FROM theme_notes WHERE assessment_id = ? AND note IS NOT NULL AND TRIM(note) != ''"
+      "SELECT cluster, note, situation, actions, results, impact, replication FROM theme_notes WHERE assessment_id = ?"
     )
-    .all(assessmentId) as ThemeNoteRow[];
+    .all(assessmentId) as ThemeNoteFull[];
 }
 
-export function upsertThemeNote(assessmentId: number, cluster: string, note: string | null) {
+/** Save one field of a theme's justification (Manager/Panel `note`, or a self framework field). */
+export function saveThemeField(assessmentId: number, cluster: string, field: ThemeField, value: string | null) {
+  if (!THEME_FIELDS.includes(field)) throw new Error("Invalid theme field.");
   const db = getDb();
-  if (note == null) {
-    db.prepare("DELETE FROM theme_notes WHERE assessment_id = ? AND cluster = ?").run(assessmentId, cluster);
-  } else {
-    db.prepare(
-      `INSERT INTO theme_notes (assessment_id, cluster, note)
-       VALUES (?, ?, ?)
-       ON CONFLICT (assessment_id, cluster) DO UPDATE SET note = excluded.note`
-    ).run(assessmentId, cluster, note);
-  }
+  const v = value && value.trim() !== "" ? value.trim() : null;
+  db.prepare(
+    `INSERT INTO theme_notes (assessment_id, cluster, ${field}) VALUES (?, ?, ?)
+     ON CONFLICT (assessment_id, cluster) DO UPDATE SET ${field} = excluded.${field}`
+  ).run(assessmentId, cluster, v);
+  // drop a row that has become entirely empty
+  db.prepare(
+    `DELETE FROM theme_notes WHERE assessment_id = ? AND cluster = ?
+       AND note IS NULL AND situation IS NULL AND actions IS NULL AND results IS NULL AND impact IS NULL AND replication IS NULL`
+  ).run(assessmentId, cluster);
   db.prepare("UPDATE assessments SET updated_at = datetime('now') WHERE id = ?").run(assessmentId);
+}
+
+/** Readable text for a theme row: the five framework answers if present, else the single note. */
+export function themeJustificationText(row: Partial<ThemeNoteFull>): string {
+  const fw: [string, string | null | undefined][] = [
+    ["Situation", row.situation],
+    ["Actions", row.actions],
+    ["Results", row.results],
+    ["Impact", row.impact],
+    ["Replication", row.replication],
+  ];
+  const parts = fw.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}: ${v!.trim()}`);
+  if (parts.length) return parts.join("\n");
+  return (row.note ?? "").trim();
+}
+
+/** Clusters on this assessment still missing their required justification (the submit gate).
+ *  Self must answer all five framework questions per theme; Manager/Panel one note per theme. */
+export function unjustifiedThemes(assessmentId: number, lens: Lens): string[] {
+  const clusters: string[] = [];
+  const seen = new Set<string>();
+  for (const c of listCapabilities()) if (!seen.has(c.cluster)) { seen.add(c.cluster); clusters.push(c.cluster); }
+  const byCluster = new Map(getThemeNotesFull(assessmentId).map((n) => [n.cluster, n]));
+  const has = (v: string | null | undefined) => !!(v && v.trim());
+  return clusters.filter((cl) => {
+    const n = byCluster.get(cl);
+    if (lens === "self")
+      return !(n && has(n.situation) && has(n.actions) && has(n.results) && has(n.impact) && has(n.replication));
+    return !(n && has(n.note));
+  });
 }
 
 export function submitAssessment(assessmentId: number, raterUserId: number) {
@@ -273,15 +318,19 @@ export function submittedLevels(amId: number): Record<Lens, Map<number, number>>
  * Theme (cluster) notes from submitted Manager / APEX Panel assessments, for the
  * individual analysis view and PDF. Self-assessments never carry notes.
  */
-export function submittedThemeNotes(amId: number): { lens: Lens; cluster: string; note: string }[] {
+/** Submitted theme justifications across all three lenses. Each row carries the raw
+ *  fields; call themeJustificationText(row) for display text, or read the framework
+ *  fields directly. Rows with no content are excluded. */
+export function submittedThemeNotes(amId: number): (ThemeNoteFull & { lens: Lens })[] {
   return getDb()
     .prepare(
-      `SELECT a.lens, t.cluster, t.note
+      `SELECT a.lens, t.cluster, t.note, t.situation, t.actions, t.results, t.impact, t.replication
        FROM assessments a JOIN theme_notes t ON t.assessment_id = a.id
        WHERE a.am_id = ? AND a.status = 'submitted' AND a.lens IN ('self','manager','expert')
-         AND t.note IS NOT NULL AND TRIM(t.note) != ''`
+         AND (t.note IS NOT NULL OR t.situation IS NOT NULL OR t.actions IS NOT NULL
+              OR t.results IS NOT NULL OR t.impact IS NOT NULL OR t.replication IS NOT NULL)`
     )
-    .all(amId) as { lens: Lens; cluster: string; note: string }[];
+    .all(amId) as (ThemeNoteFull & { lens: Lens })[];
 }
 
 /** True once all three lenses (Self, Manager, APEX Panel) have submitted for this AM —
@@ -332,10 +381,11 @@ export type HeatCell = {
  * track are skipped for that AM.
  */
 export function zoneHeatmap(
-  track?: AM["track"]
+  track?: AM["track"],
+  segment?: string
 ): { zones: string[]; rows: { cap: Capability; cells: HeatCell[] }[] } {
   const caps = listCapabilities();
-  const ams = listAMs().filter((am) => !track || am.track === track);
+  const ams = listAMs().filter((am) => (!track || am.track === track) && (!segment || am.segment === segment));
   const byZone = new Map<string, AM[]>();
   for (const z of ZONES) byZone.set(z, []);
   for (const am of ams) byZone.get(am.zone)!.push(am);
@@ -368,8 +418,8 @@ export function zoneHeatmap(
 }
 
 /** Largest zone-level deficits — the "who to train on what, where" list. */
-export function trainingPriorities(limit = 6, track?: AM["track"]) {
-  const { zones, rows } = zoneHeatmap(track);
+export function trainingPriorities(limit = 6, track?: AM["track"], segment?: string) {
+  const { zones, rows } = zoneHeatmap(track, segment);
   const flat: { zone: string; cap: Capability; cell: HeatCell }[] = [];
   for (const row of rows)
     row.cells.forEach((cell, i) => {

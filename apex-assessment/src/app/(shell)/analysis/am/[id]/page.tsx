@@ -9,6 +9,7 @@ import {
   requiredLevel,
   submittedLevels,
   submittedThemeNotes,
+  themeJustificationText,
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
 import { gapClass } from "@/lib/heat";
@@ -36,8 +37,10 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
   const themeNotes = submittedThemeNotes(am.id);
   const notesByCluster = new Map<string, { lens: Lens; note: string }[]>();
   for (const n of themeNotes) {
+    const text = themeJustificationText(n);
+    if (!text) continue;
     if (!notesByCluster.has(n.cluster)) notesByCluster.set(n.cluster, []);
-    notesByCluster.get(n.cluster)!.push({ lens: n.lens, note: n.note });
+    notesByCluster.get(n.cluster)!.push({ lens: n.lens, note: text });
   }
   for (const list of notesByCluster.values()) {
     list.sort((a, b) => LENSES.indexOf(a.lens) - LENSES.indexOf(b.lens));

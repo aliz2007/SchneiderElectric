@@ -115,6 +115,20 @@ function migrate(db: Database.Database) {
   } catch {
     /* column already exists */
   }
+  // business segment on the account (picked at account creation / onboarding)
+  try {
+    db.exec("ALTER TABLE account_managers ADD COLUMN segment TEXT");
+  } catch {
+    /* column already exists */
+  }
+  // the self-assessor's five APEX framework answers per theme (Manager/Panel still use `note`)
+  for (const col of ["situation", "actions", "results", "impact", "replication"]) {
+    try {
+      db.exec(`ALTER TABLE theme_notes ADD COLUMN ${col} TEXT`);
+    } catch {
+      /* column already exists */
+    }
+  }
 
   const capCount = (db.prepare("SELECT COUNT(*) AS n FROM capabilities").get() as { n: number }).n;
   if (capCount === 0) {

@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requireSuperadmin } from "@/lib/session";
 import { createAccountManager, listAMs, listCapabilities, setAssignments } from "@/lib/queries";
+import { SEGMENTS } from "@/lib/seed-data";
 
 function amIdsFrom(formData: FormData): number[] {
   return formData.getAll("am").map(Number).filter((n) => Number.isInteger(n) && n > 0);
@@ -143,6 +144,11 @@ export async function loadDemoData() {
     const insR = db.prepare(
       "INSERT INTO ratings (assessment_id, capability_id, level, note) VALUES (?, ?, ?, NULL)"
     );
+    // segment is picked when a new account is created, so the original Excel roster has none.
+    // Backfill a deterministic spread across the segments here so the segment filter has
+    // something to show once the demo dataset is loaded.
+    const setSeg = db.prepare("UPDATE account_managers SET segment = ? WHERE id = ? AND (segment IS NULL OR segment = '')");
+    ams.forEach((am, i) => setSeg.run(SEGMENTS[i % SEGMENTS.length], am.id));
     for (const am of ams) {
       for (const lens of ["self", "manager", "expert"] as const) {
         const aId = Number(insA.run(am.id, lens, me.id).lastInsertRowid);

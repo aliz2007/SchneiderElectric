@@ -26,7 +26,7 @@ import {
   assignedAMs,
   getAssessment,
   getRatings,
-  getThemeNotes,
+  getThemeNotesFull,
   listAMs,
   listCapabilities,
   listUsers,
@@ -34,6 +34,7 @@ import {
   requiredLevel,
   submittedLevels,
   submittedThemeNotes,
+  themeJustificationText,
 } from "./queries";
 import { LENS_LABELS, LENSES, type Lens } from "./seed-data";
 
@@ -104,6 +105,7 @@ function fullSnapshot() {
       account: am.account,
       zone: am.zone,
       track: am.track,
+      segment: am.segment,
       assessmentsSubmitted: LENSES.filter((lens) => getAssessment(am.id, lens)?.status === "submitted").map(
         (lens) => LENS_LABELS[lens]
       ),
@@ -115,11 +117,9 @@ function fullSnapshot() {
         perceptionGaps,
       },
       capabilities: rows,
-      themeNotes: submittedThemeNotes(am.id).map((n) => ({
-        lens: LENS_LABELS[n.lens],
-        cluster: n.cluster,
-        note: n.note,
-      })),
+      themeNotes: submittedThemeNotes(am.id)
+        .map((n) => ({ lens: LENS_LABELS[n.lens], cluster: n.cluster, note: themeJustificationText(n) }))
+        .filter((n) => n.note),
     };
   });
 
@@ -191,7 +191,11 @@ function scopedSnapshot(viewer: ChatViewer) {
           capabilitiesRated: ratings.length,
           capabilitiesTotal: caps.length,
           myRatings: ratings,
-          myThemeNotes: a ? getThemeNotes(a.id) : [],
+          myThemeNotes: a
+            ? getThemeNotesFull(a.id)
+                .map((n) => ({ cluster: n.cluster, justification: themeJustificationText(n) }))
+                .filter((n) => n.justification)
+            : [],
         };
       })
     : [];

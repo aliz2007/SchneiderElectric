@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { assignedAMs } from "@/lib/queries";
-import { ZONES } from "@/lib/seed-data";
+import { SEGMENTS, ZONES } from "@/lib/seed-data";
 import { saveOnboarding } from "./actions";
 
 export default async function OnboardingPage({
@@ -63,6 +63,19 @@ export default async function OnboardingPage({
                 <option value="Saturation">Saturation</option>
               </select>
             </div>
+          </div>
+          <div className="field">
+            <label>Segment</label>
+            <select className="input" name="segment" defaultValue="" required>
+              <option value="" disabled>
+                — select your account&apos;s segment —
+              </option>
+              {SEGMENTS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
           <button className="btn btn-primary" style={{ marginTop: 8 }} type="submit">
             Save and start my self-assessment

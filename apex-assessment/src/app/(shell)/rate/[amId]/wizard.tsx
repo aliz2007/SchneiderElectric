@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { FRAMEWORK_QUESTIONS } from "@/lib/seed-data";
 import { saveRating, saveThemeNote, submit } from "./actions";
 
 export type WizardCap = {
@@ -14,6 +15,8 @@ export type WizardCap = {
 };
 
 export type WizardInitial = Record<number, { level: number | null }>;
+/** cluster -> field -> value (fields: "note" for Manager/Panel; the 5 framework keys for self) */
+export type ThemeData = Record<string, Record<string, string>>;
 
 const LEVEL_META = [
   { level: 1, tag: "L1", name: "Developing", key: "l1" as const },
@@ -27,8 +30,7 @@ export default function Wizard({
   isSelf,
   caps,
   initial,
-  themeNotesEnabled,
-  initialThemeNotes,
+  initialThemeData,
   submitted,
 }: {
   am: { id: number; name: string; account: string; zone: string; track: string };
@@ -36,27 +38,33 @@ export default function Wizard({
   isSelf: boolean;
   caps: WizardCap[];
   initial: WizardInitial;
-  themeNotesEnabled: boolean;
-  initialThemeNotes: Record<string, string>;
+  initialThemeData: ThemeData;
   submitted: boolean;
 }) {
-  const [answers, setAnswers] = useState<WizardInitial>(() => {
-    const a: WizardInitial = {};
-    for (const c of caps) a[c.id] = initial[c.id] ?? { level: null };
-    return a;
-  });
-  // ordered, de-duplicated list of themes (clusters) as they appear in the rubric
+  // ordered, de-duplicated list of themes (clusters)
   const themes = useMemo(() => {
     const seen = new Set<string>();
     const out: string[] = [];
     for (const c of caps) if (!seen.has(c.cluster)) { seen.add(c.cluster); out.push(c.cluster); }
     return out;
   }, [caps]);
-  const [themeNotes, setThemeNotes] = useState<Record<string, string>>(() => {
-    const n: Record<string, string> = {};
-    for (const t of themes) n[t] = initialThemeNotes[t] ?? "";
-    return n;
+  // the justification fields required for this lens
+  const fields = useMemo(() => (isSelf ? FRAMEWORK_QUESTIONS.map((q) => q.key as string) : ["note"]), [isSelf]);
+
+  const [answers, setAnswers] = useState<WizardInitial>(() => {
+    const a: WizardInitial = {};
+    for (const c of caps) a[c.id] = initial[c.id] ?? { level: null };
+    return a;
   });
+  const [themeData, setThemeData] = useState<ThemeData>(() => {
+    const d: ThemeData = {};
+    for (const t of themes) {
+      d[t] = {};
+      for (const f of fields) d[t][f] = initialThemeData[t]?.[f] ?? "";
+    }
+    return d;
+  });
+
   const firstUnanswered = caps.findIndex((c) => (initial[c.id]?.level ?? null) == null);
   const [idx, setIdx] = useState(submitted ? -1 : firstUnanswered === -1 ? -1 : firstUnanswered);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -64,11 +72,16 @@ export default function Wizard({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const answeredCount = useMemo(
-    () => caps.filter((c) => answers[c.id]?.level != null).length,
-    [caps, answers]
-  );
+  const answeredCount = useMemo(() => caps.filter((c) => answers[c.id]?.level != null).length, [caps, answers]);
   const allAnswered = answeredCount === caps.length;
+
+  const themeComplete = useCallback(
+    (cluster: string) => fields.every((f) => (themeData[cluster]?.[f] ?? "").trim() !== ""),
+    [fields, themeData]
+  );
+  const incompleteThemes = useMemo(() => themes.filter((t) => !themeComplete(t)), [themes, themeComplete]);
+  const canSubmit = allAnswered && incompleteThemes.length === 0;
+
   const onReview = idx === -1;
   const cap = onReview ? null : caps[idx];
 
@@ -77,22 +90,19 @@ export default function Wizard({
       if (submitted) return;
       setAnswers((prev) => ({ ...prev, [capId]: { level } }));
       setSaveState("saving");
-      saveRating(am.id, capId, level)
-        .then(() => setSaveState("saved"))
-        .catch(() => setSaveState("error"));
+      saveRating(am.id, capId, level).then(() => setSaveState("saved")).catch(() => setSaveState("error"));
     },
     [am.id, submitted]
   );
 
-  const setThemeNote = useCallback(
-    (cluster: string, note: string) => {
-      setThemeNotes((prev) => ({ ...prev, [cluster]: note }));
-      if (noteTimers.current[cluster]) clearTimeout(noteTimers.current[cluster]);
-      noteTimers.current[cluster] = setTimeout(() => {
+  const setThemeField = useCallback(
+    (cluster: string, field: string, value: string) => {
+      setThemeData((prev) => ({ ...prev, [cluster]: { ...prev[cluster], [field]: value } }));
+      const key = `${cluster}|${field}`;
+      if (noteTimers.current[key]) clearTimeout(noteTimers.current[key]);
+      noteTimers.current[key] = setTimeout(() => {
         setSaveState("saving");
-        saveThemeNote(am.id, cluster, note)
-          .then(() => setSaveState("saved"))
-          .catch(() => setSaveState("error"));
+        saveThemeNote(am.id, cluster, field, value).then(() => setSaveState("saved")).catch(() => setSaveState("error"));
       }, 700);
     },
     [am.id]
@@ -118,24 +128,77 @@ export default function Wizard({
       try {
         await submit(am.id);
       } catch (err) {
-        // redirect() throws internally on success — only surface real errors
-        if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) {
-          setSubmitError(err.message);
-        } else {
-          throw err;
-        }
+        if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) setSubmitError(err.message);
+        else throw err;
       }
     });
   };
+
+  const jumpToTheme = (cluster: string) => {
+    const i = caps.findIndex((c) => c.cluster === cluster);
+    if (i >= 0) setIdx(i);
+  };
+
+  // ---- justification block shown under the level cards for the current theme ----
+  function Justification({ cluster }: { cluster: string }) {
+    const done = themeComplete(cluster);
+    return (
+      <div className={`framework-block${done ? " done" : ""}`}>
+        <div className="framework-head">
+          <span className="framework-kicker">
+            {isSelf ? "Justify your ratings for this theme" : "Justify your rating for this theme"} · {cluster}
+          </span>
+          <span className={`framework-status ${done ? "ok" : "todo"}`}>
+            {done ? "✓ complete" : isSelf ? "required · all 5" : "required"}
+          </span>
+        </div>
+        {isSelf ? (
+          <>
+            <p className="framework-intro">
+              Share a concrete example from your account, then answer all five. All five are mandatory before you
+              can submit.
+            </p>
+            {FRAMEWORK_QUESTIONS.map((q, i) => {
+              const val = themeData[cluster]?.[q.key] ?? "";
+              return (
+                <div key={q.key} className={`framework-field${val.trim() ? " filled" : ""}`}>
+                  <label htmlFor={`fw-${cluster}-${q.key}`}>
+                    <span className="framework-num">{i + 1}</span>
+                    <span className="framework-label">{q.label}</span>
+                    <span className="framework-prompt">{q.prompt}</span>
+                  </label>
+                  <textarea
+                    id={`fw-${cluster}-${q.key}`}
+                    className="input"
+                    rows={2}
+                    value={val}
+                    onChange={(e) => setThemeField(cluster, q.key, e.target.value)}
+                    disabled={submitted}
+                  />
+                </div>
+              );
+            })}
+          </>
+        ) : (
+          <textarea
+            className="input framework-note"
+            rows={3}
+            value={themeData[cluster]?.note ?? ""}
+            onChange={(e) => setThemeField(cluster, "note", e.target.value)}
+            disabled={submitted}
+            placeholder={`What evidence supports your ratings for ${cluster}? A justification is required for every theme.`}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="wizard">
       <div className="wizard-top">
         <div>
           <div className="page-kicker">{lensLabel}</div>
-          <h1 className="page-title" style={{ marginBottom: 2 }}>
-            {am.name}
-          </h1>
+          <h1 className="page-title" style={{ marginBottom: 2 }}>{am.name}</h1>
           <div className="am-meta" style={{ marginTop: 6 }}>
             <span className="badge badge-zone">{am.zone}</span>
             <span className="badge badge-track">{am.track}</span>
@@ -143,9 +206,7 @@ export default function Wizard({
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div className="wizard-counter">
-            {answeredCount} / {caps.length} rated
-          </div>
+          <div className="wizard-counter">{answeredCount} / {caps.length} rated</div>
           <div className="progress-track" style={{ width: 180, marginTop: 6 }}>
             <div className="progress-fill" style={{ width: `${(answeredCount / caps.length) * 100}%` }} />
           </div>
@@ -154,8 +215,8 @@ export default function Wizard({
 
       {submitted && (
         <div className="banner banner-ok">
-          ✓ This assessment has been submitted and is now locked. Contact your administrator if it
-          needs to be reopened.
+          ✓ This assessment has been submitted and is now locked. Contact your administrator if it needs to be
+          reopened.
         </div>
       )}
 
@@ -177,40 +238,14 @@ export default function Wizard({
                   <div className="lvl-head">
                     <span className="lvl-num">{m.tag}</span>
                     {m.name}
-                    <span className="key-hint" style={{ marginLeft: "auto" }}>
-                      press {m.level}
-                    </span>
+                    <span className="key-hint" style={{ marginLeft: "auto" }}>press {m.level}</span>
                   </div>
                   <div className="lvl-desc">{cap[m.key]}</div>
                 </button>
               );
             })}
           </div>
-          {themeNotesEnabled && (
-            <div className="field theme-note-field" style={{ marginBottom: 0 }}>
-              <label htmlFor={`theme-note-${idx}`}>
-                {isSelf ? "Notes" : "Theme notes"} · <span className="theme-note-name">{cap.cluster}</span>
-                <span className="theme-note-hint">
-                  {isSelf
-                    ? " — optional: explain or justify your ratings for this theme"
-                    : " — one note for this theme, shared across its capabilities"}
-                </span>
-              </label>
-              <textarea
-                id={`theme-note-${idx}`}
-                className="input"
-                rows={2}
-                placeholder={
-                  isSelf
-                    ? `Why you rated yourself this way on ${cap.cluster}… (optional)`
-                    : `Overall observations on ${cap.cluster}…`
-                }
-                value={themeNotes[cap.cluster] ?? ""}
-                onChange={(e) => setThemeNote(cap.cluster, e.target.value)}
-                disabled={submitted}
-              />
-            </div>
-          )}
+          <Justification cluster={cap.cluster} />
         </div>
       )}
 
@@ -220,7 +255,7 @@ export default function Wizard({
           <p className="card-sub">
             {submitted
               ? "Your submitted ratings for this Account Manager."
-              : "Check your ratings, then submit. After submitting, the assessment is locked."}
+              : "Check your ratings and justifications, then submit. After submitting, the assessment is locked."}
           </p>
           <div className="review-list">
             {caps.map((c, i) => {
@@ -232,66 +267,56 @@ export default function Wizard({
                   </span>
                   <span className="review-cap">{c.name}</span>
                   {!submitted && (
-                    <button className="btn btn-sm btn-ghost" type="button" onClick={() => setIdx(i)}>
-                      Edit
-                    </button>
+                    <button className="btn btn-sm btn-ghost" type="button" onClick={() => setIdx(i)}>Edit</button>
                   )}
                 </div>
               );
             })}
           </div>
 
-          {themeNotesEnabled && (
-            <div className="theme-notes-review">
-              <h3 className="card-title" style={{ fontSize: 15, marginTop: 22 }}>
-                {isSelf ? "Your notes" : "Theme notes"}
-              </h3>
-              <p className="card-sub" style={{ marginBottom: 12 }}>
-                {isSelf
-                  ? "Optional — one note per theme to justify or add context to your ratings. These appear on your report."
-                  : "One note per theme — these appear on the individual report and PDF."}
-              </p>
-              {themes.map((t) => (
-                <div key={t} className="field theme-note-field">
-                  <label htmlFor={`review-note-${t}`}>
-                    <span className="theme-note-name">{t}</span>
-                  </label>
-                  <textarea
-                    id={`review-note-${t}`}
-                    className="input"
-                    rows={2}
-                    placeholder={`Overall observations on ${t}…`}
-                    value={themeNotes[t] ?? ""}
-                    onChange={(e) => setThemeNote(t, e.target.value)}
-                    disabled={submitted}
-                  />
+          <div className="theme-notes-review">
+            <h3 className="card-title" style={{ fontSize: 15, marginTop: 22 }}>
+              {isSelf ? "Framework justifications" : "Theme justifications"}
+            </h3>
+            <p className="card-sub" style={{ marginBottom: 12 }}>
+              {isSelf
+                ? "The five framework questions must be answered for every theme."
+                : "A justification note is required for every theme."}
+            </p>
+            {themes.map((t) => {
+              const done = themeComplete(t);
+              return (
+                <div key={t} className="review-row">
+                  <span className={`badge ${done ? "badge-green" : "badge-amber"}`}>{done ? "✓ complete" : "incomplete"}</span>
+                  <span className="review-cap">{t}</span>
+                  {!submitted && (
+                    <button className="btn btn-sm btn-ghost" type="button" onClick={() => jumpToTheme(t)}>Edit</button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
 
           {submitError && <div className="form-error" style={{ marginTop: 14 }}>{submitError}</div>}
           {!submitted && (
-            <div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center" }}>
-              <button
-                className="btn btn-primary"
-                type="button"
-                disabled={!allAnswered || submitting}
-                onClick={doSubmit}
-              >
+            <div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center", flexWrap: "wrap" }}>
+              <button className="btn btn-primary" type="button" disabled={!canSubmit || submitting} onClick={doSubmit}>
                 {submitting ? "Submitting…" : "Submit assessment"}
               </button>
               {!allAnswered && (
                 <span style={{ fontSize: 13, color: "var(--muted)" }}>
-                  {caps.length - answeredCount} capability{caps.length - answeredCount > 1 ? "ies" : ""} left to rate
+                  {caps.length - answeredCount} capabilit{caps.length - answeredCount > 1 ? "ies" : "y"} left to rate
+                </span>
+              )}
+              {allAnswered && incompleteThemes.length > 0 && (
+                <span style={{ fontSize: 13, color: "var(--amber)" }}>
+                  Justify {incompleteThemes.length} more theme{incompleteThemes.length > 1 ? "s" : ""}: {incompleteThemes.join(", ")}
                 </span>
               )}
             </div>
           )}
           {submitted && (
-            <Link className="btn btn-outline" style={{ marginTop: 18 }} href="/rate">
-              ← Back to my assessments
-            </Link>
+            <Link className="btn btn-outline" style={{ marginTop: 18 }} href="/rate">← Back to my assessments</Link>
           )}
         </div>
       )}
@@ -300,29 +325,16 @@ export default function Wizard({
         <div style={{ display: "flex", gap: 8 }}>
           {!onReview && (
             <>
-              <button
-                className="btn btn-outline"
-                type="button"
-                disabled={idx === 0}
-                onClick={() => setIdx(idx - 1)}
-              >
-                ← Prev
-              </button>
+              <button className="btn btn-outline" type="button" disabled={idx === 0} onClick={() => setIdx(idx - 1)}>← Prev</button>
               {idx < caps.length - 1 ? (
-                <button className="btn btn-outline" type="button" onClick={() => setIdx(idx + 1)}>
-                  Next →
-                </button>
+                <button className="btn btn-outline" type="button" onClick={() => setIdx(idx + 1)}>Next →</button>
               ) : (
-                <button className="btn btn-primary" type="button" onClick={() => setIdx(-1)}>
-                  Review & submit →
-                </button>
+                <button className="btn btn-primary" type="button" onClick={() => setIdx(-1)}>Review & submit →</button>
               )}
             </>
           )}
           {onReview && !submitted && (
-            <button className="btn btn-outline" type="button" onClick={() => setIdx(0)}>
-              ← Back to questions
-            </button>
+            <button className="btn btn-outline" type="button" onClick={() => setIdx(0)}>← Back to questions</button>
           )}
         </div>
         <div className="dots">
@@ -358,32 +370,20 @@ export default function Wizard({
           <ul className="wizard-help-list">
             {isSelf ? (
               <>
+                <li>Rate yourself on each capability against the three levels — be candid.</li>
+                <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
                 <li>
-                  Rate yourself on each capability: read the three levels and pick the one that best
-                  matches how you work today. Be candid — there are no right or wrong answers.
+                  For every theme, answer all <b>five framework questions</b> (Situation, Actions, Results, Impact,
+                  Replication) to justify your ratings. They are mandatory.
                 </li>
-                <li>
-                  Prefer the keyboard? Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level, and use
-                  the arrows or the dots below to move between capabilities.
-                </li>
-                <li>If needed, share any comments, feedback or achievements related to this capability.</li>
-                <li>
-                  Everything saves automatically. Once all {caps.length} are rated, open{" "}
-                  <b>Review &amp; submit</b>. Submitting locks your assessment.
-                </li>
+                <li>Everything saves automatically. You can only submit once all {caps.length} are rated and every theme is justified.</li>
               </>
             ) : (
               <>
                 <li>Rate the Account Manager on each capability against the three levels.</li>
-                <li>
-                  Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level, and use the arrows or the
-                  dots below to move between capabilities.
-                </li>
-                <li>If needed, share any comments, feedback or achievements related to this capability.</li>
-                <li>
-                  Ratings save automatically. When all {caps.length} are rated, open{" "}
-                  <b>Review &amp; submit</b>; submitting locks the assessment.
-                </li>
+                <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
+                <li>Write a <b>justification note for every theme</b> — it is mandatory before you can submit.</li>
+                <li>Ratings save automatically. Submit once all {caps.length} are rated and every theme is justified.</li>
               </>
             )}
           </ul>
