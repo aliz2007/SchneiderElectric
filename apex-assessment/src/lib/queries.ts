@@ -323,9 +323,11 @@ export type HeatCell = {
  * vs the required level for each AM's track. Capabilities not applicable to an AM's
  * track are skipped for that AM.
  */
-export function zoneHeatmap(): { zones: string[]; rows: { cap: Capability; cells: HeatCell[] }[] } {
+export function zoneHeatmap(
+  track?: AM["track"]
+): { zones: string[]; rows: { cap: Capability; cells: HeatCell[] }[] } {
   const caps = listCapabilities();
-  const ams = listAMs();
+  const ams = listAMs().filter((am) => !track || am.track === track);
   const byZone = new Map<string, AM[]>();
   for (const z of ZONES) byZone.set(z, []);
   for (const am of ams) byZone.get(am.zone)!.push(am);
@@ -358,8 +360,8 @@ export function zoneHeatmap(): { zones: string[]; rows: { cap: Capability; cells
 }
 
 /** Largest zone-level deficits — the "who to train on what, where" list. */
-export function trainingPriorities(limit = 6) {
-  const { zones, rows } = zoneHeatmap();
+export function trainingPriorities(limit = 6, track?: AM["track"]) {
+  const { zones, rows } = zoneHeatmap(track);
   const flat: { zone: string; cap: Capability; cell: HeatCell }[] = [];
   for (const row of rows)
     row.cells.forEach((cell, i) => {

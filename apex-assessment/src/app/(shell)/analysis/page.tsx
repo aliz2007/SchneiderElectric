@@ -12,18 +12,27 @@ import {
 import { gapClass, fmt } from "@/lib/heat";
 import { ZONES } from "@/lib/seed-data";
 import ZoneMap, { type MapAM, type MapCap } from "./zone-map";
+import TrackFilter from "./track-filter";
 
-export default async function AnalysisPage() {
+export default async function AnalysisPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ track?: string }>;
+}) {
   // the aggregated dashboard is open to every signed-in user; drill-down into
   // individual ratings stays superadmin-only
   const user = await requireUser();
   const isAdmin = user.role === "superadmin";
 
+  // All / Acquisition / Saturation filter (see TrackFilter) — scopes every analytics view
+  const { track: trackRaw } = await searchParams;
+  const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
+
   const stats = overviewStats();
-  const { zones, rows } = zoneHeatmap();
-  const priorities = trainingPriorities(6);
+  const { zones, rows } = zoneHeatmap(track);
+  const priorities = trainingPriorities(6, track);
   const statuses = assessmentStatuses();
-  const ams = listAMs();
+  const ams = listAMs().filter((am) => !track || am.track === track);
 
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
   const completionPct = Math.round((submittedTotal / (stats.amCount * 3)) * 100);
@@ -110,6 +119,12 @@ export default async function AnalysisPage() {
               : `avg ${fmt(stats.avgExpert, 2)} · rounded to nearest level`}
           </div>
         </div>
+      </div>
+
+      <div className="analytics-filter-row">
+        <span className="analytics-filter-label">Track</span>
+        <TrackFilter current={track ?? "all"} />
+        {track && <span className="analytics-filter-note">Showing {ams.length} {track} Account Managers</span>}
       </div>
 
       {isAdmin && (
