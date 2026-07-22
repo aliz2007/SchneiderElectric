@@ -43,10 +43,12 @@ export default async function ZonePage({ params }: { params: Promise<{ zone: str
               <tr>
                 <th className="hm-rowhead">Capability</th>
                 {ams.map((am) => (
-                  <th key={am.id} title={`${am.account} · ${am.track}`}>
+                  <th key={am.id} title={`${am.name} · ${am.account} · ${am.track}`}>
                     <Link href={`/analysis/am/${am.id}`} style={{ color: "var(--blue)" }}>
                       {am.code}
                     </Link>
+                    {/* superadmin-only page, so the name is safe to surface here */}
+                    <span className="zone-am-name" title={am.name}>{am.name}</span>
                   </th>
                 ))}
                 <th>Zone avg</th>

@@ -213,11 +213,15 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
     ctx.setTransform(2, 0, 0, 2, 0, 0);
     for (const zone of ZONES) {
       const gap = zoneStats.get(zone)?.gap ?? null;
-      if (gap == null) continue; // no data — leave the neutral land colour underneath
-      const [r, g, b] = LUT[Math.round(severity(gap) * 255)];
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.92)`;
       const path = new Path2D();
       for (const c of countriesByZone.groups.get(zone) ?? []) path.addPath(new Path2D(c.d));
+      if (gap == null) {
+        // no submitted data for this view — a clear neutral fill, never a black hole
+        ctx.fillStyle = "rgba(100, 116, 139, 0.42)";
+      } else {
+        const [r, g, b] = LUT[Math.round(severity(gap) * 255)];
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.92)`;
+      }
       ctx.fill(path);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);

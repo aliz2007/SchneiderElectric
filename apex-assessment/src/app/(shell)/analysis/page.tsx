@@ -28,22 +28,28 @@ export default async function AnalysisPage() {
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
   const completionPct = Math.round((submittedTotal / (stats.amCount * 3)) * 100);
 
-  // raw per-AM panel scores for the thermal map (filterable client-side)
-  const mapCaps: MapCap[] = listCapabilities().map((c) => ({
-    id: c.id,
-    name: c.name,
-    cluster: c.cluster,
-    reqAcq: c.req_acq,
-    reqSat: c.req_sat,
-  }));
-  const mapAMs: MapAM[] = ams.map((am) => ({
-    id: am.id,
-    code: am.code,
-    name: am.name,
-    zone: am.zone as MapAM["zone"],
-    track: am.track,
-    scores: Object.fromEntries(submittedLevels(am.id).expert),
-  }));
+  // Raw per-AM panel scores + required levels for the thermal map. These are
+  // individual results, so they are built and sent to the client ONLY for
+  // superadmins; assessors get the aggregated views below, never this payload.
+  const mapCaps: MapCap[] = isAdmin
+    ? listCapabilities().map((c) => ({
+        id: c.id,
+        name: c.name,
+        cluster: c.cluster,
+        reqAcq: c.req_acq,
+        reqSat: c.req_sat,
+      }))
+    : [];
+  const mapAMs: MapAM[] = isAdmin
+    ? ams.map((am) => ({
+        id: am.id,
+        code: am.code,
+        name: am.name,
+        zone: am.zone as MapAM["zone"],
+        track: am.track,
+        scores: Object.fromEntries(submittedLevels(am.id).expert),
+      }))
+    : [];
 
   // group heat map rows by cluster for readable sections
   const clusters: { name: string; rows: typeof rows }[] = [];
@@ -106,15 +112,17 @@ export default async function AnalysisPage() {
         </div>
       </div>
 
-      <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
-        <h2 className="card-title">Zone performance map</h2>
-        <p className="card-sub">
-          Thermal view of APEX Panel performance vs required levels across Schneider hubs —
-          blue is on target, red is a critical gap. Filter by capability, hover the hubs,
-          click a zone to focus.
-        </p>
-        <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} />
-      </div>
+      {isAdmin && (
+        <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
+          <h2 className="card-title">Zone performance map</h2>
+          <p className="card-sub">
+            Thermal view of APEX Panel performance vs required levels across Schneider hubs —
+            blue is on target, red is a critical gap. Filter by capability, hover the hubs,
+            click a zone to focus.
+          </p>
+          <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} />
+        </div>
+      )}
 
       {priorities.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: 22 }}>

@@ -5,13 +5,13 @@ import { useEffect, useRef, useState } from "react";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const ADMIN_EXAMPLES = [
-  "Quels skill gaps reviennent le plus dans la zone India ?",
+  "Which skill gaps are most frequent in the India zone?",
   "Does anyone have a perception gap on Pipeline Shaping?",
   "Which assessments are still missing?",
 ];
 const ASSESSOR_EXAMPLES = [
   "How far along are my assessments?",
-  "Quelles capacités me restent a noter ?",
+  "Which capabilities do I still need to rate?",
 ];
 
 /**
@@ -30,10 +30,11 @@ export default function ChatWidget({ isSuperadmin }: { isSuperadmin: boolean }) 
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [msgs, busy]);
+  }, [msgs, busy, open]); // include open so reopening jumps to the latest reply
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+    // focus on open, and refocus after each reply (the input is disabled while busy)
+    if (open && !busy) inputRef.current?.focus();
+  }, [open, busy]);
 
   async function send(text: string) {
     const q = text.trim();

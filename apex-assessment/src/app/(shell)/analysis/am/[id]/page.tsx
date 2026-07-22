@@ -70,14 +70,14 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
   });
 
   const applicable = rows.filter((r) => r.req != null);
+  // Strength = strictly ABOVE the required level. At-level is on the baseline, not a
+  // strength. Development = every capability BELOW required (all of them, uncapped).
   const strengths = applicable
-    .filter((r) => r.gap != null && r.gap >= 0 && r.expert != null)
-    .sort((a, b) => b.gap! - a.gap! || b.expert! - a.expert!)
-    .slice(0, 5);
+    .filter((r) => r.gap != null && r.gap > 0 && r.expert != null)
+    .sort((a, b) => b.gap! - a.gap! || b.expert! - a.expert!);
   const development = applicable
     .filter((r) => r.gap != null && r.gap < 0)
-    .sort((a, b) => a.gap! - b.gap!)
-    .slice(0, 5);
+    .sort((a, b) => a.gap! - b.gap!);
   const perceptionGaps = rows
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!));
@@ -125,9 +125,13 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
       <div className="two-col" style={{ marginBottom: 20 }}>
         <div className="card card-pad">
           <h2 className="card-title">Strengths</h2>
-          <p className="card-sub">APEX Panel at or above the required level.</p>
+          <p className="card-sub">APEX Panel above the required level.</p>
           {strengths.length === 0 ? (
-            <p style={{ color: "var(--muted)", fontSize: 13.5 }}>No submitted panel data yet.</p>
+            <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
+              {levels.expert.size === 0
+                ? "No submitted panel data yet."
+                : "No capability above the required level — the panel places this person at or below the baseline throughout."}
+            </p>
           ) : (
             <ul className="mini-list">
               {strengths.map((r) => (

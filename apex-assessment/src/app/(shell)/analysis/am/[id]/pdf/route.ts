@@ -74,15 +74,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 
   const applicable = rows.filter((r) => r.req != null);
+  // Strength = strictly ABOVE required (at-level is baseline, not a strength).
   const strengths = applicable
-    .filter((r) => r.gap != null && r.gap >= 0 && r.expert != null)
+    .filter((r) => r.gap != null && r.gap > 0 && r.expert != null)
     .sort((a, b) => b.gap! - a.gap! || b.expert! - a.expert!)
-    .slice(0, 5)
+    .slice(0, 6)
     .map((r) => ({ name: r.name, expert: r.expert!, req: r.req }));
   const development = applicable
     .filter((r) => r.gap != null && r.gap < 0)
     .sort((a, b) => a.gap! - b.gap!)
-    .slice(0, 5)
     .map((r) => ({ name: r.name, expert: r.expert!, req: r.req }));
   const perceptionGaps = rows
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
