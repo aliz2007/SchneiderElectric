@@ -265,37 +265,8 @@ export type SeedAM = {
   account: string;
   zone: "MEA" | "SAM" | "India" | "Pacific";
   track: "Acquisition" | "Saturation";
+  segment: Segment;
 };
-
-export const ROSTER: SeedAM[] = [
-  { code: "AM01", name: "Account Manager 1", account: "Account 1", zone: "MEA", track: "Acquisition" },
-  { code: "AM02", name: "Mohamed Marzouk", account: "Account 2", zone: "MEA", track: "Saturation" },
-  { code: "AM03", name: "Basim El-Subihy", account: "Account 3", zone: "MEA", track: "Acquisition" },
-  { code: "AM04", name: "Biju Mathew", account: "Account 4", zone: "MEA", track: "Saturation" },
-  { code: "AM05", name: "Oseid Mohamemed Faqih", account: "Account 5", zone: "MEA", track: "Acquisition" },
-  { code: "AM06", name: "Kamel Bedrane", account: "Account 6", zone: "MEA", track: "Acquisition" },
-  { code: "AM07", name: "Moamen Mohamed Ahmed Ibrahim", account: "Account 7", zone: "SAM", track: "Saturation" },
-  { code: "AM08", name: "Ahmed Abdel-Maugod", account: "Account 8", zone: "SAM", track: "Acquisition" },
-  { code: "AM09", name: "Moteeb Albaqami", account: "Account 9", zone: "SAM", track: "Saturation" },
-  { code: "AM10", name: "Anny Rodrigues de Assis", account: "Account 10", zone: "SAM", track: "Saturation" },
-  { code: "AM11", name: "Eduardo Salles de Carvalho", account: "Account 11", zone: "SAM", track: "Acquisition" },
-  { code: "AM12", name: "Marco Antonio Martins", account: "Account 12", zone: "SAM", track: "Acquisition" },
-  { code: "AM13", name: "Account Manager 13", account: "Account 13", zone: "India", track: "Saturation" },
-  { code: "AM14", name: "Account Manager 14", account: "Account 14", zone: "India", track: "Acquisition" },
-  { code: "AM15", name: "Account Manager 15", account: "Account 15", zone: "India", track: "Saturation" },
-  { code: "AM16", name: "Account Manager 16", account: "Account 16", zone: "India", track: "Saturation" },
-  { code: "AM17", name: "Account Manager 17", account: "Account 17", zone: "India", track: "Acquisition" },
-  { code: "AM18", name: "Account Manager 18", account: "Account 18", zone: "India", track: "Acquisition" },
-  { code: "AM19", name: "Brian Casserly", account: "Account 19", zone: "Pacific", track: "Acquisition" },
-  { code: "AM20", name: "Vishal Nayak", account: "Account 20", zone: "Pacific", track: "Saturation" },
-  { code: "AM21", name: "Franky Chan", account: "Account 21", zone: "Pacific", track: "Saturation" },
-  { code: "AM22", name: "Account Manager 22", account: "Account 22", zone: "Pacific", track: "Acquisition" },
-  { code: "AM23", name: "Account Manager 23", account: "Account 23", zone: "Pacific", track: "Saturation" },
-  { code: "AM24", name: "Account Manager 24", account: "Account 24", zone: "Pacific", track: "Acquisition" },
-  { code: "AM25", name: "Account Manager 25", account: "Account 25", zone: "Pacific", track: "Acquisition" },
-];
-
-export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 
 // Business segments an account belongs to (picked when the account is created).
 export const SEGMENTS = [
@@ -305,6 +276,36 @@ export const SEGMENTS = [
   "Multi-segment",
 ] as const;
 export type Segment = (typeof SEGMENTS)[number];
+
+export const ROSTER: SeedAM[] = [
+  { code: "AM01", name: "Account Manager 1", account: "Account 1", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM02", name: "Mohamed Marzouk", account: "Account 2", zone: "MEA", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM03", name: "Basim El-Subihy", account: "Account 3", zone: "MEA", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM04", name: "Biju Mathew", account: "Account 4", zone: "MEA", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM05", name: "Oseid Mohamemed Faqih", account: "Account 5", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM06", name: "Kamel Bedrane", account: "Account 6", zone: "MEA", track: "Acquisition", segment: "Energy & Chemicals" },
+  { code: "AM07", name: "Moamen Mohamed Ahmed Ibrahim", account: "Account 7", zone: "SAM", track: "Saturation", segment: "Power & Grid" },
+  { code: "AM08", name: "Ahmed Abdel-Maugod", account: "Account 8", zone: "SAM", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM09", name: "Moteeb Albaqami", account: "Account 9", zone: "SAM", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM10", name: "Anny Rodrigues de Assis", account: "Account 10", zone: "SAM", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM11", name: "Eduardo Salles de Carvalho", account: "Account 11", zone: "SAM", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM12", name: "Marco Antonio Martins", account: "Account 12", zone: "SAM", track: "Acquisition", segment: "Energy & Chemicals" },
+  { code: "AM13", name: "Account Manager 13", account: "Account 13", zone: "India", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM14", name: "Account Manager 14", account: "Account 14", zone: "India", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM15", name: "Account Manager 15", account: "Account 15", zone: "India", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM16", name: "Account Manager 16", account: "Account 16", zone: "India", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM17", name: "Account Manager 17", account: "Account 17", zone: "India", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM18", name: "Account Manager 18", account: "Account 18", zone: "India", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM19", name: "Brian Casserly", account: "Account 19", zone: "Pacific", track: "Acquisition", segment: "Energy & Chemicals" },
+  { code: "AM20", name: "Vishal Nayak", account: "Account 20", zone: "Pacific", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM21", name: "Franky Chan", account: "Account 21", zone: "Pacific", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM22", name: "Account Manager 22", account: "Account 22", zone: "Pacific", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM23", name: "Account Manager 23", account: "Account 23", zone: "Pacific", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM24", name: "Account Manager 24", account: "Account 24", zone: "Pacific", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM25", name: "Account Manager 25", account: "Account 25", zone: "Pacific", track: "Acquisition", segment: "Multi-segment" },
+];
+
+export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 
 // The five APEX framework questions a self-assessor answers per theme to justify
 // their ratings (from the APEX discussion guide). Situation/Actions/Results/Impact/

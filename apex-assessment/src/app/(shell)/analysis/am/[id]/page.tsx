@@ -115,6 +115,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
         <div className="am-meta" style={{ marginTop: 6 }}>
           <span className="badge badge-zone">{am.zone}</span>
           <span className="badge badge-track">{am.track} track</span>
+          {am.segment && <span className="badge badge-segment">{am.segment}</span>}
           <span className="badge badge-gray">{am.account}</span>
           {lensStatus.map(({ lens, a, rater }) => (
             <span key={lens} className={`badge ${a?.status === "submitted" ? "badge-green" : "badge-gray"}`}>

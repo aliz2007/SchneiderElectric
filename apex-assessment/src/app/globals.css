@@ -358,6 +358,7 @@ input, select, textarea { font: inherit; }
 }
 .badge-zone { background: rgba(46, 124, 246, 0.18); color: var(--blue); }
 .badge-track { background: rgba(255, 255, 255, 0.07); color: var(--ink-2); border: 1px solid var(--line); }
+.badge-segment { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; }
 .badge-lens { background: linear-gradient(160deg, #f2f6fd, #cfd9ea); color: #0b1220; }
 .badge-green { background: rgba(61, 205, 88, 0.18); color: #5fe57d; }
 .badge-amber { background: rgba(245, 158, 11, 0.16); color: var(--amber); }

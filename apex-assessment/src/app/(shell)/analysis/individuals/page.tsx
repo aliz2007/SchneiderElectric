@@ -28,6 +28,7 @@ export default async function IndividualsPage() {
                 <th>Account Manager</th>
                 <th>Zone</th>
                 <th>Track</th>
+                <th>Segment</th>
                 <th>Self avg</th>
                 <th>Mgr avg</th>
                 <th>APEX avg</th>
@@ -52,6 +53,7 @@ export default async function IndividualsPage() {
                     <td style={{ fontWeight: 600 }}>{am.name}</td>
                     <td><span className="badge badge-zone">{am.zone}</span></td>
                     <td><span className="badge badge-track">{am.track}</span></td>
+                    <td>{am.segment ? <span className="badge badge-segment">{am.segment}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                     <td>{fmt(avg(levels.self), 2)}</td>
                     <td>{fmt(avg(levels.manager), 2)}</td>
                     <td style={{ fontWeight: 700 }}>{fmt(avg(levels.expert), 2)}</td>

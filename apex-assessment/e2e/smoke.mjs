@@ -95,6 +95,10 @@ try {
   await page.locator("text=Analysis →").first().click();
   await page.waitForSelector("text=Capability detail");
   ok("individual analysis renders");
+  // segment is shown at the top alongside zone/track
+  (await page.locator(".am-meta .badge-segment").count()) === 1
+    ? ok("segment shown in the individual profile header")
+    : fail("segment badge on detail", "not found");
   await page.waitForTimeout(700); // let entrance animation settle
   await page.screenshot({ path: `${SHOTS}/3-individual.png` });
 

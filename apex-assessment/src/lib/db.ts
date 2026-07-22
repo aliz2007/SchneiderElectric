@@ -121,6 +121,14 @@ function migrate(db: Database.Database) {
   } catch {
     /* column already exists */
   }
+  // backfill the roster's segment on databases seeded before segments existed, matching by
+  // code and never overwriting a segment someone has already chosen
+  {
+    const setSeg = db.prepare(
+      "UPDATE account_managers SET segment = ? WHERE code = ? AND (segment IS NULL OR segment = '')"
+    );
+    for (const am of ROSTER) setSeg.run(am.segment, am.code);
+  }
   // the self-assessor's five APEX framework answers per theme (Manager/Panel still use `note`)
   for (const col of ["situation", "actions", "results", "impact", "replication"]) {
     try {
@@ -142,8 +150,8 @@ function migrate(db: Database.Database) {
   const amCount = (db.prepare("SELECT COUNT(*) AS n FROM account_managers").get() as { n: number }).n;
   if (amCount === 0) {
     const insAm = db.prepare(
-      `INSERT INTO account_managers (code, name, account, zone, track)
-       VALUES (@code, @name, @account, @zone, @track)`
+      `INSERT INTO account_managers (code, name, account, zone, track, segment)
+       VALUES (@code, @name, @account, @zone, @track, @segment)`
     );
     for (const am of ROSTER) insAm.run(am);
   }

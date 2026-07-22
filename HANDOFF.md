@@ -70,10 +70,12 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   Pacific (AM19–25). Roster in `src/lib/seed-data.ts`.
 - Each AM also belongs to a **business segment**: Power & Grid, Energy & Chemicals,
   CS&P - Cloud & Service Providers, or Multi-segment (`SEGMENTS` in `seed-data.ts`). Segment
-  is chosen when an account is created (self-assessor onboarding, or the admin create flow),
-  so the original Excel roster has none; the demo-dataset loader backfills a deterministic
-  spread across the four values so the segment filter has data to show. Segment is a
-  reporting/filter dimension only — it does NOT change required levels (track does that).
+  is a first-class account attribute like zone and track: it is seeded on the 25-AM roster in
+  `seed-data.ts`, a `db.ts` migration backfills it (by AM code, never overwriting a chosen
+  value) on databases created before segments existed, and new accounts pick it at
+  self-assessor onboarding / the admin create flow. It is shown on the individuals list and
+  the individual detail header (a purple `badge-segment`), and is a reporting/filter dimension
+  only — it does NOT change required levels (track does that).
 - **11 of 25 names are placeholders** ("Account Manager 1", 13–18, 22–25) because the Excel
   itself had placeholder tabs. Real names exist for AM02–AM12 and AM19–AM21. The user has
   not yet provided the missing names.
@@ -133,8 +135,8 @@ renders whichever is present (the five labelled framework parts if any, else the
   ['superadmin'|'assessor'], lens ['self'|'manager'|'expert'|null], active, created_at).
 - `sessions` (token PK, user_id, expires_at).
 - `account_managers` (id, code unique, name, account, zone ['MEA'|'SAM'|'India'|'Pacific'],
-  track ['Acquisition'|'Saturation'], profile_complete, segment [one of `SEGMENTS`, nullable
-  — null for the seeded Excel roster until backfilled/onboarded]).
+  track ['Acquisition'|'Saturation'], profile_complete, segment [one of `SEGMENTS`; seeded on
+  the roster and backfilled by migration, so effectively always set]).
 - `capabilities` (id, ord, name, cluster, src, req_acq, req_sat, l1, l2, l3).
 - `assignments` (user_id, am_id) — which AMs a user is linked to. For self assessors this is
   the one AM that IS them; for manager/panel it is who they evaluate. PK (user_id, am_id).
@@ -226,9 +228,8 @@ lens rather than a multi-checkbox.
   - Data tools: **Create test sandbox** (three blank-draft logins `self.demo` /
     `manager.demo` / `panel.demo`, password `demo1234`, all on the first AM, for trying the
     flow from every lens; idempotent), **Load demo dataset (submitted)** (fills all 75
-    assessments with plausible submitted scores for the dashboards; replaces existing ratings;
-    also backfills a deterministic segment on each AM so the segment filter has data), and
-    **Clear all ratings**.
+    assessments with plausible submitted scores for the dashboards; replaces existing
+    ratings), and **Clear all ratings**.
   - There is NO in-app AI settings card: the Kimi key is hardcoded (see §6).
 
 ## 5. The PDF narrative (deterministic)
