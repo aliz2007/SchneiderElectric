@@ -3,10 +3,12 @@ import path from "node:path";
 import { createElement } from "react";
 import { notFound } from "next/navigation";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { requireSuperadmin } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 import {
+  allLensesSubmitted,
   getAM,
   getAssessment,
+  isAssigned,
   listCapabilities,
   ratersByLens,
   requiredLevel,
@@ -33,12 +35,21 @@ if (SHOW_LOGO) {
   }
 }
 
-/** GET /analysis/am/[id]/pdf — superadmin-only individual report download. */
+/**
+ * GET /analysis/am/[id]/pdf — individual report download. A superadmin can export
+ * anyone; the assessed person (self lens) can export ONLY their own report, and
+ * only once all three assessments are submitted.
+ */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireSuperadmin();
+  const user = await requireUser();
   const { id } = await params;
-  const am = getAM(Number(id));
+  const amId = Number(id);
+  const am = getAM(amId);
   if (!am) notFound();
+  if (user.role !== "superadmin") {
+    const ownFinalised = user.lens === "self" && isAssigned(user.id, amId) && allLensesSubmitted(amId);
+    if (!ownFinalised) return new Response("Not authorized", { status: 403 });
+  }
 
   const caps = listCapabilities();
   const levels = submittedLevels(am.id);

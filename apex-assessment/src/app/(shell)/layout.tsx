@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/session";
 import { LENS_LABELS } from "@/lib/seed-data";
+import { allLensesSubmitted, assignedAMs } from "@/lib/queries";
 import { BrandMark } from "@/lib/brand";
 import NavLinks, { type NavItem } from "./nav-links";
 import ChatWidget from "./chat-widget";
@@ -11,6 +12,13 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   const rateItems: NavItem[] = user.lens
     ? [{ href: "/rate", label: user.lens === "self" ? "My Self-Assessment" : "My Assessments", ico: "✎" }]
     : [];
+  // The assessed person sees their own feedback once all three lenses are submitted.
+  if (user.lens === "self") {
+    const mine = assignedAMs(user.id);
+    if (mine.length > 0 && mine[0].profile_complete && allLensesSubmitted(mine[0].id)) {
+      rateItems.push({ href: "/feedback", label: "My Feedback", ico: "★" });
+    }
+  }
   // the aggregated dashboard is open to everyone; individual results & access
   // management stay superadmin-only
   const adminItems: NavItem[] = [

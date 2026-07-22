@@ -284,6 +284,14 @@ export function submittedThemeNotes(amId: number): { lens: Lens; cluster: string
     .all(amId) as { lens: Lens; cluster: string; note: string }[];
 }
 
+/** True once all three lenses (Self, Manager, APEX Panel) have submitted for this AM —
+ *  the gate for releasing feedback to the assessed person. */
+export function allLensesSubmitted(amId: number): boolean {
+  return (["self", "manager", "expert"] as const).every(
+    (lens) => getAssessment(amId, lens)?.status === "submitted"
+  );
+}
+
 export type LensStatus = { status: "missing" | "draft" | "submitted"; rated: number };
 
 /** Per-AM per-lens progress for roster tables. */
