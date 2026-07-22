@@ -1,11 +1,13 @@
 "use client";
 
 // Thermographic zone map.
-// A canvas renders a smooth thermal field (blue = at/above target … red = critical
-// gap) over the four APEX zones, driven by real per-AM panel scores anchored at
-// Schneider hub cities. A capability filter re-renders the field live. SVG on top
-// handles country borders, hub markers and interaction: hover tooltips (hub or
-// country), click-to-focus a zone with a stats panel, drag pan + wheel/button zoom.
+// A canvas colours each APEX zone UNIFORMLY (blue = at/above target … red =
+// critical gap) from that zone's average panel-vs-required gap. The data is
+// per-zone — not per country or city — so a zone is always one flat colour;
+// nothing within a region is shaded differently. A capability filter re-colours
+// the zones live. SVG on top handles country borders, hub markers and
+// interaction: hover tooltips, click-to-focus a zone with a stats panel, drag
+// pan + wheel/button zoom.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -76,29 +78,6 @@ const LUT: [number, number, number][] = Array.from({ length: 256 }, (_, i) => {
     Math.round(a[3] + (b[3] - a[3]) * f),
   ];
 });
-
-// cheap deterministic 2-octave value noise for the organic thermographic mottle
-function makeNoise() {
-  const hash = (x: number, y: number) => {
-    let h = (x * 374761393 + y * 668265263) | 0;
-    h = (h ^ (h >> 13)) * 1274126177;
-    return (((h ^ (h >> 16)) >>> 0) % 1000) / 1000;
-  };
-  const smooth = (x: number, y: number) => {
-    const xi = Math.floor(x);
-    const yi = Math.floor(y);
-    const xf = x - xi;
-    const yf = y - yi;
-    const u = xf * xf * (3 - 2 * xf);
-    const v = yf * yf * (3 - 2 * yf);
-    const a = hash(xi, yi);
-    const b = hash(xi + 1, yi);
-    const c = hash(xi, yi + 1);
-    const d = hash(xi + 1, yi + 1);
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-  };
-  return (x: number, y: number) => 0.65 * smooth(x, y) + 0.35 * smooth(x * 2.3, y * 2.3);
-}
 
 type View = { k: number; x: number; y: number };
 const clampView = (v: View): View => {
@@ -218,85 +197,35 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
     return { groups, neutral };
   }, []);
 
-  // ---- thermal field ----
+  // ---- zone colouring ----
+  // The data is per-zone, so each zone is painted as ONE flat colour from its
+  // average gap vs required. No gradients or noise inside a region: shading
+  // differences within a zone would imply per-country data that does not exist.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const hubs: { x: number; y: number; v: number; w: number }[] = [];
-    for (const hub of HUBS) {
-      const list = hubAMs.get(hub) ?? [];
-      const stats = list.map(amStat).filter(Boolean) as { gap: number }[];
-      const zoneGap = zoneStats.get(hub.zone)?.gap ?? null;
-      if (stats.length > 0) {
-        const g = stats.reduce((a, s) => a + s.gap, 0) / stats.length;
-        hubs.push({ x: hub.x, y: hub.y, v: severity(g), w: 1 + 0.5 * (stats.length - 1) });
-      } else if (zoneGap != null) {
-        hubs.push({ x: hub.x, y: hub.y, v: severity(zoneGap), w: 0.45 });
-      }
-    }
-
-    const FW = 490;
-    const FH = 240;
-    const off = document.createElement("canvas");
-    off.width = FW;
-    off.height = FH;
-    const octx = off.getContext("2d")!;
-    const img = octx.createImageData(FW, FH);
-    const noise = makeNoise();
-    const SIG2 = 2 * 48 * 48;
-
-    for (let j = 0; j < FH; j++) {
-      const y = (j + 0.5) * (H / FH);
-      for (let i = 0; i < FW; i++) {
-        const x = (i + 0.5) * (W / FW);
-        let num = 1e-7 * 0.32;
-        let den = 1e-7;
-        for (const h of hubs) {
-          const dx = x - h.x;
-          const dy = y - h.y;
-          const w = h.w * Math.exp(-(dx * dx + dy * dy) / SIG2);
-          num += w * h.v;
-          den += w;
-        }
-        let v = num / den;
-        v += (noise(x * 0.045, y * 0.045) - 0.5) * 0.22;
-        v = Math.min(1, Math.max(0, v));
-        const [r, g, b] = LUT[Math.round(v * 255)];
-        const p = (j * FW + i) * 4;
-        img.data[p] = r;
-        img.data[p + 1] = g;
-        img.data[p + 2] = b;
-        img.data[p + 3] = 235;
-      }
-    }
-    octx.putImageData(img, 0, 0);
-
     canvas.width = W * 2;
     canvas.height = H * 2;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
-
-    // keep the thermal field only on zone land — one combined mask, single fill
-    // (per-country destination-in fills would intersect away everything)
-    const mask = new Path2D();
-    for (const zone of ZONES) {
-      for (const c of countriesByZone.groups.get(zone) ?? []) mask.addPath(new Path2D(c.d));
-    }
-    ctx.globalCompositeOperation = "destination-in";
     ctx.setTransform(2, 0, 0, 2, 0, 0);
-    ctx.fill(mask);
+    for (const zone of ZONES) {
+      const gap = zoneStats.get(zone)?.gap ?? null;
+      if (gap == null) continue; // no data — leave the neutral land colour underneath
+      const [r, g, b] = LUT[Math.round(severity(gap) * 255)];
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.92)`;
+      const path = new Path2D();
+      for (const c of countriesByZone.groups.get(zone) ?? []) path.addPath(new Path2D(c.d));
+      ctx.fill(path);
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = "source-over";
 
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       canvas.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 500, easing: "ease-out" });
     }
-  }, [hubAMs, amStat, zoneStats, countriesByZone]);
+  }, [zoneStats, countriesByZone]);
 
   // ---- camera ----
   const toSvg = (clientX: number, clientY: number): [number, number] => {
@@ -401,10 +330,6 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
 
   const tipZone = tip ? zoneStats.get(tip.zone) : null;
   const tipHubAMs = tip?.hub ? (hubAMs.get(tip.hub) ?? []) : [];
-  const tipHubStats = tipHubAMs.map(amStat).filter(Boolean) as { score: number; req: number; gap: number }[];
-  const tipHubGap = tipHubStats.length
-    ? tipHubStats.reduce((a, s) => a + s.gap, 0) / tipHubStats.length
-    : null;
   const selStat = selected ? zoneStats.get(selected) : null;
 
   const clusters = useMemo(() => {
@@ -545,19 +470,15 @@ export default function ZoneMap({ ams, caps, canDrill }: { ams: MapAM[]; caps: M
                   {tipHubAMs.slice(0, 3).map((a) => a.name.split(" ")[0]).join(", ")}
                   {tipHubAMs.length > 3 ? "…" : ""}
                 </div>
-                {tipHubStats.length > 0 && (
-                  <div className="zmap-tip-row">
-                    Avg score{" "}
-                    <strong>{fmt(tipHubStats.reduce((a, s) => a + s.score, 0) / tipHubStats.length)}</strong> vs
-                    required{" "}
-                    <strong>{fmt(tipHubStats.reduce((a, s) => a + s.req, 0) / tipHubStats.length)}</strong>
-                    {"  "}
-                    <strong className={chipClass(tipHubGap)}>
-                      {tipHubGap != null && tipHubGap > 0 ? "+" : ""}
-                      {fmt(tipHubGap)}
-                    </strong>
-                  </div>
-                )}
+                {/* stats are per-zone (the data has no finer granularity) */}
+                <div className="zmap-tip-row">
+                  {tip.zone} avg <strong>{fmt(tipZone.avgScore)}</strong> vs required{" "}
+                  <strong>{fmt(tipZone.avgReq)}</strong>{"  "}
+                  <strong className={chipClass(tipZone.gap)}>
+                    {tipZone.gap != null && tipZone.gap > 0 ? "+" : ""}
+                    {fmt(tipZone.gap)}
+                  </strong>
+                </div>
               </>
             ) : (
               <>
