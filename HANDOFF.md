@@ -175,38 +175,61 @@ is not on the AM's track). When the panel has not scored the person, the prose f
 cautious "provisional" wording rather than inventing strengths. This deterministic output is
 always the fallback for the AI path.
 
-## 6. The PDF narrative (optional AI, Kimi / Moonshot)
+## 6. The PDF narrative (AI, Kimi / Moonshot)
 
-`src/lib/ai-narrative.ts` can have Kimi write the three prose sections instead (strength /
-development / self-perception vs panel). It is a pure enhancement with a hard fallback:
+`src/lib/ai-narrative.ts` has Kimi write the narrative sections. It is an enhancement with
+a hard fallback:
 
-- Attempted only when a key is configured AND the panel has scored the person.
-- On ANY failure (no key, network blocked, non-200, bad/empty JSON, timeout) it returns
-  `null` and the route keeps the deterministic narrative. PDF export never depends on the
-  external call.
-- The model is prompted (see `SYSTEM_PROMPT`) to ground every statement in the provided
-  scores, theme-note comments and definitions, to never quote the definitions, and to return
-  strict JSON `{strength, development, perception}`. Capability definitions on the page stay
-  deterministic (rubric-based) regardless.
-- Config resolves from the **in-app AI settings** first (stored in `app_settings`, edited on
-  the Users & Access page in the "AI feedback (Kimi)" card, which has a **Test connection**
-  button that reports the exact success/error so a bad key, model or endpoint is easy to
-  diagnose), then from environment variables, then defaults. The code never hardcodes a key:
-  - `MOONSHOT_API_KEY` (required to enable AI), `MOONSHOT_BASE_URL`
-    (default `https://api.moonshot.ai/v1`; use `.cn` for the China platform),
-    `MOONSHOT_MODEL` (default `moonshot-v1-8k`; can be `kimi-k2-0711-preview` / `kimi-latest`),
-    `MOONSHOT_TIMEOUT_MS` (default 20000), `MOONSHOT_ENABLED=0` to force-disable.
-  - `apex-assessment/.env.example` documents these. The real key goes in
-    `apex-assessment/.env.local`, which is git-ignored and must never be committed. (The
-    platform's safety tooling also blocks pushing secrets.) To enable:
-    `cp apex-assessment/.env.example apex-assessment/.env.local` then set the key.
-- Keys are sanitized on save and on use (non-printable/non-ASCII characters such as a
-  pasted bullet are stripped) so a stray character can never crash the HTTP request.
-- Visibility: the PDF narrative page is stamped with its source ("Written by Kimi (Moonshot
-  AI)" vs "Generated automatically from the assessment data"), and the Export PDF control is
-  a client button (`export-pdf-button.tsx`) that shows a "Kimi is writing…" state while the
-  server renders — so it is obvious whether the AI actually ran. AI is used only when it is
-  enabled AND the panel has scored the person; otherwise the deterministic narrative is used.
+- Attempted only when AI is enabled AND the panel has scored the person.
+- On ANY failure (network blocked, non-200, bad/empty JSON, timeout) it returns `null` and
+  the route keeps the deterministic narrative. PDF export never depends on the external call.
+- Sections are `{strengths, development, comments}`. Strengths and development are organised
+  BY CAPABILITY CLUSTER: one tight paragraph per cluster, led by the exact cluster name and
+  a colon (the PDF bolds that lead — see `ClusterNarrative` in `pdf-report.tsx`). `comments`
+  is a single paragraph synthesising the evaluators' theme notes, and is empty (section
+  hidden) when no notes exist. The model is prompted (see `SYSTEM_PROMPT`) to ground every
+  statement in the provided data, never quote the rubric definitions, cover every qualifying
+  capability, and stay concise.
+- THE KEY IS HARDCODED at the repo owner's explicit direction: `EMBEDDED_KEY` in
+  `ai-narrative.ts` is the single place it lives, and it is read directly (no env fallback).
+  There is no in-app AI settings card. Optional env overrides: `MOONSHOT_BASE_URL`,
+  `MOONSHOT_MODEL`, `MOONSHOT_TIMEOUT_MS` (default 90000), `MOONSHOT_MAX_TOKENS` (default
+  8000), and `MOONSHOT_ENABLED=0` to force-disable (used by the e2e run so tests stay
+  hermetic).
+- Model auto-fallback: default `kimi-latest`; if the key cannot use the configured model
+  (Moonshot answers 404 resource_not_found), the call falls through `moonshot-v1-128k` then
+  `moonshot-v1-32k`, uses the first that works and REMEMBERS it in `app_settings`
+  (`moonshot_model`) so later calls skip the probing. Auth/rate-limit/network errors fail
+  fast instead of cycling models.
+- The reply parser tolerates real-world model output: markdown fences, trailing prose, raw
+  newlines inside JSON strings, and a reply cut off by the token limit (repairJson closes
+  open strings/braces). `sanitizeText` maps smart punctuation to ASCII and drops glyphs the
+  PDF font cannot draw.
+- Visibility: the narrative page is stamped with its source ("Written by Kimi (Moonshot AI)"
+  vs "Generated automatically from the assessment data"), and the Export PDF button shows a
+  "Kimi is writing…" state plus a verdict from the `X-AI-Source` / `X-AI-Reason` response
+  headers. The last attempt's outcome is also stored in `app_settings.moonshot_last_result`.
+
+## 6b. The APEX Assistant (in-app chatbot)
+
+A floating chat bubble (bottom right, every page in the shell) opens a small window where
+users ask quick questions over the live data ("which skill gaps repeat most in India",
+"does X have a perception gap on Pipeline Shaping"). Pieces:
+
+- `src/app/(shell)/chat-widget.tsx` — client widget (bubble, panel, example prompts).
+  Mounted in the shell layout for every signed-in user.
+- `src/app/api/chat/route.ts` — POST endpoint. Auth via `getCurrentUser()`; validates and
+  caps the message history (12 messages, 4000 chars each); when `MOONSHOT_ENABLED=0` it
+  returns a fixed "turned off" reply (the e2e asserts this deterministic round-trip).
+- `src/lib/chat-data.ts` — `buildChatSnapshot(viewer)` rebuilds a fresh JSON snapshot of
+  the database on EVERY question, so answers always reflect current data.
+- ACCESS MIRRORS THE APP (hard rule): a superadmin's snapshot has everything (all lenses,
+  required levels, gaps, notes, users and assignments). An assessor's snapshot contains ONLY
+  their own work (their assigned people, their own ratings and notes, drafts included) plus
+  the dashboard's completion counts; required levels and other evaluators' scores are ABSENT
+  from the payload, so the model cannot leak what it never receives. The system prompt also
+  instructs the restricted variant to refuse such questions.
+- Uses `kimiChat()` in `ai-narrative.ts` — same hardcoded key, same model auto-fallback.
 
 ## 7. Key files
 

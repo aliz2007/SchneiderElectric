@@ -25,8 +25,9 @@ The app is the system of record. The rubric and roster were seeded once from the
 1. **Three assessment lenses.** Self, Manager, and APEX Panel each rate the same person independently. Evaluators never see one another's scores, so every assessment stays blind and unbiased.
 2. **Guided rating wizard.** One capability per screen with the behavioural anchors inline, keyboard shortcuts, autosave, a progress view, and a final review before submitting. Required levels stay hidden while rating to avoid anchoring bias.
 3. **Per theme notes.** Manager and Panel evaluators add one written note per theme. Self assessors add none.
-4. **Individual PDF report.** A four page report per person: a cover, a scores overview, a written narrative with a definition of every capability it names, and the full capability detail with the theme notes.
-5. **AI feedback, optional.** When a Kimi (Moonshot) key is configured, the narrative page is written by the model from the person's own scores and comments. If the key is absent or the service is unreachable, the report falls back to a built in deterministic narrative, so exports never break.
+4. **Individual PDF report.** A four page report per person: a cover, a scores overview, a written narrative organised by capability cluster, and the full capability detail with the theme notes.
+5. **AI feedback, built in.** The narrative page is written by Kimi (Moonshot AI) from the person's own scores and comments, grouped by capability cluster. If the service is unreachable, the report falls back to a built in deterministic narrative, so exports never break.
+5b. **APEX Assistant.** A floating chat bubble on every page answers quick questions over the live assessment data ("which skill gaps are most frequent in India", "does X have a perception gap on Pipeline Shaping"). Each account's assistant sees only the data that account can already access: superadmins get everything, assessors get only their own work.
 6. **Zone level analytics.** A thermal world map, capability heat maps, perception gaps, and a recommended training focus across the four regions (MEA, SAM, India, Pacific).
 7. **Confidential by design.** Individual results and analysis are restricted to superadmins. Role and lens checks run on every page and every server action, not only in the interface.
 8. **Self assessors land on their own page.** A self assessor signs in and goes straight to their own assessment, with no ability to pick anyone else.
@@ -55,14 +56,9 @@ Open http://localhost:3010 and sign in as `vladimir` / `apex2026`.
 
 To explore the analytics with data, open **Users and Access**, then **Load demo dataset**. To try the assessment flow from every lens, use **Create test sandbox**, which provisions three blank ready to use logins on one person.
 
-## Optional: AI feedback with Kimi
+## AI features (Kimi)
 
-```bash
-cp apex-assessment/.env.example apex-assessment/.env.local
-# then set MOONSHOT_API_KEY in .env.local
-```
-
-The key lives only in `.env.local`, which is never committed. Without it, the PDF uses the built in narrative.
+The Kimi (Moonshot AI) key is built into the code, so both AI features work with no setup: the PDF narrative page and the APEX Assistant chat bubble. To run without AI (for example while testing), start the server with `MOONSHOT_ENABLED=0`; the PDF then uses the built in deterministic narrative and the assistant says it is turned off.
 
 ## How it is built
 

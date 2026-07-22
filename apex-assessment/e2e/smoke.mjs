@@ -62,6 +62,25 @@ try {
   completion?.trim() === "100%" ? ok("completion KPI = 100% after demo load") : fail("completion KPI", completion ?? "");
   await page.screenshot({ path: `${SHOTS}/2-dashboard.png`, fullPage: false });
 
+  // ---- 3b. APEX Assistant (floating chatbot) ----
+  (await page.locator(".chat-fab").count()) === 1
+    ? ok("assistant bubble shown (superadmin)")
+    : fail("assistant bubble", "not found");
+  await page.click(".chat-fab");
+  await page.waitForSelector(".chat-panel");
+  ok("assistant panel opens");
+  await page.fill(".chat-input-row input", "Which assessments are missing?");
+  await page.click('.chat-input-row button[type="submit"]');
+  // the e2e server runs with MOONSHOT_ENABLED=0, so the deterministic "turned off"
+  // reply proves the whole widget → API → snapshot round-trip without an external call
+  await page.waitForSelector(".chat-msg.from-bot:not(.chat-typing)", { timeout: 20000 });
+  const botReply = await page.locator(".chat-msg.from-bot:not(.chat-typing)").first().textContent();
+  botReply?.includes("turned off")
+    ? ok("assistant answers through the API (AI-off reply)")
+    : fail("assistant reply", botReply ?? "(none)");
+  await page.click(".chat-close");
+  await page.waitForTimeout(200);
+
   // ---- 4. individual analysis ----
   await page.locator("text=Analysis →").first().click();
   await page.waitForSelector("text=Capability detail");
@@ -220,6 +239,10 @@ try {
   // the assessment page carries a how-to help block
   const helpShown = await page.locator(".wizard-help").count();
   helpShown > 0 ? ok("assessment how-to help shown") : fail("how-to help block", `${helpShown}`);
+  // assessors get the assistant too (fed only their own scoped data server-side)
+  (await page.locator(".chat-fab").count()) === 1
+    ? ok("assistant bubble also shown for assessors")
+    : fail("assessor assistant bubble", "not found");
   // self-assessors CAN now add notes to justify their own ratings, and they persist
   const selfNoteFields = await page.locator(".theme-note-field textarea").count();
   selfNoteFields > 0 ? ok("self-assessor has note fields to justify themselves") : fail("self note fields", `${selfNoteFields}`);

@@ -353,6 +353,44 @@ export async function generateAiNarrative(input: AiNarrativeInput): Promise<AiNa
 }
 
 /**
+ * General-purpose chat call, used by the in-app APEX Assistant. Same hardcoded key
+ * and the same model auto-fallback as the PDF narrative. Returns the reply text,
+ * or a plain-English error the caller can surface.
+ */
+export async function kimiChat(
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  opts?: { temperature?: number; maxTokens?: number },
+): Promise<{ ok: true; content: string; model: string } | { ok: false; error: string }> {
+  const cfg = aiConfig();
+  if (!cfg.enabled) return { ok: false, error: "AI is turned off on this server." };
+  const body = {
+    temperature: opts?.temperature ?? 0.3,
+    max_tokens: opts?.maxTokens ?? 1500,
+    messages,
+  };
+  const candidates = modelCandidates(cfg.model);
+  const tried: string[] = [];
+  for (const m of candidates) {
+    tried.push(m);
+    const r = await moonshotChat(cfg, m, body, cfg.timeoutMs);
+    if ("error" in r) return { ok: false, error: r.error };
+    if (isModelUnavailable(r.status, r.text)) continue; // this key can't use m — try the next
+    if (r.status < 200 || r.status >= 300) return { ok: false, error: `HTTP ${r.status}: ${r.text.slice(0, 160)}` };
+    let content: unknown;
+    try {
+      content = (JSON.parse(r.text) as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]?.message
+        ?.content;
+    } catch {
+      content = undefined;
+    }
+    if (typeof content !== "string" || !content.trim()) return { ok: false, error: "the model returned an empty reply" };
+    if (m !== cfg.model) rememberModel(m);
+    return { ok: true, content: content.trim(), model: m };
+  }
+  return { ok: false, error: `no usable model — this key cannot access any of: ${tried.join(", ")}` };
+}
+
+/**
  * Live check used by the "Test connection" button. Sends a tiny request and reports
  * exactly what happened, so a misconfigured key / model / endpoint is easy to diagnose.
  */

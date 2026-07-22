@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/session";
 import { LENS_LABELS } from "@/lib/seed-data";
 import { BrandMark } from "@/lib/brand";
 import NavLinks, { type NavItem } from "./nav-links";
+import ChatWidget from "./chat-widget";
 import { logout } from "./actions";
 
 export default async function ShellLayout({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
         </div>
       </aside>
       <main className="main">{children}</main>
+      <ChatWidget isSuperadmin={user.role === "superadmin"} />
     </div>
   );
 }
