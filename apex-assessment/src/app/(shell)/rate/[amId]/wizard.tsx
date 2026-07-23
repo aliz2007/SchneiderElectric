@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { FRAMEWORK_QUESTIONS } from "@/lib/seed-data";
+import { SELF_JUSTIFICATION_PROMPT } from "@/lib/seed-data";
 import { saveRating, saveThemeNote, submit } from "./actions";
 
 export type WizardCap = {
@@ -15,7 +15,7 @@ export type WizardCap = {
 };
 
 export type WizardInitial = Record<number, { level: number | null }>;
-/** cluster -> field -> value (fields: "note" for Manager/Panel; the 5 framework keys for self) */
+/** cluster -> field -> value; every lens uses a single "note" field per theme */
 export type ThemeData = Record<string, Record<string, string>>;
 
 const LEVEL_META = [
@@ -48,8 +48,9 @@ export default function Wizard({
     for (const c of caps) if (!seen.has(c.cluster)) { seen.add(c.cluster); out.push(c.cluster); }
     return out;
   }, [caps]);
-  // the justification fields required for this lens
-  const fields = useMemo(() => (isSelf ? FRAMEWORK_QUESTIONS.map((q) => q.key as string) : ["note"]), [isSelf]);
+  // every lens justifies each theme with one mandatory note (self-assessors get a
+  // guided prompt; Manager / APEX Panel a free note) — a single field either way
+  const fields = useMemo(() => ["note"], []);
 
   const [answers, setAnswers] = useState<WizardInitial>(() => {
     const a: WizardInitial = {};
@@ -140,55 +141,28 @@ export default function Wizard({
   };
 
   // ---- justification block shown under the level cards for the current theme ----
+  // One mandatory note per theme for every lens; self-assessors get a guided prompt.
   function Justification({ cluster }: { cluster: string }) {
     const done = themeComplete(cluster);
     return (
       <div className={`framework-block${done ? " done" : ""}`}>
         <div className="framework-head">
-          <span className="framework-kicker">
-            {isSelf ? "Justify your ratings for this theme" : "Justify your rating for this theme"} · {cluster}
-          </span>
-          <span className={`framework-status ${done ? "ok" : "todo"}`}>
-            {done ? "✓ complete" : isSelf ? "required · all 5" : "required"}
-          </span>
+          <span className="framework-kicker">Justify your rating for this theme · {cluster}</span>
+          <span className={`framework-status ${done ? "ok" : "todo"}`}>{done ? "✓ complete" : "required"}</span>
         </div>
-        {isSelf ? (
-          <>
-            <p className="framework-intro">
-              Share a concrete example from your account, then answer all five. All five are mandatory before you
-              can submit.
-            </p>
-            {FRAMEWORK_QUESTIONS.map((q, i) => {
-              const val = themeData[cluster]?.[q.key] ?? "";
-              return (
-                <div key={q.key} className={`framework-field${val.trim() ? " filled" : ""}`}>
-                  <label htmlFor={`fw-${cluster}-${q.key}`}>
-                    <span className="framework-num">{i + 1}</span>
-                    <span className="framework-label">{q.label}</span>
-                    <span className="framework-prompt">{q.prompt}</span>
-                  </label>
-                  <textarea
-                    id={`fw-${cluster}-${q.key}`}
-                    className="input"
-                    rows={2}
-                    value={val}
-                    onChange={(e) => setThemeField(cluster, q.key, e.target.value)}
-                    disabled={submitted}
-                  />
-                </div>
-              );
-            })}
-          </>
-        ) : (
-          <textarea
-            className="input framework-note"
-            rows={3}
-            value={themeData[cluster]?.note ?? ""}
-            onChange={(e) => setThemeField(cluster, "note", e.target.value)}
-            disabled={submitted}
-            placeholder={`What evidence supports your ratings for ${cluster}? A justification is required for every theme.`}
-          />
-        )}
+        {isSelf && <p className="framework-intro">{SELF_JUSTIFICATION_PROMPT}</p>}
+        <textarea
+          className="input framework-note"
+          rows={isSelf ? 5 : 3}
+          value={themeData[cluster]?.note ?? ""}
+          onChange={(e) => setThemeField(cluster, "note", e.target.value)}
+          disabled={submitted}
+          placeholder={
+            isSelf
+              ? "Describe a concrete example — situation, actions taken, results, impact, and where relevant how it could be replicated."
+              : `What evidence supports your ratings for ${cluster}? A justification is required for every theme.`
+          }
+        />
       </div>
     );
   }
@@ -276,12 +250,10 @@ export default function Wizard({
 
           <div className="theme-notes-review">
             <h3 className="card-title" style={{ fontSize: 15, marginTop: 22 }}>
-              {isSelf ? "Framework justifications" : "Theme justifications"}
+              Theme justifications
             </h3>
             <p className="card-sub" style={{ marginBottom: 12 }}>
-              {isSelf
-                ? "The five framework questions must be answered for every theme."
-                : "A justification note is required for every theme."}
+              A justification is required for every theme.
             </p>
             {themes.map((t) => {
               const done = themeComplete(t);
@@ -373,8 +345,8 @@ export default function Wizard({
                 <li>Rate yourself on each capability against the three levels — be candid.</li>
                 <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
                 <li>
-                  For every theme, answer all <b>five framework questions</b> (Situation, Actions, Results, Impact,
-                  Replication) to justify your ratings. They are mandatory.
+                  For every theme, write one <b>concrete example</b> to justify your ratings — structure it as
+                  situation, actions, results and impact. It is mandatory.
                 </li>
                 <li>Everything saves automatically. You can only submit once all {caps.length} are rated and every theme is justified.</li>
               </>

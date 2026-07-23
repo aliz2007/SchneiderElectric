@@ -1096,9 +1096,9 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 
 .zone-am-rank { display: block; margin-top: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
 
-/* ---- self-assessor framework questions + mandatory theme justification ---- */
+/* ---- mandatory per-theme justification (self-assessor gets a guided prompt) ---- */
 .framework-block {
-  margin-top: 18px; padding: 18px 20px 6px;
+  margin-top: 18px; padding: 18px 20px;
   border: 1px solid rgba(76, 226, 106, 0.28); border-radius: 16px;
   background: rgba(76, 226, 106, 0.05);
 }
@@ -1108,17 +1108,8 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .framework-status { font-size: 10.5px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
 .framework-status.ok { color: var(--se-green-ink); background: var(--se-green-bright); }
 .framework-status.todo { color: #0b1424; background: var(--amber); }
-.framework-intro { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.5; }
-.framework-field { margin-bottom: 14px; }
-.framework-field > label { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
-.framework-num {
-  width: 20px; height: 20px; flex-shrink: 0; border-radius: 6px; display: inline-grid; place-items: center;
-  font-size: 11px; font-weight: 800; color: var(--se-green-ink); background: var(--se-green-bright);
-}
-.framework-label { font-size: 13.5px; font-weight: 700; color: var(--ink); }
-.framework-prompt { font-size: 12px; color: var(--muted); }
-.framework-field textarea, .framework-note { width: 100%; resize: vertical; }
-.framework-note { margin-bottom: 12px; }
+.framework-intro { font-size: 13px; color: var(--ink-2); margin: 0 0 12px; line-height: 1.55; font-weight: 550; }
+.framework-note { width: 100%; resize: vertical; }
 
 /* ---- centralized dashboard filter window ---- */
 .filter-bar { position: relative; display: inline-block; }

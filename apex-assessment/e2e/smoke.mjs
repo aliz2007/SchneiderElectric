@@ -160,13 +160,13 @@ try {
   cards === 1 ? ok("assessor sees exactly 1 assigned AM") : fail("assignment scoping", `${cards} cards`);
 
   // self-service: add anyone to your list by typing their name
-  await page.fill(".assign-input", "Basim");
+  await page.fill(".assign-input", "Omar");
   await page.locator(".assign-opt").first().click();
   await page.waitForFunction(() => document.querySelectorAll(".am-card").length === 2);
   ok("self-assigned an AM by typing a name");
 
   // ---- 8. rating wizard (AM02 reopened above; all 22 pre-rated by demo → review; edit one) ----
-  await page.locator('.am-card:has-text("Mohamed Marzouk") a.btn').click();
+  await page.locator('.am-card:has-text("Layla Haddad") a.btn').click();
   await page.waitForSelector(".review-list");
   ok("wizard opens on review screen for fully-rated draft");
   await page.locator('.review-row button:has-text("Edit")').first().click();
@@ -259,7 +259,7 @@ try {
   await page.waitForURL("**/rate/4");
   ok("self-assessor lands directly on their own self-assessment");
   const ownName = await page.locator(".wizard-top .page-title").textContent();
-  ownName?.includes("Biju Mathew") ? ok("self-assessor sees their own profile") : fail("self profile", ownName ?? "");
+  ownName?.includes("Sofia Rahman") ? ok("self-assessor sees their own profile") : fail("self profile", ownName ?? "");
   // the assessment page carries a how-to help block
   const helpShown = await page.locator(".wizard-help").count();
   helpShown > 0 ? ok("assessment how-to help shown") : fail("how-to help block", `${helpShown}`);
@@ -267,29 +267,27 @@ try {
   (await page.locator(".chat-fab").count()) === 1
     ? ok("assistant bubble also shown for assessors")
     : fail("assessor assistant bubble", "not found");
-  // self-assessors justify with the FIVE APEX framework questions per theme (mandatory).
-  // AM04 is fully rated so the wizard opens on review — open a theme to reach the questions.
+  // self-assessors justify each theme with ONE mandatory concrete-example note (guided prompt).
+  // AM04 is fully rated so the wizard opens on review — open a theme to reach the note field.
   await page.locator(".dots .dot").first().click();
   await page.waitForSelector(".framework-block");
-  const selfFields = await page.locator(".framework-field textarea").count();
-  selfFields === 5 ? ok("self-assessor sees the 5 framework questions") : fail("self framework fields", `${selfFields}`);
-  const FW = [
-    "Context: took over a stalled strategic account.",
-    "Actions: rebuilt the executive relationship map.",
-    "Results: reopened two dormant opportunities.",
-    "Impact: protected the multi-year renewal.",
-    "Replication: rolled the playbook out to two peers.",
-  ];
-  for (let i = 0; i < 5; i++) await page.locator(".framework-field textarea").nth(i).fill(FW[i]);
-  await page.waitForTimeout(1400); // five debounced autosaves (700ms) + server round-trips
+  const selfFields = await page.locator(".framework-note").count();
+  selfFields === 1 ? ok("self-assessor sees one justification note per theme") : fail("self note field", `${selfFields}`);
+  (await page.locator(".framework-intro").textContent())?.includes("concrete example")
+    ? ok("self-assessor sees the guided justification prompt")
+    : fail("self justification prompt", "not shown");
+  const SELF_NOTE =
+    "Situation: took over a stalled strategic account. Actions: rebuilt the executive map. Results: reopened two deals. Impact: protected the renewal.";
+  await page.locator(".framework-note").fill(SELF_NOTE);
+  await page.waitForTimeout(1100); // debounced autosave (700ms) + server round-trip
   const themeDone = await page.locator(".framework-status.ok").count();
-  themeDone >= 1 ? ok("theme marks complete once all five are answered") : fail("theme completion", `${themeDone}`);
+  themeDone >= 1 ? ok("theme marks complete once justified") : fail("theme completion", `${themeDone}`);
   await page.reload();
   await page.waitForSelector(".level-cards, .review-list");
   await page.locator(".dots .dot").first().click();
   await page.waitForSelector(".framework-block");
-  const firstFw = await page.locator(".framework-field textarea").first().inputValue();
-  firstFw === FW[0] ? ok("self framework answers persist (server accepts them)") : fail("self framework persistence", firstFw);
+  const firstFw = await page.locator(".framework-note").inputValue();
+  firstFw === SELF_NOTE ? ok("self justification persists (server accepts it)") : fail("self justification persistence", firstFw);
 
   // the pick-someone list is out of reach — /rate redirects them onto their own assessment
   await page.goto(`${BASE}/rate`);

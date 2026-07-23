@@ -43,8 +43,8 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
   const initial: WizardInitial = {};
   for (const r of ratings) initial[r.capability_id] = { level: r.level };
 
-  // Per-theme justification: self-assessors answer the five framework questions;
-  // Manager / APEX Panel write one note. Both are mandatory to submit.
+  // Per-theme justification: every lens writes one note per theme (self-assessors get a
+  // guided prompt), mandatory to submit. Legacy framework columns are still hydrated.
   const initialThemeData: ThemeData = {};
   for (const t of getThemeNotesFull(assessment.id)) {
     initialThemeData[t.cluster] = {

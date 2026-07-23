@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-22.
+Last updated: 2026-07-23.
 
 ---
 
@@ -20,14 +20,18 @@ Last updated: 2026-07-22.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-22): the **five APEX framework questions** as the
-  self-assessor's mandatory per-theme justification; a **mandatory one-note-per-theme**
-  justification for Manager / APEX Panel; a **business Segment** attribute on every account
-  (picked at creation/onboarding) usable as an analytics filter; a single **centralized
-  Filters window** on the dashboard holding Track + Segment + map Capability; a **My Feedback**
-  tab that releases each assessed person's own report once all three lenses have submitted;
-  and strengths/development redefined strictly (strength = strictly above required,
-  development = anything below). See the relevant sections below and §14 (the parcours).
+- Most recent additions (2026-07-23): the demo roster now uses **fictional names** (legal —
+  no real Schneider employees); the self-assessor justification is **one mandatory
+  concrete-example note per theme** (a guided prompt — this replaced an earlier five-question
+  variant); the PDF's perception section is now a **generated diverging over/under-rating
+  chart**. Earlier this cycle (2026-07-22): a **mandatory one-note-per-theme** justification
+  for every lens; a **business Segment** attribute on every account (picked at
+  creation/onboarding) usable as an analytics filter and shown on the individual pages; a
+  single **centralized Filters window** on the dashboard holding Track + Segment + map
+  Capability; a **My Feedback** tab that releases each assessed person's own report once all
+  three lenses have submitted; and strengths/development redefined strictly (strength =
+  strictly above required, development = anything below). See the sections below and §14 (the
+  parcours).
 
 ## 2. The project
 
@@ -76,27 +80,26 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   self-assessor onboarding / the admin create flow. It is shown on the individuals list and
   the individual detail header (a purple `badge-segment`), and is a reporting/filter dimension
   only — it does NOT change required levels (track does that).
-- **11 of 25 names are placeholders** ("Account Manager 1", 13–18, 22–25) because the Excel
-  itself had placeholder tabs. Real names exist for AM02–AM12 and AM19–AM21. The user has
-  not yet provided the missing names.
+- **The 25 roster names are FICTIONAL demo data** (`ROSTER` in `seed-data.ts`), not real
+  Schneider employees — deliberately, to avoid using real people's names in the sample
+  database. Any resemblance is coincidental. (The original Excel had some real-looking names;
+  they were all replaced.) If the client later provides a real, cleared roster, edit `ROSTER`.
 
-### The five APEX framework questions (self-assessor justification)
+### Per-theme justification (the self-assessor's concrete example)
 
-Self-assessors justify their ratings with the five APEX framework questions, asked once per
-theme (cluster) and ALL mandatory before they can submit (`FRAMEWORK_QUESTIONS` in
-`seed-data.ts`):
+Every lens justifies each theme (cluster) with ONE mandatory free-text note, written in-context
+under the level cards and required before the assessment can be submitted:
 
-1. **Situation** — the context, challenge or opportunity.
-2. **Actions** — what the person personally did, decided, or influenced.
-3. **Results** — the measurable outcomes; what changed.
-4. **Impact** — impact on the customer, the account, SE, or the long-term strategy.
-5. **Replication** — whether it was applied elsewhere / is repeatable or scalable.
+- **Self-assessors** get a guided prompt (`SELF_JUSTIFICATION_PROMPT` in `seed-data.ts`): "Please
+  share a concrete example to support your rating. You can structure it as: situation, actions
+  taken, results, impact — and, where relevant, how this could be replicated." It is one note,
+  not five fields. (An earlier iteration split this into five separate framework questions;
+  that was reverted to a single note at the user's request.)
+- **Manager / APEX Panel** write a free justification note per theme.
 
-(The source guide marks Replication "optional"; at the user's explicit instruction all five
-are enforced as mandatory.) Manager and APEX Panel do NOT answer the five questions — they
-write ONE free-text justification note per theme, also now mandatory before submitting. Both
-kinds live in the same `theme_notes` row (see the data model); `themeJustificationText(row)`
-renders whichever is present (the five labelled framework parts if any, else the note).
+All of these live in the `theme_notes.note` column (one row per assessment per cluster).
+`themeJustificationText(row)` returns that note; it still falls back to the legacy five
+framework columns if an old row only has those, so nothing pre-existing is lost.
 
 ### Hard product rules (enforced server-side — keep them)
 
@@ -108,9 +111,9 @@ renders whichever is present (the five labelled framework parts if any, else the
    lenses have submitted (nothing about anyone else is exposed).
 4. The app is the system of record. Rubric + roster were seeded once from the Excel; all
    ratings are created in the app. The Excel is retired.
-5. Every theme must be justified before an assessment can be submitted: a self-assessor must
-   answer all five framework questions per theme; a Manager / APEX Panel evaluator must write
-   one note per theme. Enforced server-side in `unjustifiedThemes()` (called by `submit`).
+5. Every theme must be justified before an assessment can be submitted: every lens writes one
+   note per theme (self-assessors from a guided prompt). Enforced server-side in
+   `unjustifiedThemes()` (called by `submit`).
 
 ## 3. Architecture
 
@@ -146,12 +149,13 @@ renders whichever is present (the five labelled framework parts if any, else the
   capability_id). NOTE: the per-capability `note` column still exists but is no longer
   written by the wizard; notes are now per-theme (see `theme_notes`).
 - `theme_notes` (assessment_id, cluster, note, situation, actions, results, impact,
-  replication). PK (assessment_id, cluster). ONE row per theme per assessment. Manager /
-  APEX Panel fill `note`; self-assessors fill the five framework columns
-  (situation/actions/results/impact/replication). Columns are added by idempotent
-  `ALTER TABLE … ADD COLUMN` migrations in `db.ts`. A row that becomes entirely empty is
-  deleted (`saveThemeField`). Read helpers: `getThemeNotesFull`, `themeJustificationText`,
-  `unjustifiedThemes`.
+  replication). PK (assessment_id, cluster). ONE row per theme per assessment. Every lens now
+  fills `note` (self-assessors from a guided prompt, Manager/Panel free text). The five
+  framework columns (situation/actions/results/impact/replication) are LEGACY — kept so any
+  data saved during the brief five-question iteration still reads back, but no longer written.
+  Columns are added by idempotent `ALTER TABLE … ADD COLUMN` migrations in `db.ts`. A row that
+  becomes entirely empty is deleted (`saveThemeField`). Read helpers: `getThemeNotesFull`,
+  `themeJustificationText`, `unjustifiedThemes`.
 - `app_settings` (key PK, value) — runtime key/value store. Now holds only `moonshot_model`
   (the auto-selected working model) and `moonshot_last_result` (last PDF-AI outcome). The
   Kimi API key is HARDCODED in `ai-narrative.ts` (`EMBEDDED_KEY`), not stored here; there is
@@ -179,9 +183,9 @@ lens rather than a multi-checkbox.
     sent to the client. Superadmin can reopen a submitted assessment from the individual
     analysis page.
   - **Per-theme justification (mandatory)**: below the level cards, each capability screen
-    shows the justification block for that capability's theme (cluster). For a
-    **self-assessor** it is the five framework questions (Situation, Actions, Results, Impact,
-    Replication), rendered bigger/wider as numbered fields — all five required. For a
+    shows the justification block for that capability's theme (cluster) — one required note.
+    For a **self-assessor** it is a bigger/wider text box carrying the guided prompt (a concrete
+    example: situation, actions, results, impact, and where relevant replication). For a
     **Manager / APEX Panel** evaluator it is a single required note. Autosaved (700 ms
     debounce) via `saveThemeNote → saveThemeField`. The review screen shows a completion badge
     per theme, and **Submit is disabled** until every capability is rated AND every theme is
@@ -214,8 +218,11 @@ lens rather than a multi-checkbox.
     Gated by `allLensesSubmitted(am.id)`: until Self + Manager + APEX Panel have all submitted
     it shows a status checklist instead. The nav tab only appears for a linked self-assessor.
 - **PDF report** (`GET /analysis/am/[id]/pdf`, superadmin-only): a styled 4-page report
-  (`src/lib/pdf-report.tsx`): (1) cover, (2) overview = profile + strengths/development +
-  perception gaps, (3) narrative = per-person strengths/weaknesses prose + a definition of
+  (`src/lib/pdf-report.tsx`): (1) cover, (2) overview = profile + strengths/development + a
+  **perception-profile chart** (a diverging over/under-rating bar chart, `PerceptionChart`,
+  drawn with @react-pdf SVG primitives — amber bars right = self over-rates vs the panel, blue
+  bars left = under-rates, bar length = the gap in levels), (3) narrative = strengths/weaknesses
+  prose + a definition of
   every capability it names, (4) capability-detail table with theme notes. See §5–6 for how
   the narrative and definitions are produced.
 - **Admin — Users & Access** (`/admin/users`, superadmin):
@@ -257,9 +264,10 @@ a hard fallback:
   (section hidden) when none exist. The model is prompted (see `SYSTEM_PROMPT`) to ground
   every statement in the provided data, never quote the rubric definitions, cover every
   qualifying capability, and stay concise. The prompt tells it that Manager/Panel notes are
-  free text while a Self-Assessment note is the five framework answers (Situation, Actions,
-  Results, Impact, Replication) — the person's own evidence, to be weighed as their view, not
-  the verdict. (`themeJustificationText` is what feeds these notes to the model.)
+  free text while a Self-Assessment note is a concrete example the person gives to justify their
+  ratings (prompted to cover situation, actions, results, impact and, where relevant,
+  replication) — their own evidence, to be weighed as their view, not the verdict.
+  (`themeJustificationText` is what feeds these notes to the model.)
 - THE KEY IS HARDCODED at the repo owner's explicit direction: `EMBEDDED_KEY` in
   `ai-narrative.ts` is the single place it lives, and it is read directly (no env fallback).
   There is no in-app AI settings card. Optional env overrides: `MOONSHOT_BASE_URL`,
@@ -300,8 +308,8 @@ users ask quick questions over the live data ("which skill gaps repeat most in I
   other evaluators' scores are ABSENT from the payload, so the model cannot leak what it never
   receives. The system prompt also instructs the restricted variant to refuse such questions.
 - The prompt is kept in step with the model: it explains segment as a dimension, and that
-  per-theme justifications are the five framework answers (self) or a single note
-  (manager/panel), to be quoted as evidence for "why" questions and never fabricated.
+  per-theme justifications are one note per lens — a self-assessor's guided concrete example, or
+  a manager/panel free note — to be quoted as evidence for "why" questions and never fabricated.
 - Uses `kimiChat()` in `ai-narrative.ts` — same hardcoded key, same model auto-fallback.
 
 ## 7. Key files
@@ -349,15 +357,16 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 49/49
+node e2e/smoke.mjs                                # in a second shell — currently 51/51
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
-the centralized Filters window, the APEX Assistant round-trip, individual analysis, PDF
-export, zone view, assessor creation and confidentiality, the rating wizard, the mandatory
-per-theme justification for BOTH the Manager note (walking every theme) and the self-assessor
-five framework questions, justification end-to-end (wizard -> analysis -> PDF), the
-self-assessor direct landing, onboarding (now incl. segment), the test sandbox, and account
+the centralized Filters window, the APEX Assistant round-trip, individual analysis (incl. the
+segment badge), PDF export, zone view, assessor creation and confidentiality, the rating
+wizard, the mandatory per-theme justification note for BOTH the Manager (walking every theme)
+and the self-assessor (the guided concrete-example prompt), justification end-to-end (wizard ->
+analysis -> PDF), the self-assessor direct landing, onboarding (now incl. segment), the test
+sandbox, and account
 deletion. Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
 narrative, the chatbot returns its fixed "turned off" reply, no external call). The e2e header
 comments explain the `CHROMIUM` / `BASE` env vars.
@@ -376,7 +385,9 @@ The app is fully functional but three things stand between it and a company-wide
 
 ## 11. Open items
 
-1. **11 placeholder AM names** — waiting on the user for the real names.
+1. **The roster is fictional demo data.** All 25 names are made-up (deliberately — no real
+   Schneider employees in the sample DB). A real, cleared roster would replace `ROSTER` in
+   `seed-data.ts` (and/or arrive via the roster-management tooling below, which is not built).
 2. **Roster management is not built.** The 25 AMs come from the seed; there is no in-app way
    to add / edit / delete Account Managers or bulk-import them from CSV/Excel. This was
    discussed with the user (the roster was pre-loaded from the Excel, so no one hand-typed
@@ -390,8 +401,9 @@ The app is fully functional but three things stand between it and a company-wide
 - SQLite is deliberate (zero infra); move to Postgres only if asked.
 - v1 auth is username/password managed by the superadmin; SSO is a later concern.
 - Justification is per-theme (one row per cluster), **replacing** the old per-capability
-  evidence note. It is now MANDATORY for all three lenses: self-assessors answer the five
-  framework questions per theme; Manager/APEX Panel write one note per theme.
+  evidence note. It is MANDATORY for all three lenses: one note per theme — self-assessors from
+  a guided concrete-example prompt, Manager/APEX Panel free text. (A brief experiment split the
+  self note into five separate framework questions; that was reverted to one note.)
 - Strength vs development is strict: a strength is a capability where the panel is STRICTLY
   above required; anything below required is a development area (uncapped, all shown); AT
   required is the baseline and is neither.
@@ -419,9 +431,10 @@ The app is fully functional but three things stand between it and a company-wide
   create-user form, the test sandbox, user account deletion, the dev port move to 3010, the
   "Avg APEX maturity" KPI as a rounded level, this repo's README, the floating APEX Assistant
   chatbot (role-scoped), uniform-per-region zone colouring, the zone-benchmark AM names + track
-  ranking, the strict strengths/development redefinition, the My Feedback tab, and — most
-  recently — the five framework questions + mandatory per-theme justification, the Segment
-  attribute + filter, and the centralized Filters window.
+  ranking, the strict strengths/development redefinition, the My Feedback tab, the Segment
+  attribute + filter and centralized Filters window, and — most recently — fictional demo
+  roster names (legal), the single guided concrete-example self-justification note per theme
+  (which replaced a brief five-question variant), and the PDF perception-profile chart.
 - `demo.bat` (repo root) is a double-click Windows launcher: installs Node LTS via winget if
   missing, downloads a branch zip, runs `npm ci` + `npm run build` when the zip changed, then
   `npm start -- -p 3000` and opens the browser. If you change which branch the demo ships,
@@ -452,8 +465,9 @@ model; the sections above give the mechanics.
    track, and **segment**. Otherwise they go straight to their own assessment.
 2. **`/rate/[their AM]`** opens directly (no picking anyone else; `/rate` just redirects here).
    For each of the 22 capabilities they pick L1/L2/L3 (required levels are hidden), and for
-   each of the 6 themes they answer the **five framework questions** (Situation, Actions,
-   Results, Impact, Replication) — all mandatory. Everything autosaves.
+   each of the 6 themes they write **one concrete-example justification note** from the guided
+   prompt (situation, actions, results, impact, and where relevant replication) — mandatory.
+   Everything autosaves.
 3. The review screen shows a completion badge per theme; **Submit** unlocks only once all 22
    are rated and all 6 themes are fully answered, then the assessment locks.
 4. Once their Manager and the APEX Panel have also submitted, a **My Feedback** tab appears:

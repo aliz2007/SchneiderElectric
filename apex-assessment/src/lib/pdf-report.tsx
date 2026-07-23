@@ -1,4 +1,5 @@
-import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, G, Image, Line, Page, Rect, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
+import type { ReactElement } from "react";
 import type { Narrative } from "./report-narrative";
 
 /**
@@ -143,6 +144,11 @@ const s = StyleSheet.create({
 
   lvl: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, minWidth: 24, alignItems: "center" },
   percePill: { width: 68, borderRadius: 5, paddingVertical: 2, alignItems: "center" },
+  perceptLegend: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", marginTop: 8, gap: 14 },
+  perceptKey: { flexDirection: "row", alignItems: "center" },
+  perceptSwatch: { width: 9, height: 9, borderRadius: 2, marginRight: 5 },
+  perceptKeyText: { fontSize: 8, color: MUTED },
+  perceptKeyNote: { fontSize: 8, color: FAINT },
   lvlText: { fontSize: 8, fontFamily: "Helvetica-Bold" },
   na: { fontSize: 8.5, color: FAINT, textAlign: "center" },
 
@@ -424,6 +430,111 @@ function NarrativePage(p: AmReportProps) {
   );
 }
 
+// colours for the perception (over/under-rating) chart
+const OVER = "#e0912f"; // amber — self rated ABOVE the panel (over-rates)
+const UNDER = "#4a82c9"; // blue — self rated BELOW the panel (under-rates)
+
+// @react-pdf's SVG <Text> type omits fontSize/fontFamily, though its renderer honours
+// them — widen the typing so the chart labels can be sized without a cast at each call.
+type SvgTextProps = {
+  x: number;
+  y: number;
+  fill?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  textAnchor?: "start" | "middle" | "end";
+  children?: string | number;
+};
+const SvgText = Text as unknown as (props: SvgTextProps) => ReactElement;
+
+/**
+ * Diverging bar chart of the person's perception profile: for every capability where
+ * the self rating differs from the APEX Panel by a full level or more, a bar leaves the
+ * centre axis — right (amber) when they over-rate, left (blue) when they under-rate — its
+ * length the size of the gap in levels. Drawn with @react-pdf SVG primitives so it is
+ * generated from the data, not a static image. Rows are ordered most over- to most
+ * under-rated so the shape reads as a single profile.
+ */
+function PerceptionChart({ gaps }: { gaps: AmReportProps["perceptionGaps"] }) {
+  const rows = [...gaps].sort((a, b) => b.perception - a.perception);
+  const W = 511;
+  const NAME_X = 168; // right edge of the capability-name gutter
+  const PLOT_L = 178;
+  const PLOT_R = 402;
+  const CX = (PLOT_L + PLOT_R) / 2; // centre axis (agreement with the panel)
+  const HALF = (PLOT_R - PLOT_L) / 2;
+  const MAXMAG = 2; // levels are 1-3, so the gap is at most 2
+  const PER = HALF / MAXMAG;
+  const DETAIL_X = 509;
+  const HEAD = 20;
+  const ROW = 18;
+  const BAR = 11;
+  const H = HEAD + rows.length * ROW + 2;
+  const gridTop = HEAD - 6;
+  const gridBottom = H - 2;
+  const clip = (name: string) => (name.length > 42 ? name.slice(0, 41) + "..." : name);
+  const grid = [CX - 2 * PER, CX - PER, CX + PER, CX + 2 * PER];
+
+  return (
+    <View wrap={false}>
+      <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ marginTop: 4 }}>
+        {/* axis labels */}
+        <SvgText x={(PLOT_L + CX) / 2} y={10} fill={UNDER} fontSize={7} fontFamily="Helvetica-Bold" textAnchor="middle">
+          UNDER-RATES
+        </SvgText>
+        <SvgText x={(CX + PLOT_R) / 2} y={10} fill={OVER} fontSize={7} fontFamily="Helvetica-Bold" textAnchor="middle">
+          OVER-RATES
+        </SvgText>
+        {/* faint gridlines at +/- 1 and +/- 2 levels, solid centre axis */}
+        {grid.map((x, i) => (
+          <Line key={i} x1={x} y1={gridTop} x2={x} y2={gridBottom} stroke={LINE} strokeWidth={0.75} />
+        ))}
+        <Line x1={CX} y1={gridTop} x2={CX} y2={gridBottom} stroke={FAINT} strokeWidth={1} />
+        {rows.map((r, i) => {
+          const y0 = HEAD + i * ROW;
+          const midY = y0 + ROW / 2;
+          const over = r.perception > 0;
+          const mag = Math.min(MAXMAG, Math.abs(r.perception));
+          const len = mag * PER;
+          const fill = over ? OVER : UNDER;
+          return (
+            <G key={r.name}>
+              <SvgText x={NAME_X} y={midY + 2.4} fill={INK} fontSize={7.4} textAnchor="end">
+                {clip(r.name)}
+              </SvgText>
+              <Rect x={over ? CX : CX - len} y={midY - BAR / 2} width={len} height={BAR} rx={1.5} fill={fill} />
+              <SvgText
+                x={over ? CX + len - 3 : CX - len + 3}
+                y={midY + 2.3}
+                fill="#ffffff"
+                fontSize={6.5}
+                fontFamily="Helvetica-Bold"
+                textAnchor={over ? "end" : "start"}
+              >
+                {(over ? "+" : "-") + mag}
+              </SvgText>
+              <SvgText x={DETAIL_X} y={midY + 2.4} fill={MUTED} fontSize={6.8} textAnchor="end">
+                {`self L${r.self} vs panel L${r.expert}`}
+              </SvgText>
+            </G>
+          );
+        })}
+      </Svg>
+      <View style={s.perceptLegend}>
+        <View style={s.perceptKey}>
+          <View style={[s.perceptSwatch, { backgroundColor: OVER }]} />
+          <Text style={s.perceptKeyText}>Over-rates — self above the panel</Text>
+        </View>
+        <View style={s.perceptKey}>
+          <View style={[s.perceptSwatch, { backgroundColor: UNDER }]} />
+          <Text style={s.perceptKeyText}>Under-rates — self below the panel</Text>
+        </View>
+        <Text style={s.perceptKeyNote}>Bar length and the number show the gap in levels.</Text>
+      </View>
+    </View>
+  );
+}
+
 export function AmReportPdf(p: AmReportProps) {
   return (
     <Document
@@ -522,34 +633,14 @@ export function AmReportPdf(p: AmReportProps) {
           </View>
         </View>
 
-        {/* perception gaps */}
+        {/* perception gaps — diverging over/under-rating chart */}
         {p.perceptionGaps.length > 0 && (
-          <View style={{ marginBottom: 18 }}>
+          <View style={{ marginBottom: 18 }} wrap={false}>
             <SectionHead
-              title="Perception gaps"
-              sub="Self-assessment differs from the APEX Panel by a full level or more"
+              title="Perception profile"
+              sub="Where the self-assessment differs from the APEX Panel by a full level or more"
             />
-            {p.perceptionGaps.map((r) => (
-              <View key={r.name} style={s.listItem} wrap={false}>
-                <View
-                  style={[
-                    s.percePill,
-                    s.listItemLead,
-                    r.perception > 0 ? { backgroundColor: "#fdf1de" } : { backgroundColor: CARD },
-                  ]}
-                >
-                  <Text
-                    style={[s.lvlText, r.perception > 0 ? { color: "#b45309" } : { color: MUTED }]}
-                  >
-                    {r.perception > 0 ? "overrates" : "underrates"} {Math.abs(r.perception)}
-                  </Text>
-                </View>
-                <Text style={s.listName}>{r.name}</Text>
-                <Text style={s.listMeta}>
-                  self L{r.self} vs panel L{r.expert}
-                </Text>
-              </View>
-            ))}
+            <PerceptionChart gaps={p.perceptionGaps} />
           </View>
         )}
 

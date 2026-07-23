@@ -38,9 +38,9 @@ export async function saveRating(amId: number, capabilityId: number, level: numb
 const THEME_FIELDS: ThemeField[] = ["note", "situation", "actions", "results", "impact", "replication"];
 
 /**
- * Save one theme-justification field for the caller's lens. Managers and the APEX Panel
- * fill the single `note`; self-assessors fill the five framework fields (situation …
- * replication). Both are mandatory to submit (enforced in submit()).
+ * Save the theme-justification note for the caller's lens. Every lens now writes one
+ * `note` per theme (self-assessors get a guided prompt, Manager/Panel a free note),
+ * mandatory to submit (enforced in submit()). The other columns remain for legacy data.
  */
 export async function saveThemeNote(amId: number, cluster: string, field: string, value: string) {
   const { assessment } = await guard(amId);
@@ -56,14 +56,10 @@ export async function submit(amId: number) {
   if (assessment.status === "submitted") return;
   const total = listCapabilities().length;
   if (ratedCount(assessment.id) < total) throw new Error("All capabilities must be rated before submitting.");
-  // every theme must be justified: self answers all five framework questions, Manager/Panel a note
-  const missing = unjustifiedThemes(assessment.id, user.lens!);
+  // every theme must be justified with one note before the assessment can be submitted
+  const missing = unjustifiedThemes(assessment.id);
   if (missing.length > 0) {
-    throw new Error(
-      user.lens === "self"
-        ? `Answer all five framework questions for every theme first. Still incomplete: ${missing.join(", ")}.`
-        : `Add a justification note for every theme first. Still missing: ${missing.join(", ")}.`
-    );
+    throw new Error(`Add a justification for every theme first. Still missing: ${missing.join(", ")}.`);
   }
   submitAssessment(assessment.id, user.id);
   redirect("/rate?done=1");

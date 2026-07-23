@@ -277,47 +277,43 @@ export const SEGMENTS = [
 ] as const;
 export type Segment = (typeof SEGMENTS)[number];
 
+// NOTE: these are fictional demo names, not real Schneider Electric employees.
+// The roster is sample data only; any resemblance to real people is coincidental.
 export const ROSTER: SeedAM[] = [
-  { code: "AM01", name: "Account Manager 1", account: "Account 1", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
-  { code: "AM02", name: "Mohamed Marzouk", account: "Account 2", zone: "MEA", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM03", name: "Basim El-Subihy", account: "Account 3", zone: "MEA", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
-  { code: "AM04", name: "Biju Mathew", account: "Account 4", zone: "MEA", track: "Saturation", segment: "Multi-segment" },
-  { code: "AM05", name: "Oseid Mohamemed Faqih", account: "Account 5", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
-  { code: "AM06", name: "Kamel Bedrane", account: "Account 6", zone: "MEA", track: "Acquisition", segment: "Energy & Chemicals" },
-  { code: "AM07", name: "Moamen Mohamed Ahmed Ibrahim", account: "Account 7", zone: "SAM", track: "Saturation", segment: "Power & Grid" },
-  { code: "AM08", name: "Ahmed Abdel-Maugod", account: "Account 8", zone: "SAM", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
-  { code: "AM09", name: "Moteeb Albaqami", account: "Account 9", zone: "SAM", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM10", name: "Anny Rodrigues de Assis", account: "Account 10", zone: "SAM", track: "Saturation", segment: "Multi-segment" },
-  { code: "AM11", name: "Eduardo Salles de Carvalho", account: "Account 11", zone: "SAM", track: "Acquisition", segment: "Power & Grid" },
-  { code: "AM12", name: "Marco Antonio Martins", account: "Account 12", zone: "SAM", track: "Acquisition", segment: "Energy & Chemicals" },
-  { code: "AM13", name: "Account Manager 13", account: "Account 13", zone: "India", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
-  { code: "AM14", name: "Account Manager 14", account: "Account 14", zone: "India", track: "Acquisition", segment: "Power & Grid" },
-  { code: "AM15", name: "Account Manager 15", account: "Account 15", zone: "India", track: "Saturation", segment: "Multi-segment" },
-  { code: "AM16", name: "Account Manager 16", account: "Account 16", zone: "India", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM17", name: "Account Manager 17", account: "Account 17", zone: "India", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
-  { code: "AM18", name: "Account Manager 18", account: "Account 18", zone: "India", track: "Acquisition", segment: "Power & Grid" },
-  { code: "AM19", name: "Brian Casserly", account: "Account 19", zone: "Pacific", track: "Acquisition", segment: "Energy & Chemicals" },
-  { code: "AM20", name: "Vishal Nayak", account: "Account 20", zone: "Pacific", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
-  { code: "AM21", name: "Franky Chan", account: "Account 21", zone: "Pacific", track: "Saturation", segment: "Multi-segment" },
-  { code: "AM22", name: "Account Manager 22", account: "Account 22", zone: "Pacific", track: "Acquisition", segment: "Power & Grid" },
-  { code: "AM23", name: "Account Manager 23", account: "Account 23", zone: "Pacific", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM24", name: "Account Manager 24", account: "Account 24", zone: "Pacific", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
-  { code: "AM25", name: "Account Manager 25", account: "Account 25", zone: "Pacific", track: "Acquisition", segment: "Multi-segment" },
+  { code: "AM01", name: "Adam Fisher", account: "Account 1", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM02", name: "Layla Haddad", account: "Account 2", zone: "MEA", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM03", name: "Omar Nasri", account: "Account 3", zone: "MEA", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM04", name: "Sofia Rahman", account: "Account 4", zone: "MEA", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM05", name: "Karim Belhaj", account: "Account 5", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM06", name: "Nadia Toure", account: "Account 6", zone: "MEA", track: "Acquisition", segment: "Energy & Chemicals" },
+  { code: "AM07", name: "Lucas Moreira", account: "Account 7", zone: "SAM", track: "Saturation", segment: "Power & Grid" },
+  { code: "AM08", name: "Camila Rojas", account: "Account 8", zone: "SAM", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM09", name: "Mateo Silva", account: "Account 9", zone: "SAM", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM10", name: "Valentina Cruz", account: "Account 10", zone: "SAM", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM11", name: "Diego Fernandes", account: "Account 11", zone: "SAM", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM12", name: "Isabela Costa", account: "Account 12", zone: "SAM", track: "Acquisition", segment: "Energy & Chemicals" },
+  { code: "AM13", name: "Rohan Mehta", account: "Account 13", zone: "India", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM14", name: "Priya Nair", account: "Account 14", zone: "India", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM15", name: "Arjun Kapoor", account: "Account 15", zone: "India", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM16", name: "Ananya Rao", account: "Account 16", zone: "India", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM17", name: "Vikram Shah", account: "Account 17", zone: "India", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM18", name: "Neha Iyer", account: "Account 18", zone: "India", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM19", name: "Ethan Walker", account: "Account 19", zone: "Pacific", track: "Acquisition", segment: "Energy & Chemicals" },
+  { code: "AM20", name: "Mia Chen", account: "Account 20", zone: "Pacific", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM21", name: "Liam Tan", account: "Account 21", zone: "Pacific", track: "Saturation", segment: "Multi-segment" },
+  { code: "AM22", name: "Grace Wong", account: "Account 22", zone: "Pacific", track: "Acquisition", segment: "Power & Grid" },
+  { code: "AM23", name: "Noah Park", account: "Account 23", zone: "Pacific", track: "Saturation", segment: "Energy & Chemicals" },
+  { code: "AM24", name: "Olivia Lim", account: "Account 24", zone: "Pacific", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM25", name: "Jack Nguyen", account: "Account 25", zone: "Pacific", track: "Acquisition", segment: "Multi-segment" },
 ];
 
 export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 
-// The five APEX framework questions a self-assessor answers per theme to justify
-// their ratings (from the APEX discussion guide). Situation/Actions/Results/Impact/
-// Replication — the flow that separates knowledge, execution and strategic mastery.
-export const FRAMEWORK_QUESTIONS = [
-  { key: "situation", label: "Situation", prompt: "What was the context, challenge, or opportunity?" },
-  { key: "actions", label: "Actions", prompt: "What did you personally do? What decisions? How did you influence?" },
-  { key: "results", label: "Results", prompt: "What measurable outcomes? What changed?" },
-  { key: "impact", label: "Impact", prompt: "Impact on the customer, the account, SE, or the long-term strategy?" },
-  { key: "replication", label: "Replication", prompt: "Applied elsewhere? Is it repeatable or scalable?" },
-] as const;
-export type FrameworkKey = (typeof FRAMEWORK_QUESTIONS)[number]["key"];
+// The single justification a self-assessor writes per theme to evidence their
+// ratings. One mandatory free-text answer, gently guided by the APEX framework
+// (situation / actions / results / impact / replication) rather than five fields.
+export const SELF_JUSTIFICATION_PROMPT =
+  "Please share a concrete example to support your rating. You can structure it as: situation, actions taken, results, impact — and, where relevant, how this could be replicated.";
 
 export const LENSES = ["self", "manager", "expert"] as const;
 export type Lens = (typeof LENSES)[number];

@@ -92,8 +92,9 @@ function migrate(db: Database.Database) {
       PRIMARY KEY (assessment_id, capability_id)
     );
 
-    -- One free-text note per theme (capability cluster) per assessment. Captured by
-    -- Manager / APEX Panel evaluators only (self-assessments carry no notes).
+    -- One mandatory justification note per theme (capability cluster) per assessment,
+    -- written by every lens (self-assessors from a guided prompt, Manager/Panel free text).
+    -- The legacy framework columns (situation/actions/...) are added by migration below.
     CREATE TABLE IF NOT EXISTS theme_notes (
       assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
       cluster TEXT NOT NULL,

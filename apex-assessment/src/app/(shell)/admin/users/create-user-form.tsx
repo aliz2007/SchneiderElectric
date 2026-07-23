@@ -26,11 +26,11 @@ export default function CreateUserForm({ ams }: { ams: AmOption[] }) {
       <div className="form-grid">
         <div className="field">
           <label>Full name</label>
-          <input className="input" name="displayName" placeholder="e.g. Mohamed Marzouk" required />
+          <input className="input" name="displayName" placeholder="e.g. Alex Carter" required />
         </div>
         <div className="field">
           <label>Username</label>
-          <input className="input" name="username" placeholder="e.g. mmarzouk" required />
+          <input className="input" name="username" placeholder="e.g. acarter" required />
         </div>
         <div className="field">
           <label>Password</label>

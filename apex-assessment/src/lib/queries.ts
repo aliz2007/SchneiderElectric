@@ -170,34 +170,25 @@ export function saveThemeField(assessmentId: number, cluster: string, field: The
   db.prepare("UPDATE assessments SET updated_at = datetime('now') WHERE id = ?").run(assessmentId);
 }
 
-/** Readable text for a theme row: the five framework answers if present, else the single note. */
+/** Readable justification text for a theme row: the single note every lens now writes. */
 export function themeJustificationText(row: Partial<ThemeNoteFull>): string {
-  const fw: [string, string | null | undefined][] = [
-    ["Situation", row.situation],
-    ["Actions", row.actions],
-    ["Results", row.results],
-    ["Impact", row.impact],
-    ["Replication", row.replication],
-  ];
-  const parts = fw.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}: ${v!.trim()}`);
-  if (parts.length) return parts.join("\n");
-  return (row.note ?? "").trim();
+  const note = (row.note ?? "").trim();
+  if (note) return note;
+  // legacy fallback: a self-assessment saved under the old five-field framework
+  const fw: (string | null | undefined)[] = [row.situation, row.actions, row.results, row.impact, row.replication];
+  const labels = ["Situation", "Actions", "Results", "Impact", "Replication"];
+  return fw.map((v, i) => (v && v.trim() ? `${labels[i]}: ${v.trim()}` : "")).filter(Boolean).join("\n");
 }
 
 /** Clusters on this assessment still missing their required justification (the submit gate).
- *  Self must answer all five framework questions per theme; Manager/Panel one note per theme. */
-export function unjustifiedThemes(assessmentId: number, lens: Lens): string[] {
+ *  Every lens now writes one justification note per theme. */
+export function unjustifiedThemes(assessmentId: number): string[] {
   const clusters: string[] = [];
   const seen = new Set<string>();
   for (const c of listCapabilities()) if (!seen.has(c.cluster)) { seen.add(c.cluster); clusters.push(c.cluster); }
   const byCluster = new Map(getThemeNotesFull(assessmentId).map((n) => [n.cluster, n]));
   const has = (v: string | null | undefined) => !!(v && v.trim());
-  return clusters.filter((cl) => {
-    const n = byCluster.get(cl);
-    if (lens === "self")
-      return !(n && has(n.situation) && has(n.actions) && has(n.results) && has(n.impact) && has(n.replication));
-    return !(n && has(n.note));
-  });
+  return clusters.filter((cl) => !has(byCluster.get(cl)?.note));
 }
 
 export function submitAssessment(assessmentId: number, raterUserId: number) {
@@ -314,13 +305,9 @@ export function submittedLevels(amId: number): Record<Lens, Map<number, number>>
   return out;
 }
 
-/**
- * Theme (cluster) notes from submitted Manager / APEX Panel assessments, for the
- * individual analysis view and PDF. Self-assessments never carry notes.
- */
-/** Submitted theme justifications across all three lenses. Each row carries the raw
- *  fields; call themeJustificationText(row) for display text, or read the framework
- *  fields directly. Rows with no content are excluded. */
+/** Submitted theme justifications across all three lenses (every lens now writes one note
+ *  per theme), for the individual analysis view and PDF. Call themeJustificationText(row)
+ *  for display text. Rows with no content are excluded. */
 export function submittedThemeNotes(amId: number): (ThemeNoteFull & { lens: Lens })[] {
   return getDb()
     .prepare(
