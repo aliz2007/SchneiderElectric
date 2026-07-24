@@ -32,7 +32,7 @@ export type AmReportProps = {
   lensStatus: { label: string; submitted: boolean; rater?: string }[];
   strengths: { name: string; expert: number; req: number | null }[];
   development: { name: string; expert: number; req: number | null }[];
-  perceptionGaps: { name: string; perception: number; self?: number; expert?: number }[];
+  perceptionRows: { name: string; perception: number; self?: number; expert?: number }[];
   clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[];
   narrative: Narrative;
   narrativeSource: "kimi" | "auto";
@@ -448,18 +448,19 @@ type SvgTextProps = {
 const SvgText = Text as unknown as (props: SvgTextProps) => ReactElement;
 
 /**
- * Diverging bar chart of the person's perception profile: for every capability where
- * the self rating differs from the APEX Panel by a full level or more, a bar leaves the
- * centre axis — right (amber) when they over-rate, left (blue) when they under-rate — its
- * length the size of the gap in levels. Drawn with @react-pdf SVG primitives so it is
- * generated from the data, not a static image. Rows are ordered most over- to most
- * under-rated so the shape reads as a single profile.
+ * Diverging bar chart of the person's perception profile across EVERY rated capability.
+ * Each capability's self rating is compared to the APEX Panel: a bar leaves the centre axis
+ * right (amber) when they over-rate, left (blue) when they under-rate, its length the size of
+ * the gap in levels; a capability where self and panel agree sits on the axis as a small grey
+ * "aligned" dot. Drawn with @react-pdf SVG primitives so it is generated from the data, not a
+ * static image. Rows are ordered most over- to most under-rated so the shape reads as one
+ * profile — where the person is confident, aligned, and modest, all at once.
  */
-function PerceptionChart({ gaps }: { gaps: AmReportProps["perceptionGaps"] }) {
-  const rows = [...gaps].sort((a, b) => b.perception - a.perception);
+function PerceptionChart({ rows: input }: { rows: AmReportProps["perceptionRows"] }) {
+  const rows = [...input].sort((a, b) => b.perception - a.perception);
   const W = 511;
-  const NAME_X = 168; // right edge of the capability-name gutter
-  const PLOT_L = 178;
+  const NAME_X = 176; // right edge of the capability-name gutter
+  const PLOT_L = 186;
   const PLOT_R = 402;
   const CX = (PLOT_L + PLOT_R) / 2; // centre axis (agreement with the panel)
   const HALF = (PLOT_R - PLOT_L) / 2;
@@ -467,12 +468,13 @@ function PerceptionChart({ gaps }: { gaps: AmReportProps["perceptionGaps"] }) {
   const PER = HALF / MAXMAG;
   const DETAIL_X = 509;
   const HEAD = 20;
-  const ROW = 18;
-  const BAR = 11;
+  const ROW = rows.length > 14 ? 14 : 17; // stay compact when all capabilities are shown
+  const BAR = rows.length > 14 ? 9 : 11;
+  const NAME_FS = rows.length > 14 ? 6.8 : 7.4;
   const H = HEAD + rows.length * ROW + 2;
   const gridTop = HEAD - 6;
   const gridBottom = H - 2;
-  const clip = (name: string) => (name.length > 42 ? name.slice(0, 41) + "..." : name);
+  const clip = (name: string) => (name.length > 40 ? name.slice(0, 39) + "..." : name);
   const grid = [CX - 2 * PER, CX - PER, CX + PER, CX + 2 * PER];
 
   return (
@@ -493,28 +495,36 @@ function PerceptionChart({ gaps }: { gaps: AmReportProps["perceptionGaps"] }) {
         {rows.map((r, i) => {
           const y0 = HEAD + i * ROW;
           const midY = y0 + ROW / 2;
+          const aligned = r.perception === 0;
           const over = r.perception > 0;
           const mag = Math.min(MAXMAG, Math.abs(r.perception));
           const len = mag * PER;
           const fill = over ? OVER : UNDER;
           return (
             <G key={r.name}>
-              <SvgText x={NAME_X} y={midY + 2.4} fill={INK} fontSize={7.4} textAnchor="end">
+              <SvgText x={NAME_X} y={midY + 2.3} fill={aligned ? MUTED : INK} fontSize={NAME_FS} textAnchor="end">
                 {clip(r.name)}
               </SvgText>
-              <Rect x={over ? CX : CX - len} y={midY - BAR / 2} width={len} height={BAR} rx={1.5} fill={fill} />
-              <SvgText
-                x={over ? CX + len - 3 : CX - len + 3}
-                y={midY + 2.3}
-                fill="#ffffff"
-                fontSize={6.5}
-                fontFamily="Helvetica-Bold"
-                textAnchor={over ? "end" : "start"}
-              >
-                {(over ? "+" : "-") + mag}
-              </SvgText>
-              <SvgText x={DETAIL_X} y={midY + 2.4} fill={MUTED} fontSize={6.8} textAnchor="end">
-                {`self L${r.self} vs panel L${r.expert}`}
+              {aligned ? (
+                // self agrees with the panel — a small neutral marker on the axis
+                <Rect x={CX - 2} y={midY - 2} width={4} height={4} rx={2} fill={FAINT} />
+              ) : (
+                <>
+                  <Rect x={over ? CX : CX - len} y={midY - BAR / 2} width={len} height={BAR} rx={1.5} fill={fill} />
+                  <SvgText
+                    x={over ? CX + len - 3 : CX - len + 3}
+                    y={midY + 2.2}
+                    fill="#ffffff"
+                    fontSize={6.3}
+                    fontFamily="Helvetica-Bold"
+                    textAnchor={over ? "end" : "start"}
+                  >
+                    {(over ? "+" : "-") + mag}
+                  </SvgText>
+                </>
+              )}
+              <SvgText x={DETAIL_X} y={midY + 2.3} fill={aligned ? FAINT : MUTED} fontSize={6.3} textAnchor="end">
+                {aligned ? `aligned · L${r.self}` : `self L${r.self} vs panel L${r.expert}`}
               </SvgText>
             </G>
           );
@@ -528,6 +538,10 @@ function PerceptionChart({ gaps }: { gaps: AmReportProps["perceptionGaps"] }) {
         <View style={s.perceptKey}>
           <View style={[s.perceptSwatch, { backgroundColor: UNDER }]} />
           <Text style={s.perceptKeyText}>Under-rates — self below the panel</Text>
+        </View>
+        <View style={s.perceptKey}>
+          <View style={[s.perceptSwatch, { backgroundColor: FAINT, borderRadius: 5 }]} />
+          <Text style={s.perceptKeyText}>Aligned with the panel</Text>
         </View>
         <Text style={s.perceptKeyNote}>Bar length and the number show the gap in levels.</Text>
       </View>
@@ -633,14 +647,14 @@ export function AmReportPdf(p: AmReportProps) {
           </View>
         </View>
 
-        {/* perception gaps — diverging over/under-rating chart */}
-        {p.perceptionGaps.length > 0 && (
+        {/* perception profile — diverging over/under-rating chart across all capabilities */}
+        {p.perceptionRows.length > 0 && (
           <View style={{ marginBottom: 18 }} wrap={false}>
             <SectionHead
               title="Perception profile"
-              sub="Where the self-assessment differs from the APEX Panel by a full level or more"
+              sub="Self-assessment vs the APEX Panel across every capability — where they over-rate, align, and under-rate"
             />
-            <PerceptionChart gaps={p.perceptionGaps} />
+            <PerceptionChart rows={p.perceptionRows} />
           </View>
         )}
 

@@ -98,9 +98,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .filter((r) => r.gap != null && r.gap < 0)
     .sort((a, b) => a.gap! - b.gap!)
     .map((r) => ({ name: r.name, expert: r.expert!, req: r.req }));
+  // for the narrative prose: only the meaningful divergences (a full level or more)
   const perceptionGaps = rows
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!))
+    .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
+  // for the perception chart: EVERY rated capability (aligned ones included), sorted from
+  // most over-rated to most under-rated so the full self-vs-panel profile reads at a glance
+  const perceptionRows = rows
+    .filter((r) => r.perception != null && r.self != null && r.expert != null)
+    .sort((a, b) => b.perception! - a.perception!)
     .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
 
   const clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[] = [];
@@ -183,7 +190,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       })),
       strengths,
       development,
-      perceptionGaps,
+      perceptionRows,
       clusters,
       narrative,
       narrativeSource,
