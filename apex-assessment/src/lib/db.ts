@@ -130,6 +130,14 @@ function migrate(db: Database.Database) {
     );
     for (const am of ROSTER) setSeg.run(am.segment, am.code);
   }
+  // Heal demo databases seeded BEFORE the roster names were made fictional: bring each
+  // seeded AM's name in line with ROSTER by code. Idempotent (no-op once names match). This
+  // is safe because the seeded 25 AMs have no in-app name-edit path — onboarding only fills
+  // brand-new accounts (codes past AM25), so this never clobbers a user-entered name.
+  {
+    const rename = db.prepare("UPDATE account_managers SET name = ? WHERE code = ? AND name <> ?");
+    for (const am of ROSTER) rename.run(am.name, am.code, am.name);
+  }
   // the self-assessor's five APEX framework answers per theme (Manager/Panel still use `note`)
   for (const col of ["situation", "actions", "results", "impact", "replication"]) {
     try {
