@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-23.
+Last updated: 2026-07-24.
 
 ---
 
@@ -20,18 +20,23 @@ Last updated: 2026-07-23.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-23): the demo roster now uses **fictional names** (legal —
-  no real Schneider employees); the self-assessor justification is **one mandatory
-  concrete-example note per theme** (a guided prompt — this replaced an earlier five-question
-  variant); the PDF's perception section is now a **generated diverging over/under-rating
-  chart**. Earlier this cycle (2026-07-22): a **mandatory one-note-per-theme** justification
-  for every lens; a **business Segment** attribute on every account (picked at
-  creation/onboarding) usable as an analytics filter and shown on the individual pages; a
-  single **centralized Filters window** on the dashboard holding Track + Segment + map
-  Capability; a **My Feedback** tab that releases each assessed person's own report once all
-  three lenses have submitted; and strengths/development redefined strictly (strength =
-  strictly above required, development = anything below). See the sections below and §14 (the
-  parcours).
+- Most recent additions (2026-07-24): the **per-lens Question Guide** (two guiding questions
+  per capability for Self / Manager / APEX Panel, from the APEX Question Guide workbook)
+  shown in every assessment; **assessment scheduling** (a superadmin calendar on the
+  individual page setting the manager's deadline and the APEX Panel call date/time, with a
+  server-enforced lockout once the day has passed and an "upcoming assessment" banner for
+  the assessed person); an **unrounded Avg column** (e.g. 2.3) on the capability detail
+  (page + PDF); the PDF perception section replaced by a **spider chart of perception by
+  theme** (Self / Manager / Panel webs); and a **big colored overall grade /3** under the
+  PDF cover's CONFIDENTIAL block (red below the expected overall, green at/above, expected
+  score printed beneath).
+- Earlier (2026-07-23): fictional demo roster names (legal); the self-assessor justification
+  as **one mandatory concrete-example note per theme** (guided prompt — replaced an earlier
+  five-question variant). Earlier (2026-07-22): mandatory one-note-per-theme justification
+  for every lens; the **business Segment** attribute + filter, shown on individual pages;
+  the **centralized Filters window** (Track + Segment + map Capability); the **My Feedback**
+  tab (released once all three lenses submit); strengths/development redefined strictly
+  (strength = strictly above required, development = anything below). See §14 (parcours).
 
 ## 2. The project
 
@@ -101,6 +106,33 @@ All of these live in the `theme_notes.note` column (one row per assessment per c
 `themeJustificationText(row)` returns that note; it still falls back to the legacy five
 framework columns if an old row only has those, so nothing pre-existing is lost.
 
+### The Question Guide (per capability, per lens)
+
+`CAPABILITY_QUESTIONS` in `seed-data.ts` embeds the APEX Question Guide workbook 1:1: for
+each of the 22 capabilities, TWO guiding questions per lens. Self-assessors get reflective
+prompts ("How do you build your strategic account plan…"); Manager and APEX Panel get the
+interview prompts they ask the person ("Tell me about a time when…"). The wizard shows the
+current lens's pair on every capability screen (the blue `qguide` block between the title
+and the level cards). The guide's L1/L2/L3 anchors were verified identical to the seeded
+rubric, so only the questions were added.
+
+### Assessment scheduling & windows
+
+Two per-AM dates, set by superadmins from the **individual page** ("📅 Assessment schedule"
+toggle opening native date / datetime pickers — `schedule-editor.tsx` + `saveSchedule`):
+
+- `manager_deadline` (date): the manager can assess up to and including that day; after it,
+  their assessment locks.
+- `panel_datetime` (date + time): when the assessed person and the APEX Panel hold the
+  assessment call. Shown to the assessed person on their own assessment page as an
+  "Upcoming assessment" banner; the panel can score until the END of that day (so scoring
+  during/after the call still works), then it locks.
+
+Locks are decided by `assessmentLock(am, lens)` in `queries.ts` and enforced in EVERY rate
+server action (`guard()`), not just the UI — the wizard renders read-only with a 🔒 banner
+when closed, and shows a 📅 info banner (deadline / call date) while the window is open.
+Clearing a date in the editor removes its limit.
+
 ### Hard product rules (enforced server-side — keep them)
 
 1. Evaluators must NEVER see other evaluators' scores (blind assessment).
@@ -114,6 +146,9 @@ framework columns if an old row only has those, so nothing pre-existing is lost.
 5. Every theme must be justified before an assessment can be submitted: every lens writes one
    note per theme (self-assessors from a guided prompt). Enforced server-side in
    `unjustifiedThemes()` (called by `submit`).
+6. Assessment windows are enforced server-side (`assessmentLock` in every rate action):
+   past the manager deadline / panel-call day, that lens can no longer rate, justify or
+   submit — the wizard going read-only is a reflection of the rule, not the rule itself.
 
 ## 3. Architecture
 
@@ -139,7 +174,9 @@ framework columns if an old row only has those, so nothing pre-existing is lost.
 - `sessions` (token PK, user_id, expires_at).
 - `account_managers` (id, code unique, name, account, zone ['MEA'|'SAM'|'India'|'Pacific'],
   track ['Acquisition'|'Saturation'], profile_complete, segment [one of `SEGMENTS`; seeded on
-  the roster and backfilled by migration, so effectively always set]).
+  the roster and backfilled by migration, so effectively always set], manager_deadline
+  [YYYY-MM-DD or null], panel_datetime [YYYY-MM-DDTHH:MM or null] — the assessment windows,
+  see §2).
 - `capabilities` (id, ord, name, cluster, src, req_acq, req_sat, l1, l2, l3).
 - `assignments` (user_id, am_id) — which AMs a user is linked to. For self assessors this is
   the one AM that IS them; for manager/panel it is who they evaluate. PK (user_id, am_id).
@@ -177,11 +214,14 @@ lens rather than a multi-checkbox.
     assessment (`/rate/[their single linked AM]`); no pick-someone list; self-assign is
     refused server-side; if no AM is linked they see a banner explaining the admin must link
     their profile.
-  - **Wizard** (`/rate/[amId]`): one capability per screen with the L1/L2/L3 anchors inline,
-    keyboard shortcuts (1/2/3 to rate, arrows to move), 700 ms debounced autosave, progress
-    dots, a review screen, then submit which locks the assessment. Required levels are never
-    sent to the client. Superadmin can reopen a submitted assessment from the individual
-    analysis page.
+  - **Wizard** (`/rate/[amId]`): one capability per screen with the L1/L2/L3 anchors inline
+    and the lens-specific **Question Guide** (two guiding questions, blue block) above the
+    level cards; keyboard shortcuts (1/2/3 to rate, arrows to move), 700 ms debounced
+    autosave, progress dots, a review screen, then submit which locks the assessment.
+    Required levels are never sent to the client. Superadmin can reopen a submitted
+    assessment from the individual analysis page. **Assessment windows** apply per lens: a
+    📅 banner shows the manager deadline / panel call while open, and past the window the
+    wizard goes read-only with a 🔒 banner (see §2 Assessment scheduling; server-enforced).
   - **Per-theme justification (mandatory)**: below the level cards, each capability screen
     shows the justification block for that capability's theme (cluster) — one required note.
     For a **self-assessor** it is a bigger/wider text box carrying the guided prompt (a concrete
@@ -209,22 +249,27 @@ lens rather than a multi-checkbox.
   - `/analysis/individuals` + `/analysis/am/[id]` (superadmin): Self vs Manager vs Panel per
     capability, gap-to-required, **strengths (panel STRICTLY above required)**, **development
     areas (panel BELOW required — all of them, uncapped)**, perception gaps (|self - panel| >=
-    1), and the theme justifications shown under each theme inside the capability detail. An
-    **Export PDF** button. (A capability merely AT required is on the baseline — never a
-    strength.)
+    1), and the theme justifications shown under each theme inside the capability detail,
+    which also carries an **Avg column** — the UNROUNDED three-lens mean (e.g. 2.3), because
+    rounding would make a 1.6 and a 2.4 read as the same level. An **Export PDF** button and
+    the **📅 Assessment schedule** editor (manager deadline + panel call) live in the header.
+    (A capability merely AT required is on the baseline — never a strength.)
   - **My Feedback** (`/feedback`, self-assessors only): the assessed person's own report —
     strengths, development areas, self-vs-panel perception gaps, a three-lens capability table
     with the theme justifications, and a **Download PDF** (the same PDF as the admin export).
     Gated by `allLensesSubmitted(am.id)`: until Self + Manager + APEX Panel have all submitted
     it shows a status checklist instead. The nav tab only appears for a linked self-assessor.
 - **PDF report** (`GET /analysis/am/[id]/pdf`, superadmin-only): a styled 4-page report
-  (`src/lib/pdf-report.tsx`): (1) cover, (2) overview = profile + strengths/development + a
-  **perception-profile chart** (a diverging over/under-rating bar chart, `PerceptionChart`,
-  drawn with @react-pdf SVG primitives — amber bars right = self over-rates vs the panel, blue
-  bars left = under-rates, bar length = the gap in levels), (3) narrative = strengths/weaknesses
-  prose + a definition of
-  every capability it names, (4) capability-detail table with theme notes. See §5–6 for how
-  the narrative and definitions are produced.
+  (`src/lib/pdf-report.tsx`): (1) cover — with, right under the CONFIDENTIAL block, a **big
+  bold overall grade /3** (the unrounded APEX Panel average across the track's applicable
+  capabilities, GREEN when at/above the expected overall, RED when below, with the expected
+  overall — the average required level — printed smaller beneath; "— / 3" until the panel
+  submits); (2) overview = profile + strengths/development + a **spider chart of perception
+  by theme** (`ThemeRadar`, @react-pdf SVG: one web per lens — Self amber, Manager violet,
+  APEX Panel green — across the six themes, each point that lens's average level in the
+  theme); (3) narrative = strengths/weaknesses prose + a definition of every capability it
+  names; (4) capability-detail table with theme notes and the unrounded **Avg** column.
+  See §5–6 for how the narrative and definitions are produced.
 - **Admin — Users & Access** (`/admin/users`, superadmin):
   - Create user with a **lens-aware picker** (`create-user-form.tsx`): Self shows a
     single-select "which Account Manager is this person"; Manager/Panel show a checkbox grid
@@ -432,9 +477,11 @@ The app is fully functional but three things stand between it and a company-wide
   "Avg APEX maturity" KPI as a rounded level, this repo's README, the floating APEX Assistant
   chatbot (role-scoped), uniform-per-region zone colouring, the zone-benchmark AM names + track
   ranking, the strict strengths/development redefinition, the My Feedback tab, the Segment
-  attribute + filter and centralized Filters window, and — most recently — fictional demo
-  roster names (legal), the single guided concrete-example self-justification note per theme
-  (which replaced a brief five-question variant), and the PDF perception-profile chart.
+  attribute + filter and centralized Filters window, fictional demo roster names (legal), the
+  single guided concrete-example self-justification note per theme (which replaced a brief
+  five-question variant), and — most recently — the per-lens Question Guide in the wizard,
+  assessment scheduling with server-enforced windows, the unrounded Avg column, the
+  perception-by-theme spider chart, and the big colored overall grade on the PDF cover.
 - `demo.bat` (repo root) is a double-click Windows launcher: installs Node LTS via winget if
   missing, downloads a branch zip, runs `npm ci` + `npm run build` when the zip changed, then
   `npm start -- -p 3000` and opens the browser. If you change which branch the demo ships,
@@ -455,19 +502,22 @@ model; the sections above give the mechanics.
    / map Capability), the zone performance map, training-focus list, and capability×zone heat
    map — all re-scope together from the filter URL params.
 4. Drill in: **Individuals → an AM** for the three-lens comparison, strengths (strictly above
-   required), development areas (all below), perception gaps and the per-theme justifications;
-   **Export PDF** for the written report (Kimi-written when reachable, deterministic otherwise).
-   Reopen a submitted assessment here if someone needs to edit it.
+   required), development areas (all below), perception gaps, the unrounded Avg column and the
+   per-theme justifications; **Export PDF** for the written report (Kimi-written when
+   reachable, deterministic otherwise). Set the **📅 Assessment schedule** here — the
+   manager's deadline and the APEX Panel call date/time — and reopen a submitted assessment
+   if someone needs to edit it.
 5. Ask the **APEX Assistant** (floating bubble) free-form questions over the full live data.
 
 **B. Self-assessor (the KAM being assessed)**
 1. Sign in. If their profile is not yet complete → **`/onboarding`**: name, account, region,
    track, and **segment**. Otherwise they go straight to their own assessment.
 2. **`/rate/[their AM]`** opens directly (no picking anyone else; `/rate` just redirects here).
-   For each of the 22 capabilities they pick L1/L2/L3 (required levels are hidden), and for
-   each of the 6 themes they write **one concrete-example justification note** from the guided
-   prompt (situation, actions, results, impact, and where relevant replication) — mandatory.
-   Everything autosaves.
+   If a panel call is scheduled, an **Upcoming assessment** banner shows its date and time.
+   For each of the 22 capabilities they reflect on the two **Question Guide** prompts and pick
+   L1/L2/L3 (required levels are hidden), and for each of the 6 themes they write **one
+   concrete-example justification note** from the guided prompt (situation, actions, results,
+   impact, and where relevant replication) — mandatory. Everything autosaves.
 3. The review screen shows a completion badge per theme; **Submit** unlocks only once all 22
    are rated and all 6 themes are fully answered, then the assessment locks.
 4. Once their Manager and the APEX Panel have also submitted, a **My Feedback** tab appears:
@@ -478,7 +528,10 @@ model; the sections above give the mechanics.
 **C. Manager / APEX Panel evaluator**
 1. Sign in → **`/rate`**. Build the task list by typing a name to self-assign (or the admin
    pre-assigned them). One evaluator per AM per lens.
-2. **`/rate/[amId]`**: rate the 22 capabilities and write ONE **mandatory justification note**
-   per theme. Review → **Submit** (blocked until every theme has a note); the assessment locks.
+2. **`/rate/[amId]`**: each capability screen offers the two lens-specific **Question Guide**
+   interview prompts; rate the 22 capabilities and write ONE **mandatory justification note**
+   per theme. A 📅 banner shows the manager's deadline / the panel's call date while the
+   window is open; past it the wizard locks read-only (server-enforced). Review → **Submit**
+   (blocked until every theme has a note); the assessment locks.
 3. They can view the shared dashboard, but never other evaluators' scores or individual
    results (those stay superadmin-only). The Assistant is fed only their own scoped data.

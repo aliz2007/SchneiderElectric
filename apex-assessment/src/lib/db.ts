@@ -122,6 +122,17 @@ function migrate(db: Database.Database) {
   } catch {
     /* column already exists */
   }
+  // assessment schedule, set by superadmins on the individual page:
+  //  - manager_deadline (YYYY-MM-DD): the manager can no longer assess once this date has passed
+  //  - panel_datetime (YYYY-MM-DDTHH:MM): when the assessed person and the APEX Panel hold
+  //    their assessment call; the panel can no longer assess once that day has passed
+  for (const col of ["manager_deadline", "panel_datetime"]) {
+    try {
+      db.exec(`ALTER TABLE account_managers ADD COLUMN ${col} TEXT`);
+    } catch {
+      /* column already exists */
+    }
+  }
   // backfill the roster's segment on databases seeded before segments existed, matching by
   // code and never overwriting a segment someone has already chosen
   {

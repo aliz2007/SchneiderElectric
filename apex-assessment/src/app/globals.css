@@ -1111,6 +1111,24 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .framework-intro { font-size: 13px; color: var(--ink-2); margin: 0 0 12px; line-height: 1.55; font-weight: 550; }
 .framework-note { width: 100%; resize: vertical; }
 
+/* ---- per-capability question guide (lens-specific, from the APEX Question Guide) ---- */
+.qguide {
+  margin: 14px 0 18px; padding: 14px 16px 6px;
+  border: 1px solid rgba(46, 124, 246, 0.28); border-radius: 14px;
+  background: rgba(46, 124, 246, 0.06);
+}
+.qguide-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue); font-weight: 750;
+}
+.qguide-sub { font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 500; }
+.qguide-q { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.qguide-q p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.qguide-num {
+  flex-shrink: 0; margin-top: 1px; padding: 2px 7px; border-radius: 6px;
+  font-size: 11px; font-weight: 800; color: #fff; background: var(--blue);
+}
+
 /* ---- centralized dashboard filter window ---- */
 .filter-bar { position: relative; display: inline-block; }
 .filter-toggle {
@@ -1141,3 +1159,12 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 
 .zmap-active-cap { font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
 .zmap-active-cap.muted { color: var(--muted); font-weight: 500; }
+
+/* ---- assessment schedule editor (superadmin, individual page) ---- */
+.sched { position: relative; display: inline-block; }
+.sched-panel { min-width: 320px; }
+.sched-panel .input { color-scheme: dark; }
+.sched-hint { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.sched-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sched-saved { font-size: 12px; font-weight: 700; color: var(--se-green-bright); }
+.badge-sched { background: rgba(224, 173, 85, 0.16); color: #e8c07a; }

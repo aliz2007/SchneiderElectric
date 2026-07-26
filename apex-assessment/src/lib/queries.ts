@@ -10,6 +10,8 @@ export type AM = {
   track: "Acquisition" | "Saturation";
   segment: string | null; // business segment (Power & Grid / Energy & Chemicals / CS&P / Multi-segment)
   profile_complete: number; // 0 = created for a person who still needs to fill in their details
+  manager_deadline: string | null; // YYYY-MM-DD — manager can no longer assess past this date
+  panel_datetime: string | null; // YYYY-MM-DDTHH:MM — scheduled call; panel can no longer assess past that day
 };
 
 export type Capability = {
@@ -57,6 +59,45 @@ export function updateAccountManagerProfile(
       "UPDATE account_managers SET name = ?, account = ?, zone = ?, track = ?, segment = ?, profile_complete = 1 WHERE id = ?"
     )
     .run(p.name.trim(), p.account.trim(), p.zone, p.track, p.segment, amId);
+}
+
+/** Superadmin: set (or clear) an AM's assessment schedule. */
+export function setAssessmentSchedule(
+  amId: number,
+  s: { managerDeadline: string | null; panelDatetime: string | null }
+) {
+  getDb()
+    .prepare("UPDATE account_managers SET manager_deadline = ?, panel_datetime = ? WHERE id = ?")
+    .run(s.managerDeadline, s.panelDatetime, amId);
+}
+
+/** Human-readable date ("12 Aug 2026") / datetime ("12 Aug 2026, 14:30") for schedule strings. */
+export function formatScheduleDate(value: string, withTime = false): string {
+  const d = new Date(withTime && !value.includes("T") ? `${value}T00:00` : value);
+  if (Number.isNaN(d.getTime())) return value;
+  const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  if (!withTime || !value.includes("T")) return date;
+  return `${date}, ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+/**
+ * The assessment-window gate. Deadlines are inclusive of their day: the manager can work
+ * until the end of manager_deadline; the APEX Panel until the end of the panel-call day
+ * (so they can still score during and right after the call). Returns null when open, or
+ * a human-readable reason when that lens can no longer assess this AM.
+ */
+export function assessmentLock(am: AM, lens: Lens): string | null {
+  const pastEndOfDay = (value: string) => {
+    const end = new Date(`${value.slice(0, 10)}T23:59:59.999`);
+    return !Number.isNaN(end.getTime()) && Date.now() > end.getTime();
+  };
+  if (lens === "manager" && am.manager_deadline && pastEndOfDay(am.manager_deadline)) {
+    return `The manager assessment window closed on ${formatScheduleDate(am.manager_deadline)}.`;
+  }
+  if (lens === "expert" && am.panel_datetime && pastEndOfDay(am.panel_datetime)) {
+    return `The APEX Panel assessment took place on ${formatScheduleDate(am.panel_datetime, true)} and is now closed.`;
+  }
+  return null;
 }
 
 /** The display name of whoever submitted (or owns the draft of) each lens for an AM.

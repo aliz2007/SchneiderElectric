@@ -12,6 +12,8 @@ export type WizardCap = {
   l1: string;
   l2: string;
   l3: string;
+  /** the two lens-specific guiding questions from the APEX Question Guide */
+  questions: string[];
 };
 
 export type WizardInitial = Record<number, { level: number | null }>;
@@ -32,6 +34,8 @@ export default function Wizard({
   initial,
   initialThemeData,
   submitted,
+  lockedMessage = null,
+  scheduleNote = null,
 }: {
   am: { id: number; name: string; account: string; zone: string; track: string };
   lensLabel: string;
@@ -40,6 +44,10 @@ export default function Wizard({
   initial: WizardInitial;
   initialThemeData: ThemeData;
   submitted: boolean;
+  /** set when the assessment window has closed for this lens — everything goes read-only */
+  lockedMessage?: string | null;
+  /** upcoming deadline / panel-call info shown while the window is still open */
+  scheduleNote?: string | null;
 }) {
   // ordered, de-duplicated list of themes (clusters)
   const themes = useMemo(() => {
@@ -73,6 +81,9 @@ export default function Wizard({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  // read-only when submitted OR the assessment window has closed for this lens
+  const frozen = submitted || !!lockedMessage;
+
   const answeredCount = useMemo(() => caps.filter((c) => answers[c.id]?.level != null).length, [caps, answers]);
   const allAnswered = answeredCount === caps.length;
 
@@ -88,16 +99,17 @@ export default function Wizard({
 
   const choose = useCallback(
     (capId: number, level: number) => {
-      if (submitted) return;
+      if (frozen) return;
       setAnswers((prev) => ({ ...prev, [capId]: { level } }));
       setSaveState("saving");
       saveRating(am.id, capId, level).then(() => setSaveState("saved")).catch(() => setSaveState("error"));
     },
-    [am.id, submitted]
+    [am.id, frozen]
   );
 
   const setThemeField = useCallback(
     (cluster: string, field: string, value: string) => {
+      if (frozen) return;
       setThemeData((prev) => ({ ...prev, [cluster]: { ...prev[cluster], [field]: value } }));
       const key = `${cluster}|${field}`;
       if (noteTimers.current[key]) clearTimeout(noteTimers.current[key]);
@@ -106,12 +118,12 @@ export default function Wizard({
         saveThemeNote(am.id, cluster, field, value).then(() => setSaveState("saved")).catch(() => setSaveState("error"));
       }, 700);
     },
-    [am.id]
+    [am.id, frozen]
   );
 
   // keyboard shortcuts: 1/2/3 select level, arrows navigate
   useEffect(() => {
-    if (submitted || onReview) return;
+    if (frozen || onReview) return;
     const h = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
@@ -121,7 +133,7 @@ export default function Wizard({
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [cap, idx, caps.length, choose, submitted, onReview]);
+  }, [cap, idx, caps.length, choose, frozen, onReview]);
 
   const doSubmit = () => {
     setSubmitError(null);
@@ -156,7 +168,7 @@ export default function Wizard({
           rows={isSelf ? 5 : 3}
           value={themeData[cluster]?.note ?? ""}
           onChange={(e) => setThemeField(cluster, "note", e.target.value)}
-          disabled={submitted}
+          disabled={frozen}
           placeholder={
             isSelf
               ? "Describe a concrete example — situation, actions taken, results, impact, and where relevant how it could be replicated."
@@ -193,11 +205,35 @@ export default function Wizard({
           reopened.
         </div>
       )}
+      {!submitted && lockedMessage && (
+        <div className="banner banner-warn">
+          🔒 {lockedMessage} Contact your administrator if the window needs to be extended.
+        </div>
+      )}
+      {!submitted && !lockedMessage && scheduleNote && (
+        <div className="banner banner-info">📅 {scheduleNote}</div>
+      )}
 
       {!onReview && cap && (
         <div className="card card-pad">
           <div className="cluster-kicker">{cap.cluster}</div>
           <h2 className="cap-title">{cap.name}</h2>
+          {cap.questions.length > 0 && (
+            <div className="qguide">
+              <div className="qguide-head">
+                Question guide
+                <span className="qguide-sub">
+                  {isSelf ? "Reflect on these before picking your level" : "Ask these during the assessment conversation"}
+                </span>
+              </div>
+              {cap.questions.map((q, i) => (
+                <div key={i} className="qguide-q">
+                  <span className="qguide-num">Q{i + 1}</span>
+                  <p>{q}</p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="level-cards">
             {LEVEL_META.map((m) => {
               const selected = answers[cap.id]?.level === m.level;
@@ -207,7 +243,7 @@ export default function Wizard({
                   type="button"
                   className={`level-card${selected ? " selected" : ""}`}
                   onClick={() => choose(cap.id, m.level)}
-                  disabled={submitted}
+                  disabled={frozen}
                 >
                   <div className="lvl-head">
                     <span className="lvl-num">{m.tag}</span>
@@ -240,7 +276,7 @@ export default function Wizard({
                     {a?.level ? `L${a.level}` : "—"}
                   </span>
                   <span className="review-cap">{c.name}</span>
-                  {!submitted && (
+                  {!frozen && (
                     <button className="btn btn-sm btn-ghost" type="button" onClick={() => setIdx(i)}>Edit</button>
                   )}
                 </div>
@@ -261,7 +297,7 @@ export default function Wizard({
                 <div key={t} className="review-row">
                   <span className={`badge ${done ? "badge-green" : "badge-amber"}`}>{done ? "✓ complete" : "incomplete"}</span>
                   <span className="review-cap">{t}</span>
-                  {!submitted && (
+                  {!frozen && (
                     <button className="btn btn-sm btn-ghost" type="button" onClick={() => jumpToTheme(t)}>Edit</button>
                   )}
                 </div>
@@ -270,7 +306,7 @@ export default function Wizard({
           </div>
 
           {submitError && <div className="form-error" style={{ marginTop: 14 }}>{submitError}</div>}
-          {!submitted && (
+          {!frozen && (
             <div style={{ display: "flex", gap: 10, marginTop: 18, alignItems: "center", flexWrap: "wrap" }}>
               <button className="btn btn-primary" type="button" disabled={!canSubmit || submitting} onClick={doSubmit}>
                 {submitting ? "Submitting…" : "Submit assessment"}
@@ -334,7 +370,7 @@ export default function Wizard({
         </div>
       </div>
 
-      {!submitted && (
+      {!frozen && (
         <aside className="wizard-help">
           <h3 className="wizard-help-title">
             {isSelf ? "How to complete your self-assessment" : "How to run this assessment"}

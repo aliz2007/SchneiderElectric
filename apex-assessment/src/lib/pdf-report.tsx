@@ -1,4 +1,4 @@
-import { Document, G, Image, Line, Page, Rect, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
+import { Document, G, Image, Line, Page, Polygon, Rect, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 import type { Narrative } from "./report-narrative";
 
@@ -32,7 +32,12 @@ export type AmReportProps = {
   lensStatus: { label: string; submitted: boolean; rater?: string }[];
   strengths: { name: string; expert: number; req: number | null }[];
   development: { name: string; expert: number; req: number | null }[];
-  perceptionRows: { name: string; perception: number; self?: number; expert?: number }[];
+  /** per-theme (cluster) average level per lens, for the perception radar */
+  themeRadar: { theme: string; self: number | null; manager: number | null; expert: number | null }[];
+  /** overall APEX Panel average across the track's applicable capabilities (unrounded, /3) */
+  overallAvg: number | null;
+  /** overall expected level — average of the required levels on their track (/3) */
+  overallReq: number | null;
   clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[];
   narrative: Narrative;
   narrativeSource: "kimi" | "auto";
@@ -159,7 +164,7 @@ const s = StyleSheet.create({
   td: { fontSize: 9 },
   clusterRow: { backgroundColor: "#eef7f1", paddingVertical: 4, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: LINE },
   clusterText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: GREEN_DEEP, letterSpacing: 1 },
-  cellCap: { width: "36%" },
+  cellCap: { width: "30%" },
   cellNum: { width: "11.6%", alignItems: "center" },
   cellText: { width: "11.6%", textAlign: "center" },
 
@@ -210,6 +215,9 @@ const s = StyleSheet.create({
   coverName: { fontSize: 34, fontFamily: "Helvetica-Bold", letterSpacing: -0.6, lineHeight: 1.15, marginTop: 12 },
   coverAccount: { fontSize: 12, color: MUTED, marginTop: 8, marginBottom: 16 },
   coverMeta: { paddingHorizontal: 46, paddingBottom: 44 },
+  coverGradeWrap: { marginTop: 12 },
+  coverGrade: { fontSize: 36, fontFamily: "Helvetica-Bold", letterSpacing: -0.5 },
+  coverGradeExp: { fontSize: 9, color: MUTED, marginTop: 3 },
   coverMetaLine: { height: 1, backgroundColor: LINE, marginBottom: 12 },
   coverMetaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
   coverConf: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#b03a3a", letterSpacing: 1.4 },
@@ -380,6 +388,31 @@ function CoverPage(p: AmReportProps) {
           <View>
             <Text style={s.coverConf}>CONFIDENTIAL</Text>
             <Text style={s.coverMetaText}>Prepared for internal talent-development use only.</Text>
+            {/* headline grade: unrounded APEX Panel average across the track's capabilities,
+                green when at/above the expected overall, red when below */}
+            {p.overallAvg != null && p.overallReq != null ? (
+              <View style={s.coverGradeWrap}>
+                <Text
+                  style={[
+                    s.coverGrade,
+                    { color: p.overallAvg >= p.overallReq ? GREEN_DEEP : "#c92a2a" },
+                  ]}
+                >
+                  {p.overallAvg.toFixed(1)} / 3
+                </Text>
+                <Text style={s.coverGradeExp}>
+                  Expected overall · {p.overallReq.toFixed(1)} / 3
+                </Text>
+              </View>
+            ) : (
+              <View style={s.coverGradeWrap}>
+                <Text style={[s.coverGrade, { color: FAINT }]}>— / 3</Text>
+                <Text style={s.coverGradeExp}>
+                  Overall score appears once the APEX Panel assessment is submitted
+                  {p.overallReq != null ? ` · expected ${p.overallReq.toFixed(1)} / 3` : ""}
+                </Text>
+              </View>
+            )}
           </View>
           <Text style={s.coverMetaText}>Generated {p.generatedAt}</Text>
         </View>
@@ -430,9 +463,10 @@ function NarrativePage(p: AmReportProps) {
   );
 }
 
-// colours for the perception (over/under-rating) chart
-const OVER = "#e0912f"; // amber — self rated ABOVE the panel (over-rates)
-const UNDER = "#4a82c9"; // blue — self rated BELOW the panel (under-rates)
+// lens colours for the perception radar (self / manager / APEX Panel webs)
+const RADAR_SELF = "#e0912f"; // amber
+const RADAR_MANAGER = "#7c5cd6"; // violet
+const RADAR_PANEL = GREEN; // Schneider green - the authoritative lens
 
 // @react-pdf's SVG <Text> type omits fontSize/fontFamily, though its renderer honours
 // them — widen the typing so the chart labels can be sized without a cast at each call.
@@ -448,102 +482,119 @@ type SvgTextProps = {
 const SvgText = Text as unknown as (props: SvgTextProps) => ReactElement;
 
 /**
- * Diverging bar chart of the person's perception profile across EVERY rated capability.
- * Each capability's self rating is compared to the APEX Panel: a bar leaves the centre axis
- * right (amber) when they over-rate, left (blue) when they under-rate, its length the size of
- * the gap in levels; a capability where self and panel agree sits on the axis as a small grey
- * "aligned" dot. Drawn with @react-pdf SVG primitives so it is generated from the data, not a
- * static image. Rows are ordered most over- to most under-rated so the shape reads as one
- * profile — where the person is confident, aligned, and modest, all at once.
+ * Spider (radar) chart of perception by theme: for each of the six capability themes
+ * (clusters), the average level given by Self, Manager and the APEX Panel is plotted on
+ * its own web, one colour per lens. Where the three webs hug each other, everyone sees
+ * the person the same way; where they pull apart, perception differs. Drawn with
+ * @react-pdf SVG primitives - generated from the data, not a static image.
  */
-function PerceptionChart({ rows: input }: { rows: AmReportProps["perceptionRows"] }) {
-  const rows = [...input].sort((a, b) => b.perception - a.perception);
+function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
+  const themes = data;
+  const n = themes.length;
+  if (n < 3) return null;
   const W = 511;
-  const NAME_X = 176; // right edge of the capability-name gutter
-  const PLOT_L = 186;
-  const PLOT_R = 402;
-  const CX = (PLOT_L + PLOT_R) / 2; // centre axis (agreement with the panel)
-  const HALF = (PLOT_R - PLOT_L) / 2;
-  const MAXMAG = 2; // levels are 1-3, so the gap is at most 2
-  const PER = HALF / MAXMAG;
-  const DETAIL_X = 509;
-  const HEAD = 20;
-  const ROW = rows.length > 14 ? 14 : 17; // stay compact when all capabilities are shown
-  const BAR = rows.length > 14 ? 9 : 11;
-  const NAME_FS = rows.length > 14 ? 6.8 : 7.4;
-  const H = HEAD + rows.length * ROW + 2;
-  const gridTop = HEAD - 6;
-  const gridBottom = H - 2;
-  const clip = (name: string) => (name.length > 40 ? name.slice(0, 39) + "..." : name);
-  const grid = [CX - 2 * PER, CX - PER, CX + PER, CX + 2 * PER];
+  const H = 292;
+  const CX = W / 2;
+  const CY = 146;
+  const R = 96; // radius of the L3 ring
+  const angle = (i: number) => (-90 + (360 / n) * i) * (Math.PI / 180);
+  const pt = (i: number, v: number): [number, number] => [
+    CX + Math.cos(angle(i)) * (R * v) / 3,
+    CY + Math.sin(angle(i)) * (R * v) / 3,
+  ];
+  const ringPoints = (v: number) =>
+    themes.map((_, i) => pt(i, v).map((c) => c.toFixed(1)).join(",")).join(" ");
+
+  // two-line labels so long theme names stay clear of the web
+  const splitLabel = (name: string): string[] => {
+    const words = name.split(" ");
+    if (words.length < 2) return [name];
+    let best = 1;
+    let bestDiff = Infinity;
+    for (let i = 1; i < words.length; i++) {
+      const a = words.slice(0, i).join(" ").length;
+      const b = words.slice(i).join(" ").length;
+      if (Math.abs(a - b) < bestDiff) { bestDiff = Math.abs(a - b); best = i; }
+    }
+    return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+  };
+
+  const LENSES_META = [
+    { key: "self" as const, label: "Self", color: RADAR_SELF },
+    { key: "manager" as const, label: "Manager", color: RADAR_MANAGER },
+    { key: "expert" as const, label: "APEX Panel", color: RADAR_PANEL },
+  ];
+  const active = LENSES_META.filter((l) => themes.some((t) => t[l.key] != null));
+  if (active.length === 0) return null;
 
   return (
     <View wrap={false}>
-      <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ marginTop: 4 }}>
-        {/* axis labels */}
-        <SvgText x={(PLOT_L + CX) / 2} y={10} fill={UNDER} fontSize={7} fontFamily="Helvetica-Bold" textAnchor="middle">
-          UNDER-RATES
-        </SvgText>
-        <SvgText x={(CX + PLOT_R) / 2} y={10} fill={OVER} fontSize={7} fontFamily="Helvetica-Bold" textAnchor="middle">
-          OVER-RATES
-        </SvgText>
-        {/* faint gridlines at +/- 1 and +/- 2 levels, solid centre axis */}
-        {grid.map((x, i) => (
-          <Line key={i} x1={x} y1={gridTop} x2={x} y2={gridBottom} stroke={LINE} strokeWidth={0.75} />
+      <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ marginTop: 2 }}>
+        {/* level rings + spokes */}
+        {[1, 2, 3].map((v) => (
+          <Polygon key={v} points={ringPoints(v)} fill="none" stroke={LINE} strokeWidth={v === 3 ? 1.1 : 0.75} />
         ))}
-        <Line x1={CX} y1={gridTop} x2={CX} y2={gridBottom} stroke={FAINT} strokeWidth={1} />
-        {rows.map((r, i) => {
-          const y0 = HEAD + i * ROW;
-          const midY = y0 + ROW / 2;
-          const aligned = r.perception === 0;
-          const over = r.perception > 0;
-          const mag = Math.min(MAXMAG, Math.abs(r.perception));
-          const len = mag * PER;
-          const fill = over ? OVER : UNDER;
+        {themes.map((_, i) => {
+          const [x, y] = pt(i, 3);
+          return <Line key={i} x1={CX} y1={CY} x2={x} y2={y} stroke={LINE} strokeWidth={0.75} />;
+        })}
+        {/* ring level markers along the first (top) spoke */}
+        {[1, 2, 3].map((v) => (
+          <SvgText key={v} x={CX + 4} y={CY - (R * v) / 3 - 2} fill={FAINT} fontSize={6}>
+            {`L${v}`}
+          </SvgText>
+        ))}
+        {/* one web per lens with submitted data */}
+        {active.map((l) => {
+          const points = themes
+            .map((t, i) => pt(i, t[l.key] ?? 0).map((c) => c.toFixed(1)).join(","))
+            .join(" ");
           return (
-            <G key={r.name}>
-              <SvgText x={NAME_X} y={midY + 2.3} fill={aligned ? MUTED : INK} fontSize={NAME_FS} textAnchor="end">
-                {clip(r.name)}
-              </SvgText>
-              {aligned ? (
-                // self agrees with the panel — a small neutral marker on the axis
-                <Rect x={CX - 2} y={midY - 2} width={4} height={4} rx={2} fill={FAINT} />
-              ) : (
-                <>
-                  <Rect x={over ? CX : CX - len} y={midY - BAR / 2} width={len} height={BAR} rx={1.5} fill={fill} />
-                  <SvgText
-                    x={over ? CX + len - 3 : CX - len + 3}
-                    y={midY + 2.2}
-                    fill="#ffffff"
-                    fontSize={6.3}
-                    fontFamily="Helvetica-Bold"
-                    textAnchor={over ? "end" : "start"}
-                  >
-                    {(over ? "+" : "-") + mag}
-                  </SvgText>
-                </>
-              )}
-              <SvgText x={DETAIL_X} y={midY + 2.3} fill={aligned ? FAINT : MUTED} fontSize={6.3} textAnchor="end">
-                {aligned ? `aligned · L${r.self}` : `self L${r.self} vs panel L${r.expert}`}
-              </SvgText>
+            <G key={l.key}>
+              <Polygon points={points} fill={l.color} fillOpacity={0.11} stroke={l.color} strokeWidth={1.5} />
+              {themes.map((t, i) => {
+                const [x, y] = pt(i, t[l.key] ?? 0);
+                return <Rect key={i} x={x - 1.6} y={y - 1.6} width={3.2} height={3.2} rx={1.6} fill={l.color} />;
+              })}
+            </G>
+          );
+        })}
+        {/* theme labels around the web */}
+        {themes.map((t, i) => {
+          const a = angle(i);
+          const lx = CX + Math.cos(a) * (R + 16);
+          const ly = CY + Math.sin(a) * (R + 16);
+          const cos = Math.cos(a);
+          const anchor: "start" | "middle" | "end" = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
+          const rows = splitLabel(t.theme);
+          const baseY = ly + (Math.sin(a) > 0.35 ? 6 : Math.sin(a) < -0.35 ? -4 : 0);
+          return (
+            <G key={t.theme}>
+              {rows.map((row, ri) => (
+                <SvgText
+                  key={ri}
+                  x={lx}
+                  y={baseY + ri * 9 - (rows.length - 1) * 4}
+                  fill={INK}
+                  fontSize={7.2}
+                  fontFamily="Helvetica-Bold"
+                  textAnchor={anchor}
+                >
+                  {row}
+                </SvgText>
+              ))}
             </G>
           );
         })}
       </Svg>
       <View style={s.perceptLegend}>
-        <View style={s.perceptKey}>
-          <View style={[s.perceptSwatch, { backgroundColor: OVER }]} />
-          <Text style={s.perceptKeyText}>Over-rates — self above the panel</Text>
-        </View>
-        <View style={s.perceptKey}>
-          <View style={[s.perceptSwatch, { backgroundColor: UNDER }]} />
-          <Text style={s.perceptKeyText}>Under-rates — self below the panel</Text>
-        </View>
-        <View style={s.perceptKey}>
-          <View style={[s.perceptSwatch, { backgroundColor: FAINT, borderRadius: 5 }]} />
-          <Text style={s.perceptKeyText}>Aligned with the panel</Text>
-        </View>
-        <Text style={s.perceptKeyNote}>Bar length and the number show the gap in levels.</Text>
+        {active.map((l) => (
+          <View key={l.key} style={s.perceptKey}>
+            <View style={[s.perceptSwatch, { backgroundColor: l.color }]} />
+            <Text style={s.perceptKeyText}>{l.label}</Text>
+          </View>
+        ))}
+        <Text style={s.perceptKeyNote}>Each point is the lens's average level (L1-L3) across the theme's capabilities.</Text>
       </View>
     </View>
   );
@@ -648,13 +699,13 @@ export function AmReportPdf(p: AmReportProps) {
         </View>
 
         {/* perception profile — diverging over/under-rating chart across all capabilities */}
-        {p.perceptionRows.length > 0 && (
+        {p.themeRadar.length >= 3 && (
           <View style={{ marginBottom: 18 }} wrap={false}>
             <SectionHead
-              title="Perception profile"
-              sub="Self-assessment vs the APEX Panel across every capability — where they over-rate, align, and under-rate"
+              title="Perception by theme"
+              sub="Average level per theme — the Self, Manager and APEX Panel webs overlaid"
             />
-            <PerceptionChart rows={p.perceptionRows} />
+            <ThemeRadar data={p.themeRadar} />
           </View>
         )}
 
@@ -676,6 +727,7 @@ export function AmReportPdf(p: AmReportProps) {
             <Text style={[s.th, s.cellText]}>Self</Text>
             <Text style={[s.th, s.cellText]}>Manager</Text>
             <Text style={[s.th, s.cellText]}>APEX</Text>
+            <Text style={[s.th, s.cellText]}>Avg</Text>
             <Text style={[s.th, s.cellText]}>Gap</Text>
           </View>
           {p.clusters.map((cl) => (
@@ -707,6 +759,19 @@ export function AmReportPdf(p: AmReportProps) {
                   </View>
                   <View style={s.cellNum}>
                     <Lvl level={r.expert} />
+                  </View>
+                  <View style={s.cellNum}>
+                    {/* unrounded three-lens mean, so a 1.6 and a 2.4 stay distinguishable */}
+                    {(() => {
+                      const scores = [r.self, r.manager, r.expert].filter((v): v is number => v != null);
+                      return scores.length === 0 ? (
+                        <Text style={s.na}>—</Text>
+                      ) : (
+                        <Text style={[s.td, { fontFamily: "Helvetica-Bold" }]}>
+                          {(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}
+                        </Text>
+                      );
+                    })()}
                   </View>
                   <View style={s.cellNum}>
                     {r.gap == null ? (

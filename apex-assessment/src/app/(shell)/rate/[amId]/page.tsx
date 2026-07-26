@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import {
+  assessmentLock,
+  formatScheduleDate,
   getAM,
   getOrCreateAssessment,
   getRatings,
@@ -8,7 +10,7 @@ import {
   isAssigned,
   listCapabilities,
 } from "@/lib/queries";
-import { LENS_LABELS } from "@/lib/seed-data";
+import { CAPABILITY_QUESTIONS, LENS_LABELS } from "@/lib/seed-data";
 import Wizard, { type ThemeData, type WizardCap, type WizardInitial } from "./wizard";
 
 export default async function RateAmPage({ params }: { params: Promise<{ amId: string }> }) {
@@ -29,8 +31,24 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
   const assessment = getOrCreateAssessment(amId, user.lens, user.id);
   const ratings = getRatings(assessment.id);
 
+  // Assessment window: past the manager deadline / panel-call day the lens is locked
+  // (also enforced in every server action). While open, surface the relevant date.
+  const lockedMessage = assessmentLock(am, user.lens);
+  let scheduleNote: string | null = null;
+  if (!lockedMessage) {
+    if (user.lens === "self" && am.panel_datetime) {
+      scheduleNote = `Upcoming assessment: your call with the APEX Panel is scheduled for ${formatScheduleDate(am.panel_datetime, true)}.`;
+    } else if (user.lens === "manager" && am.manager_deadline) {
+      scheduleNote = `Deadline: complete this assessment by ${formatScheduleDate(am.manager_deadline)} (end of day).`;
+    } else if (user.lens === "expert" && am.panel_datetime) {
+      scheduleNote = `The assessment call with ${am.name} is scheduled for ${formatScheduleDate(am.panel_datetime, true)}. Scoring closes at the end of that day.`;
+    }
+  }
+
   // IMPORTANT: required levels are deliberately NOT passed to the client —
   // the brief mandates they stay hidden during assessment to avoid anchoring bias.
+  // Each capability also carries the lens-specific question guide (two guiding
+  // questions from the APEX Question Guide, different per Self / Manager / Panel).
   const caps: WizardCap[] = listCapabilities().map((c) => ({
     id: c.id,
     name: c.name,
@@ -38,6 +56,7 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
     l1: c.l1,
     l2: c.l2,
     l3: c.l3,
+    questions: CAPABILITY_QUESTIONS[c.name]?.[user.lens!] ?? [],
   }));
 
   const initial: WizardInitial = {};
@@ -66,6 +85,8 @@ export default async function RateAmPage({ params }: { params: Promise<{ amId: s
       initial={initial}
       initialThemeData={initialThemeData}
       submitted={assessment.status === "submitted"}
+      lockedMessage={lockedMessage}
+      scheduleNote={scheduleNote}
     />
   );
 }

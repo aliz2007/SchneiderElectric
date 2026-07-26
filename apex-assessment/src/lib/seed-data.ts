@@ -315,6 +315,124 @@ export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 export const SELF_JUSTIFICATION_PROMPT =
   "Please share a concrete example to support your rating. You can structure it as: situation, actions taken, results, impact — and, where relevant, how this could be replicated.";
 
+// Interview / self-reflection question guide, 1:1 from the APEX Question Guide
+// workbook: two guiding questions per capability for EACH lens. Self-assessors get
+// reflection prompts ("How do you…"); Manager and APEX Panel get the interview
+// prompts they ask the person ("Tell me about a time…"). Shown on every capability
+// screen in the wizard, whatever the assessment type.
+export const CAPABILITY_QUESTIONS: Record<string, Record<Lens, string[]>> = {
+  "Account Management": {
+    self: ["How do you build your strategic account plan, and how do you use it to steer your priorities day to day?", "How do you keep your account plan relevant when the account changes?"],
+    manager: ["Tell me about a time when you used your account plan to align the virtual team and sponsors around clear priorities.", "Tell me about a time when a decision or resource shift on your account came directly from your planning."],
+    expert: ["How does your account plan help you anticipate shifts in the account and reposition Schneider ahead of them?", "Describe a situation where your account strategy delivered impact well beyond a single deal."],
+  },
+  "Strategic Account Ambition": {
+    self: ["How do you define your ambition and target position for an account, beyond growing the numbers?", "How do you get others to buy into the ambition you set for an account?"],
+    manager: ["Tell me about a time when you set an ambition for an account that went beyond its expected trajectory.", "Tell me about a time when your ambition for an account pulled sponsors or the team behind a bigger move."],
+    expert: ["How do you shape an account ambition that unlocks bigger moves and rallies sponsors around it?", "Describe a situation where your ambition reframed what the account could become for Schneider."],
+  },
+  "Consultative Selling": {
+    self: ["How do you uncover what's really driving a customer before positioning any Schneider offer?", "How do you link what the customer needs to clear business outcomes rather than to product features?"],
+    manager: ["Tell me about a time when you moved a customer conversation from products and features onto their business priorities.", "Tell me about a time when your questioning changed the direction of an opportunity."],
+    expert: ["How do you bring a customer a perspective on their own business that reframes how they think?", "Describe a situation where a consultative approach opened an opportunity competitors did not see."],
+  },
+  "Negotiation": {
+    self: ["How do you prepare for an important negotiation, and what guides your approach before price comes up?", "How do you protect or create value in a negotiation instead of conceding on price?"],
+    manager: ["Tell me about a time when a negotiation you led strengthened Schneider's position rather than just closing the deal.", "Tell me about a time when you kept control of a negotiation that became difficult."],
+    expert: ["How do you approach a negotiation that involves several parties and the long-term relationship?", "Describe a situation where the way you handled a negotiation reshaped the commercial relationship."],
+  },
+  "Value Creation / Business Case": {
+    self: ["How do you build a business case, and how do you tailor the value argument to different stakeholders?", "How do you back your value argument with data or credible logic rather than general benefits?"],
+    manager: ["Tell me about a time when your business case was decisive in a customer's decision.", "Tell me about a time when your value thinking reshaped the scope or structure of a deal."],
+    expert: ["How do you connect the value you create to the financial or strategic priorities of the customer's leadership?", "Describe a situation where your value case helped the customer make the argument internally."],
+  },
+  "Customer Relationship Management": {
+    self: ["How do you build and maintain your network across the customer's functions and levels, beyond deal contacts?", "How do you spot and address a relationship risk before it damages the account?"],
+    manager: ["Tell me about a time when a relationship you built opened a door you would otherwise have depended on others to open.", "Tell me about a time when you were trusted to manage a difficult situation with the customer."],
+    expert: ["How do you make sure Schneider — not only you — is seen as a trusted interface across the customer?", "Describe a situation where the trust you built shifted the balance on a strategic account."],
+  },
+  "Stakeholder Management": {
+    self: ["How do you map the stakeholders in an account and keep that view current?", "How do you align stakeholders with different interests around your account priorities?"],
+    manager: ["Tell me about a time when you aligned competing stakeholders around a way forward.", "Tell me about a time when you anticipated a shift in influence or politics and got ahead of it."],
+    expert: ["How do you read where influence is moving inside a customer before it becomes obvious?", "Describe a situation where you had to influence without authority to execute an account plan."],
+  },
+  "Influencing Skills": {
+    self: ["How do you adapt your approach when you meet resistance, rather than pushing your message harder?", "How do you build alignment using facts, value and relationships when you have no authority?"],
+    manager: ["Tell me about a time when you won over a resistant stakeholder.", "Tell me about a time when you unblocked a stuck decision with senior stakeholders."],
+    expert: ["How do you influence a high-stakes decision when the people who own it don't report to you?", "Describe a situation where your influence changed the outcome of a strategic decision."],
+  },
+  "Executive Presence": {
+    self: ["How do you prepare and deliver a clear, concise message when you're in front of executives?", "How do you decide what to focus on when you only have a few minutes with a senior leader?"],
+    manager: ["Tell me about a time when you represented Schneider confidently in a demanding executive setting.", "Tell me about a time when you shaped where an executive conversation went."],
+    expert: ["How do you get treated as a peer rather than a vendor in a room of executives?", "Describe a situation where your presence turned a high-stakes conversation your way."],
+  },
+  "C-Level Engagement": {
+    self: ["How do you gain access to C-level executives and stay relevant to their agenda?", "How do you connect your C-level interactions to the ambition you have for the account?"],
+    manager: ["Tell me about a time when you engaged a C-level contact on what mattered to their business.", "Tell me about a time when a C-level relationship moved a key decision for you."],
+    expert: ["How do you make yourself relevant to a CEO's agenda rather than only to procurement?", "Describe a situation where a C-level relationship made possible an outcome that otherwise wouldn't have happened."],
+  },
+  "Executive Sponsorship Mobilization": {
+    self: ["How do you prepare and brief an executive sponsor so their involvement is genuinely useful?", "How do you time a sponsor's involvement to unlock something that's stuck?"],
+    manager: ["Tell me about a time when you prepared a sponsor and it made a real difference.", "Tell me about a time when you brought a sponsor in at exactly the right moment to unlock a play."],
+    expert: ["How do you sequence senior sponsors across a customer to build strategic momentum?", "Describe a situation where mobilising a sponsor changed the strategic position on an account."],
+  },
+  "Product Knowledge": {
+    self: ["How do you build your knowledge of the Schneider portfolio, including offers beyond your usual area?", "How do you recognise where the portfolio fits a specific customer need?"],
+    manager: ["Tell me about a time when your portfolio knowledge earned credibility or influenced a customer's choice.", "Tell me about a time when you saw how a newer or adjacent offer could fit an account."],
+    expert: ["How do you connect where the portfolio is heading to where the customer is heading?", "Describe a situation where your grasp of the portfolio let you position a larger, more integrated solution."],
+  },
+  "Industry Knowledge": {
+    self: ["How do you build your understanding of the customer's sector, its dynamics and economics, beyond the basics?", "How do you use industry insight to shape your positioning or timing on an account?"],
+    manager: ["Tell me about a time when industry insight you brought strengthened Schneider's position.", "Tell me about a time when your read of the sector shaped a decision on an account."],
+    expert: ["How do you use where the industry is heading to get ahead of where the customer will be?", "Describe a situation where anticipating a shift in the sector created an opportunity."],
+  },
+  "One-SE Solution Positioning": {
+    self: ["How do you connect several Schneider offers into one coherent story for the customer?", "How do you build a One-SE proposition rather than positioning offers separately?"],
+    manager: ["Tell me about a time when you connected multiple offers into one coherent customer story.", "Tell me about a time when a joined-up One-SE play changed Schneider's footprint in an account."],
+    expert: ["How do you get past internal boundaries to put one integrated Schneider in front of a customer?", "Describe a situation where a One-SE approach created value no single offer could deliver."],
+  },
+  "Technical & Solution Credibility": {
+    self: ["How much of the technical discussion do you carry yourself, and when do you bring in experts?", "How do you use your technical credibility to help frame the solution direction with a customer?"],
+    manager: ["Tell me about a time when your technical credibility was decisive with a customer.", "Tell me about a time when you held the technical direction alongside customers or experts."],
+    expert: ["How do you stay a credible counterpart when the room is full of technical decision-makers?", "Describe a situation where technical credibility helped you win a complex solution."],
+  },
+  "Pipeline Shaping": {
+    self: ["At what point do you get involved in an opportunity, and what does that let you influence?", "How do you shape an opportunity's framing, specs or timing before the customer has fully defined it?"],
+    manager: ["Tell me about a time when you engaged early and influenced how an opportunity took shape.", "Tell me about a time when you changed a customer's specs, framing or timing in Schneider's favour."],
+    expert: ["How do you get upstream of demand instead of responding to it once it's defined?", "Describe a situation where you identified a growth opportunity not initially visible to the customer or your team, and what came of it."],
+  },
+  "Competitive Positioning": {
+    self: ["How do you work out where Schneider genuinely wins against a specific competitor in a pursuit?", "How do you use competitor insight to sharpen your differentiation?"],
+    manager: ["Tell me about a time when you sharpened Schneider's differentiation against a competitor in a live deal.", "Tell me about a time when competitor insight made you rethink a strategy or deal structure."],
+    expert: ["How do you set the terms of a competition so it plays to Schneider's strengths?", "Describe a situation where you changed the basis on which a deal was being judged."],
+  },
+  "White-Space Penetration": {
+    self: ["How do you turn white space in an account into concrete targets and actions?", "How do you open up parts of an account where Schneider has little presence or access?"],
+    manager: ["Tell me about a time when you broke into an area of an account where Schneider had limited access.", "Tell me about a time when you expanded the footprint into a new site, domain or set of stakeholders."],
+    expert: ["How do you expand Schneider systematically into parts of an account that have never bought from us?", "Describe a situation where white-space penetration materially grew an account."],
+  },
+  "Preferred Partner Positioning": {
+    self: ["How do you build the trust and strategic relevance that make a customer see you as more than a supplier?", "How do you get brought into strategic discussions early, rather than at the buying stage?"],
+    manager: ["Tell me about a time when you moved Schneider beyond a transactional supplier role with a customer.", "Tell me about a time when a customer treated you as a partner in their thinking, not just a vendor."],
+    expert: ["How do you get Schneider written into a customer's planning as the natural partner to call?", "Describe a situation where being the preferred partner created a durable advantage."],
+  },
+  "Share of Wallet Expansion": {
+    self: ["How do you build a clear picture of where your penetration gaps in an account actually are?", "How do you turn a structured view of an account into a set of expansion plays?"],
+    manager: ["Tell me about a time when you identified and prioritised where Schneider was under-penetrated.", "Tell me about a time when you built a pipeline of expansion opportunities from a structured look at an account."],
+    expert: ["How do you build a pipeline of growth from the gaps in an existing account?", "Describe a situation where you grew your share by displacing an entrenched competitor."],
+  },
+  "Retention & Loss Prevention": {
+    self: ["How do you monitor the signals that tell you an account is at risk before it starts slipping?", "How do you act on the root cause of a retention risk rather than the symptom?"],
+    manager: ["Tell me about a time when you caught an early warning and acted before business was lost.", "Tell me about a time when you put a structured plan around holding on to an at-risk account."],
+    expert: ["How do you make an account resilient to competitive threats before any threat appears?", "Describe a situation where anticipating a threat let you secure a strategic account."],
+  },
+  "Software & Services Attach": {
+    self: ["How do you make software and services a systematic part of how you sell, rather than an afterthought?", "How do you position software, digital and services on top of the core business footprint?"],
+    manager: ["Tell me about a time when you built software or services onto the core business in an account.", "Tell me about a time when adding software or services meaningfully changed the value of a deal."],
+    expert: ["How do you shift an account towards recurring, outcome-based value through software and services?", "Describe a situation where attach changed the underlying economics of an account."],
+  },
+};
+
 export const LENSES = ["self", "manager", "expert"] as const;
 export type Lens = (typeof LENSES)[number];
 

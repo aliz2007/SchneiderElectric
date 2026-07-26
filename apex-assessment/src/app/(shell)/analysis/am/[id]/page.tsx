@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSuperadmin } from "@/lib/session";
 import {
+  formatScheduleDate,
   getAM,
   getAssessment,
   listCapabilities,
@@ -12,10 +13,11 @@ import {
   themeJustificationText,
 } from "@/lib/queries";
 import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
-import { gapClass } from "@/lib/heat";
+import { fmt, gapClass } from "@/lib/heat";
 import { aiNarrativeEnabled } from "@/lib/ai-narrative";
 import { reopen } from "./actions";
 import ExportPdfButton from "./export-pdf-button";
+import ScheduleEditor from "./schedule-editor";
 
 function Chip({ level }: { level: number | null | undefined }) {
   return (
@@ -52,6 +54,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
     self?: number;
     manager?: number;
     expert?: number;
+    avg: number | null; // unrounded mean of the submitted lens scores (e.g. 2.3)
     gap: number | null; // expert - required
     perception: number | null; // self - expert
   };
@@ -61,12 +64,14 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
     const self = levels.self.get(cap.id);
     const manager = levels.manager.get(cap.id);
     const expert = levels.expert.get(cap.id);
+    const scores = [self, manager, expert].filter((v): v is number => v != null);
     return {
       cap,
       req,
       self,
       manager,
       expert,
+      avg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
       gap: req != null && expert != null ? expert - req : null,
       perception: self != null && expert != null ? self - expert : null,
     };
@@ -123,6 +128,15 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
               {rater ? ` · by ${rater}` : ""}
             </span>
           ))}
+        </div>
+        <div className="am-meta" style={{ marginTop: 10, alignItems: "center" }}>
+          <ScheduleEditor amId={am.id} managerDeadline={am.manager_deadline} panelDatetime={am.panel_datetime} />
+          {am.manager_deadline && (
+            <span className="badge badge-sched">Manager deadline · {formatScheduleDate(am.manager_deadline)}</span>
+          )}
+          {am.panel_datetime && (
+            <span className="badge badge-sched">Panel call · {formatScheduleDate(am.panel_datetime, true)}</span>
+          )}
         </div>
       </div>
 
@@ -209,6 +223,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
                 <th><span className="lens-dot ld-self" />Self</th>
                 <th><span className="lens-dot ld-manager" />Manager</th>
                 <th><span className="lens-dot ld-expert" />APEX</th>
+                <th>Avg</th>
                 <th>Gap vs req</th>
               </tr>
             </thead>
@@ -255,6 +270,7 @@ function ClusterSection({
     self?: number;
     manager?: number;
     expert?: number;
+    avg: number | null;
     gap: number | null;
   }[];
   notes: { lens: Lens; note: string }[];
@@ -262,13 +278,13 @@ function ClusterSection({
   return (
     <>
       <tr>
-        <td colSpan={6} style={{ paddingTop: 14 }}>
+        <td colSpan={7} style={{ paddingTop: 14 }}>
           <span className="cluster-kicker">{name}</span>
         </td>
       </tr>
       {notes.length > 0 && (
         <tr>
-          <td colSpan={6} style={{ paddingTop: 0, paddingBottom: 4 }}>
+          <td colSpan={7} style={{ paddingTop: 0, paddingBottom: 4 }}>
             {notes.map((n, i) => (
               <div key={i} className="theme-note-block">
                 <span className="note-lens">{LENS_LABELS[n.lens]}</span>
@@ -291,6 +307,14 @@ function ClusterSection({
           <td><Chip level={r.self} /></td>
           <td><Chip level={r.manager} /></td>
           <td><Chip level={r.expert} /></td>
+          <td>
+            {/* unrounded three-lens mean — 1.6 and 2.4 must NOT read as the same level */}
+            {r.avg == null ? (
+              <span style={{ color: "var(--muted)" }}>—</span>
+            ) : (
+              <strong style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(r.avg, 1)}</strong>
+            )}
+          </td>
           <td>
             {r.gap == null ? (
               <span style={{ color: "var(--muted)" }}>—</span>

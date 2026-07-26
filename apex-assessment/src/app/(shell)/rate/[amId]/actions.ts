@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import {
+  assessmentLock,
   getAM,
   getOrCreateAssessment,
   isAssigned,
@@ -15,13 +16,17 @@ import {
   type ThemeField,
 } from "@/lib/queries";
 
-/** Auth + ownership guard shared by every mutation. Returns the caller's draft assessment. */
+/** Auth + ownership guard shared by every mutation. Returns the caller's draft assessment.
+ *  Also enforces the assessment window: past the manager deadline / panel-call day, the
+ *  respective lens can no longer touch the assessment. */
 async function guard(amId: number) {
   const user = await requireUser();
   if (!user.lens) throw new Error("No assessment lens configured for this account.");
   if (!isAssigned(user.id, amId)) throw new Error("You are not assigned to this Account Manager.");
   const am = getAM(amId);
   if (!am) throw new Error("Unknown Account Manager.");
+  const locked = assessmentLock(am, user.lens);
+  if (locked) throw new Error(locked);
   const assessment = getOrCreateAssessment(amId, user.lens, user.id);
   return { user, am, assessment };
 }

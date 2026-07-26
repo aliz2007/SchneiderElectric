@@ -103,12 +103,28 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!))
     .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
-  // for the perception chart: EVERY rated capability (aligned ones included), sorted from
-  // most over-rated to most under-rated so the full self-vs-panel profile reads at a glance
-  const perceptionRows = rows
-    .filter((r) => r.perception != null && r.self != null && r.expert != null)
-    .sort((a, b) => b.perception! - a.perception!)
-    .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
+
+  // Perception radar: the average level per theme (cluster) for each lens.
+  const clusterOrder: string[] = [];
+  for (const r of rows) if (!clusterOrder.includes(r.cluster)) clusterOrder.push(r.cluster);
+  const themeRadar = clusterOrder.map((cluster) => {
+    const inCluster = rows.filter((r) => r.cluster === cluster);
+    const mean = (k: "self" | "manager" | "expert") => {
+      const vals = inCluster.map((r) => r[k]).filter((v): v is number => v != null);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    return { theme: cluster, self: mean("self"), manager: mean("manager"), expert: mean("expert") };
+  });
+
+  // Cover grade: unrounded APEX Panel average across the track's applicable capabilities,
+  // against the expected overall (average of the required levels).
+  const withPanel = applicable.filter((r) => r.expert != null);
+  const overallAvg = withPanel.length
+    ? withPanel.reduce((a, r) => a + r.expert!, 0) / withPanel.length
+    : null;
+  const overallReq = applicable.length
+    ? applicable.reduce((a, r) => a + r.req!, 0) / applicable.length
+    : null;
 
   const clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[] = [];
   for (const row of rows) {
@@ -190,7 +206,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       })),
       strengths,
       development,
-      perceptionRows,
+      themeRadar,
+      overallAvg,
+      overallReq,
       clusters,
       narrative,
       narrativeSource,
