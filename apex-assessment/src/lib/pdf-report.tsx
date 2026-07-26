@@ -68,8 +68,8 @@ function gapColors(gap: number): { bg: string; fg: string } {
 
 const s = StyleSheet.create({
   page: {
-    paddingTop: 46,
-    paddingBottom: 64,
+    paddingTop: 38,
+    paddingBottom: 50,
     paddingHorizontal: 42,
     fontFamily: "Helvetica",
     fontSize: 9.5,
@@ -91,8 +91,8 @@ const s = StyleSheet.create({
   brandRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 26,
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
   brandLeft: { flexDirection: "row", alignItems: "center", gap: 9 },
   logoMark: {
@@ -117,8 +117,8 @@ const s = StyleSheet.create({
   confPillText: { fontSize: 7, color: "#b03a3a", fontFamily: "Helvetica-Bold", letterSpacing: 1.2 },
 
   name: { fontSize: 24, fontFamily: "Helvetica-Bold", letterSpacing: -0.3, lineHeight: 1.3 },
-  subtitle: { fontSize: 10, color: MUTED, marginTop: 4, marginBottom: 12 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 22 },
+  subtitle: { fontSize: 10, color: MUTED, marginTop: 3, marginBottom: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
   chip: { borderRadius: 99, paddingHorizontal: 9, paddingVertical: 3.5, backgroundColor: CARD, borderWidth: 1, borderColor: LINE },
   chipAccent: { backgroundColor: GREEN_BG, borderColor: "#bfe9cf" },
   chipText: { fontSize: 8.5, color: INK },
@@ -126,22 +126,22 @@ const s = StyleSheet.create({
   chipPending: { color: FAINT },
 
   sectionTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", marginBottom: 2, lineHeight: 1.4 },
-  sectionSub: { fontSize: 8.5, color: MUTED, marginBottom: 8 },
+  sectionSub: { fontSize: 8.5, color: MUTED, marginBottom: 6 },
 
-  twoCol: { flexDirection: "row", gap: 10, marginBottom: 18 },
+  twoCol: { flexDirection: "row", gap: 10, marginBottom: 12 },
   card: {
     flex: 1,
     borderWidth: 1,
     borderColor: LINE,
     borderRadius: 10,
-    padding: 12,
+    padding: 10,
     backgroundColor: "#ffffff",
   },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
   dot: { width: 7, height: 7, borderRadius: 99 },
   cardTitle: { fontSize: 10.5, fontFamily: "Helvetica-Bold" },
-  cardSub: { fontSize: 8, color: MUTED, marginBottom: 8 },
-  listItem: { flexDirection: "row", alignItems: "center", paddingVertical: 3.5 },
+  cardSub: { fontSize: 8, color: MUTED, marginBottom: 5 },
+  listItem: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
   listItemLead: { marginRight: 8 },
   listName: { flex: 1, fontSize: 9.5, fontFamily: "Helvetica-Bold", marginRight: 8 },
   listMeta: { fontSize: 8, color: MUTED },
@@ -149,7 +149,7 @@ const s = StyleSheet.create({
 
   lvl: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, minWidth: 24, alignItems: "center" },
   percePill: { width: 68, borderRadius: 5, paddingVertical: 2, alignItems: "center" },
-  perceptLegend: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", marginTop: 8, gap: 14 },
+  perceptLegend: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", marginTop: 4, gap: 14 },
   perceptKey: { flexDirection: "row", alignItems: "center" },
   perceptSwatch: { width: 9, height: 9, borderRadius: 2, marginRight: 5 },
   perceptKeyText: { fontSize: 8, color: MUTED },
@@ -217,8 +217,8 @@ const s = StyleSheet.create({
   coverMeta: { paddingHorizontal: 46, paddingBottom: 44 },
   // overall grade under the CONFIDENTIAL pill on the overview page
   gradeCol: { alignItems: "flex-end" },
-  grade: { fontSize: 30, fontFamily: "Helvetica-Bold", letterSpacing: -0.5, marginTop: 8 },
-  gradeExp: { fontSize: 8, color: MUTED, marginTop: 2 },
+  grade: { fontSize: 26, fontFamily: "Helvetica-Bold", letterSpacing: -0.5, marginTop: 5 },
+  gradeExp: { fontSize: 7.5, color: MUTED, marginTop: 1 },
   coverMetaLine: { height: 1, backgroundColor: LINE, marginBottom: 12 },
   coverMetaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
   coverConf: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#b03a3a", letterSpacing: 1.4 },
@@ -469,10 +469,10 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
   const n = themes.length;
   if (n < 3) return null;
   const W = 511;
-  const H = 292;
+  const H = 236;
   const CX = W / 2;
-  const CY = 146;
-  const R = 96; // radius of the L3 ring
+  const CY = 118;
+  const R = 78; // radius of the L3 ring
   const angle = (i: number) => (-90 + (360 / n) * i) * (Math.PI / 180);
   const pt = (i: number, v: number): [number, number] => [
     CX + Math.cos(angle(i)) * (R * v) / 3,
@@ -700,7 +700,7 @@ export function AmReportPdf(p: AmReportProps) {
 
         {/* perception profile — diverging over/under-rating chart across all capabilities */}
         {p.themeRadar.length >= 3 && (
-          <View style={{ marginBottom: 18 }} wrap={false}>
+          <View wrap={false}>
             <SectionHead
               title="Perception by theme"
               sub="Average level per theme — the Self, Manager and APEX Panel webs overlaid"
