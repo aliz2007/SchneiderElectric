@@ -246,7 +246,10 @@ lens rather than a multi-checkbox.
   - `/analysis/zone/[zone]` (superadmin): AM x capability heat maps, track-aware; the zone
     benchmark ranking can sort AMs and (for admins) shows each AM's name in a low-opacity font
     under their AM number.
-  - `/analysis/individuals` + `/analysis/am/[id]` (superadmin): Self vs Manager vs Panel per
+  - `/analysis/individuals` + `/analysis/am/[id]` (superadmin): the list carries a **search
+    bar** (name / account / AM code, debounced) and **Zone / Track / Segment filters** —
+    URL-param driven (`filters.tsx`), with a "Showing N of 25" note and Clear all. Per person:
+    Self vs Manager vs Panel per
     capability, gap-to-required, **strengths (panel STRICTLY above required)**, **development
     areas (panel BELOW required — all of them, uncapped)**, perception gaps (|self - panel| >=
     1), and the theme justifications shown under each theme inside the capability detail,

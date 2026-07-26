@@ -1168,3 +1168,6 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .sched-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sched-saved { font-size: 12px; font-weight: 700; color: var(--se-green-bright); }
 .badge-sched { background: rgba(224, 173, 85, 0.16); color: #e8c07a; }
+
+/* individual-results search box (sits with the zone/track/segment selects) */
+.ifilter-search { width: 250px; max-width: 100%; }

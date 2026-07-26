@@ -1,13 +1,35 @@
 import Link from "next/link";
 import { requireSuperadmin } from "@/lib/session";
 import { assessmentStatuses, listAMs, submittedLevels, listCapabilities, requiredLevel } from "@/lib/queries";
+import { SEGMENTS, ZONES } from "@/lib/seed-data";
 import { fmt } from "@/lib/heat";
+import IndividualsFilters from "./filters";
 
-export default async function IndividualsPage() {
+export default async function IndividualsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; zone?: string; track?: string; segment?: string }>;
+}) {
   await requireSuperadmin();
-  const ams = listAMs();
+
+  // search + Zone / Track / Segment filters, all URL-param driven (see filters.tsx)
+  const { q: qRaw, zone: zoneRaw, track: trackRaw, segment: segmentRaw } = await searchParams;
+  const q = (qRaw ?? "").trim().toLowerCase();
+  const zone = zoneRaw && (ZONES as readonly string[]).includes(zoneRaw) ? zoneRaw : undefined;
+  const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
+  const segment = segmentRaw && (SEGMENTS as readonly string[]).includes(segmentRaw) ? segmentRaw : undefined;
+
+  const allAMs = listAMs();
+  const ams = allAMs.filter(
+    (am) =>
+      (!q || am.name.toLowerCase().includes(q) || am.account.toLowerCase().includes(q) || am.code.toLowerCase().includes(q)) &&
+      (!zone || am.zone === zone) &&
+      (!track || am.track === track) &&
+      (!segment || am.segment === segment)
+  );
   const statuses = assessmentStatuses();
   const caps = listCapabilities();
+  const filtered = ams.length !== allAMs.length;
 
   return (
     <div>
@@ -19,6 +41,15 @@ export default async function IndividualsPage() {
           development areas.
         </p>
       </div>
+
+      <IndividualsFilters
+        current={{ q: qRaw ?? "", zone: zone ?? "all", track: track ?? "all", segment: segment ?? "all" }}
+      />
+      {filtered && (
+        <p className="analytics-filter-note" style={{ marginTop: -6, marginBottom: 12 }}>
+          Showing {ams.length} of {allAMs.length} Account Managers
+        </p>
+      )}
 
       <div className="card card-pad">
         <div className="hm-scroll">
@@ -77,6 +108,11 @@ export default async function IndividualsPage() {
             </tbody>
           </table>
         </div>
+        {ams.length === 0 && (
+          <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "14px 2px 4px" }}>
+            No Account Manager matches these filters.
+          </p>
+        )}
       </div>
     </div>
   );
