@@ -28,8 +28,8 @@ Last updated: 2026-07-24.
   the assessed person); an **unrounded Avg column** (e.g. 2.3) on the capability detail
   (page + PDF); the PDF perception section replaced by a **spider chart of perception by
   theme** (Self / Manager / Panel webs); and a **big colored overall grade /3** under the
-  PDF cover's CONFIDENTIAL block (red below the expected overall, green at/above, expected
-  score printed beneath).
+  CONFIDENTIAL pill on the PDF's overview page (red below the expected overall, green
+  at/above, expected score printed beneath).
 - Earlier (2026-07-23): fictional demo roster names (legal); the self-assessor justification
   as **one mandatory concrete-example note per theme** (guided prompt — replaced an earlier
   five-question variant). Earlier (2026-07-22): mandatory one-note-per-theme justification
@@ -260,16 +260,16 @@ lens rather than a multi-checkbox.
     Gated by `allLensesSubmitted(am.id)`: until Self + Manager + APEX Panel have all submitted
     it shows a status checklist instead. The nav tab only appears for a linked self-assessor.
 - **PDF report** (`GET /analysis/am/[id]/pdf`, superadmin-only): a styled 4-page report
-  (`src/lib/pdf-report.tsx`): (1) cover — with, right under the CONFIDENTIAL block, a **big
-  bold overall grade /3** (the unrounded APEX Panel average across the track's applicable
-  capabilities, GREEN when at/above the expected overall, RED when below, with the expected
-  overall — the average required level — printed smaller beneath; "— / 3" until the panel
-  submits); (2) overview = profile + strengths/development + a **spider chart of perception
-  by theme** (`ThemeRadar`, @react-pdf SVG: one web per lens — Self amber, Manager violet,
-  APEX Panel green — across the six themes, each point that lens's average level in the
-  theme); (3) narrative = strengths/weaknesses prose + a definition of every capability it
-  names; (4) capability-detail table with theme notes and the unrounded **Avg** column.
-  See §5–6 for how the narrative and definitions are produced.
+  (`src/lib/pdf-report.tsx`): (1) cover; (2) overview — right under its CONFIDENTIAL pill,
+  a **big bold overall grade /3** (the unrounded APEX Panel average across the track's
+  applicable capabilities, GREEN when at/above the expected overall, RED when below, with
+  the expected overall — the average required level — printed smaller beneath; "— / 3"
+  until the panel submits), then profile + strengths/development + a **spider chart of
+  perception by theme** (`ThemeRadar`, @react-pdf SVG: one web per lens — Self amber,
+  Manager violet, APEX Panel green — across the six themes, each point that lens's average
+  level in the theme); (3) narrative = strengths/weaknesses prose + a definition of every
+  capability it names; (4) capability-detail table with theme notes and the unrounded
+  **Avg** column. See §5–6 for how the narrative and definitions are produced.
 - **Admin — Users & Access** (`/admin/users`, superadmin):
   - Create user with a **lens-aware picker** (`create-user-form.tsx`): Self shows a
     single-select "which Account Manager is this person"; Manager/Panel show a checkbox grid

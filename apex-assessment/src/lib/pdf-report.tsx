@@ -215,9 +215,10 @@ const s = StyleSheet.create({
   coverName: { fontSize: 34, fontFamily: "Helvetica-Bold", letterSpacing: -0.6, lineHeight: 1.15, marginTop: 12 },
   coverAccount: { fontSize: 12, color: MUTED, marginTop: 8, marginBottom: 16 },
   coverMeta: { paddingHorizontal: 46, paddingBottom: 44 },
-  coverGradeWrap: { marginTop: 12 },
-  coverGrade: { fontSize: 36, fontFamily: "Helvetica-Bold", letterSpacing: -0.5 },
-  coverGradeExp: { fontSize: 9, color: MUTED, marginTop: 3 },
+  // overall grade under the CONFIDENTIAL pill on the overview page
+  gradeCol: { alignItems: "flex-end" },
+  grade: { fontSize: 30, fontFamily: "Helvetica-Bold", letterSpacing: -0.5, marginTop: 8 },
+  gradeExp: { fontSize: 8, color: MUTED, marginTop: 2 },
   coverMetaLine: { height: 1, backgroundColor: LINE, marginBottom: 12 },
   coverMetaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
   coverConf: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#b03a3a", letterSpacing: 1.4 },
@@ -388,31 +389,6 @@ function CoverPage(p: AmReportProps) {
           <View>
             <Text style={s.coverConf}>CONFIDENTIAL</Text>
             <Text style={s.coverMetaText}>Prepared for internal talent-development use only.</Text>
-            {/* headline grade: unrounded APEX Panel average across the track's capabilities,
-                green when at/above the expected overall, red when below */}
-            {p.overallAvg != null && p.overallReq != null ? (
-              <View style={s.coverGradeWrap}>
-                <Text
-                  style={[
-                    s.coverGrade,
-                    { color: p.overallAvg >= p.overallReq ? GREEN_DEEP : "#c92a2a" },
-                  ]}
-                >
-                  {p.overallAvg.toFixed(1)} / 3
-                </Text>
-                <Text style={s.coverGradeExp}>
-                  Expected overall · {p.overallReq.toFixed(1)} / 3
-                </Text>
-              </View>
-            ) : (
-              <View style={s.coverGradeWrap}>
-                <Text style={[s.coverGrade, { color: FAINT }]}>— / 3</Text>
-                <Text style={s.coverGradeExp}>
-                  Overall score appears once the APEX Panel assessment is submitted
-                  {p.overallReq != null ? ` · expected ${p.overallReq.toFixed(1)} / 3` : ""}
-                </Text>
-              </View>
-            )}
           </View>
           <Text style={s.coverMetaText}>Generated {p.generatedAt}</Text>
         </View>
@@ -627,8 +603,32 @@ export function AmReportPdf(p: AmReportProps) {
               <Text style={s.brandSub}>APEX TOP 25 · Strategic Account Manager Assessment</Text>
             </View>
           </View>
-          <View style={s.confPill}>
-            <Text style={s.confPillText}>CONFIDENTIAL</Text>
+          <View style={s.gradeCol}>
+            <View style={s.confPill}>
+              <Text style={s.confPillText}>CONFIDENTIAL</Text>
+            </View>
+            {/* headline grade right under the confidential mark: unrounded APEX Panel
+                average across the track's capabilities — green at/above the expected
+                overall, red below it, with the expected overall printed beneath */}
+            {p.overallAvg != null && p.overallReq != null ? (
+              <>
+                <Text
+                  style={[s.grade, { color: p.overallAvg >= p.overallReq ? GREEN_DEEP : "#c92a2a" }]}
+                >
+                  {p.overallAvg.toFixed(1)} / 3
+                </Text>
+                <Text style={s.gradeExp}>Expected overall · {p.overallReq.toFixed(1)} / 3</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[s.grade, { color: FAINT }]}>— / 3</Text>
+                <Text style={s.gradeExp}>
+                  {p.overallReq != null
+                    ? `Awaiting APEX Panel · expected ${p.overallReq.toFixed(1)} / 3`
+                    : "Awaiting APEX Panel scores"}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
