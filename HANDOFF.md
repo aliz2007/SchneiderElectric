@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-24.
+Last updated: 2026-07-26.
 
 ---
 
@@ -20,7 +20,14 @@ Last updated: 2026-07-24.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-24): the **per-lens Question Guide** (two guiding questions
+- Most recent additions (2026-07-26): a **search bar + Zone / Track / Segment filters** on
+  Individual Results; the PDF **tightened** so the report is 4 pages again (the radar sits on
+  the overview page instead of being orphaned onto its own, leaving blank space); a
+  **substantially richer narrative page** — both the Kimi prompt and the deterministic
+  fallback now write a detailed, cluster-by-cluster read (~500–700 words) instead of a few
+  bare sentences; and a shell **error boundary** that auto-recovers from stale-tab
+  ChunkLoadErrors after a deploy.
+- Earlier (2026-07-24): the **per-lens Question Guide** (two guiding questions
   per capability for Self / Manager / APEX Panel, from the APEX Question Guide workbook)
   shown in every assessment; **assessment scheduling** (a superadmin calendar on the
   individual page setting the manager's deadline and the APEX Panel call date/time, with a
@@ -289,13 +296,25 @@ lens rather than a multi-checkbox.
 
 ## 5. The PDF narrative (deterministic)
 
-`src/lib/report-narrative.ts` builds the narrative page from data alone (no LLM): a factual
-summary, a strengths paragraph, a development paragraph, an optional self-vs-panel
-perception paragraph, and a list of capability definitions. Each definition is the rubric
-behavioural anchor at the level the AM's track requires (an L2 reference when the capability
-is not on the AM's track). When the panel has not scored the person, the prose falls back to
-cautious "provisional" wording rather than inventing strengths. This deterministic output is
-always the fallback for the AI path.
+`src/lib/report-narrative.ts` builds the narrative page from data alone (no LLM), and is
+always the fallback for the AI path — so it has to read like real feedback, not a stub. It
+produces roughly 500 words:
+
+- **summary** — capability counts vs the bar, the unrounded overall average vs the expected
+  overall, the strongest and weakest theme (by average gap), and whether the person tends to
+  over- or under-rate themselves against the panel.
+- **strengths / development** — organised BY CLUSTER, one paragraph each, using the same
+  `"Cluster Name: …"` lead as the AI path (the PDF bolds that lead, see `ClusterNarrative`).
+  Each paragraph names its capabilities with levels, brings in the manager and self views as
+  corroboration or divergence, flags the widest gap, and points at that theme's written
+  justification. Development closes with an ordered priority list for the development plan.
+- **comments** — what the evaluators wrote justifications on and how to use them (only when
+  notes exist).
+- **definitions** — the rubric behavioural anchor at the level the AM's track requires (an L2
+  reference when the capability is not on the AM's track), for every capability named above.
+
+When the panel has not scored the person, the prose falls back to cautious "provisional"
+wording rather than inventing strengths.
 
 ## 6. The PDF narrative (AI, Kimi / Moonshot)
 
@@ -311,7 +330,10 @@ a hard fallback:
   is a single paragraph synthesising the evaluators' theme justifications, and is empty
   (section hidden) when none exist. The model is prompted (see `SYSTEM_PROMPT`) to ground
   every statement in the provided data, never quote the rubric definitions, cover every
-  qualifying capability, and stay concise. The prompt tells it that Manager/Panel notes are
+  qualifying capability, and be substantial: the prompt asks for roughly 500–700 words, four
+  to six sentences per cluster paragraph that explain the pattern, the why (grounded in the
+  themeNotes) and what closing a gap would look like in practice — feedback, not labels.
+  The prompt tells it that Manager/Panel notes are
   free text while a Self-Assessment note is a concrete example the person gives to justify their
   ratings (prompted to cover situation, actions, results, impact and, where relevant,
   replication) — their own evidence, to be weighed as their view, not the verdict.
@@ -379,6 +401,7 @@ src/app/(shell)/analysis/    dashboard, filter-bar, zone-map, zone view, individ
 src/app/(shell)/feedback/    My Feedback tab (self-assessor's own report + PDF download)
 src/app/(shell)/onboarding/  new self-assessor profile form (name/account/zone/track/segment)
 src/app/(shell)/chat-widget.tsx  floating APEX Assistant bubble + panel
+src/app/(shell)/error.tsx    error boundary; auto-reloads once on a stale-tab ChunkLoadError
 src/app/api/chat/route.ts    chatbot endpoint (role-scoped snapshot + Kimi)
 src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (delete, sandbox, demo)
 src/app/globals.css          all styling (semantic class names)
@@ -429,7 +452,42 @@ The app is fully functional but three things stand between it and a company-wide
    contained change.
 2. **Auth**: username/password managed by the superadmin. Production would likely want SSO.
 3. **Hosting**: currently runs locally (or via the Windows demo launcher). A real rollout
-   needs deploying somewhere with a persistent disk/DB.
+   needs deploying somewhere with a persistent disk/DB — see §10b.
+
+## 10b. Deploying online (auto-deploy from GitHub)
+
+**The one constraint that decides everything**: `better-sqlite3` writes to the file
+`data/apex.db` (created/seeded on first run by `db.ts`). Any host with an *ephemeral*
+filesystem — Vercel, Netlify, Render's free tier, anything "serverless" — silently loses
+that file on every redeploy, restart or cold start. The app still runs (it reseeds), but
+submitted assessments vanish. So a host is only suitable for REAL data if it gives either a
+**persistent disk** or a **managed database**.
+
+Three viable shapes, cheapest first:
+
+1. **Free demo hosting, no code change — Render free web service.**
+   Connect the GitHub repo once; every push to the branch auto-builds and redeploys.
+   Root directory `apex-assessment`, build `npm install && npm run build`, start
+   `npm start -- -p $PORT`. Caveats, both from the free tier: no persistent disk (the DB
+   resets on redeploy / restart — fine for a demo, just click *Load demo dataset* again),
+   and the service sleeps after ~15 min idle, so the first hit takes 30–60 s. Good for
+   showing the app; NOT for collecting real assessments.
+2. **Real data, still cheap — Render (or any VM/container host) with a persistent disk.**
+   Same setup, plus a mounted disk at `apex-assessment/data`; the disk is a paid add-on
+   (~$0.25/GB/month) on top of a paid instance (~$7/month) that also removes the sleeping.
+   Zero code change: SQLite keeps working exactly as it does locally. This is the least-work
+   path to a genuine pilot.
+3. **Vercel + a managed database — best Next.js experience, needs the DB swap.**
+   Vercel auto-deploys from GitHub and runs Next.js natively, but its filesystem is
+   ephemeral, so this REQUIRES replacing SQLite with a hosted DB (Neon/Supabase Postgres, or
+   Turso which speaks SQLite) — i.e. rewriting `db.ts` and the query layer in `queries.ts`.
+   Also note Vercel's free **Hobby plan forbids commercial use**; a Schneider-owned
+   deployment belongs on a paid plan.
+
+Whichever is chosen, set `MOONSHOT_ENABLED=0` in the host's environment variables if the AI
+narrative should stay off, and remember the Kimi key is hardcoded in `ai-narrative.ts` — a
+public deployment exposes it to anyone who can read the repo, so rotate it or move it to an
+env var before putting the app on the open internet.
 
 ## 11. Open items
 

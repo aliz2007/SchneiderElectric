@@ -1,0 +1,33 @@
+# Optional one-click deploy config for Render (https://render.com).
+#
+# Using it: New → Blueprint → connect this GitHub repo → pick the branch. Render reads this
+# file, builds the app and redeploys automatically on every push to that branch.
+#
+# IMPORTANT — the free plan has NO persistent disk, so data/apex.db is recreated (and
+# reseeded) on every redeploy, restart or wake-from-sleep: submitted assessments do NOT
+# survive. That is fine for a demo (click "Load demo dataset" after deploying) but not for
+# collecting real assessments. For real data, switch `plan: free` to a paid instance and
+# attach a disk mounted at /opt/render/project/src/apex-assessment/data — SQLite then works
+# exactly as it does locally, with no code change. See HANDOFF.md §10b.
+services:
+  - type: web
+    name: apex-assessment
+    runtime: node
+    plan: free
+    rootDir: apex-assessment
+    buildCommand: npm ci && npm run build
+    startCommand: npm start -- -p $PORT
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Set to "0" to disable the Kimi-written PDF narrative / chatbot on this deployment.
+      # The API key is currently hardcoded in src/lib/ai-narrative.ts — rotate it or move it
+      # to an env var before exposing the app publicly.
+      - key: MOONSHOT_ENABLED
+        value: "1"
+    # For a paid instance, uncomment to keep the SQLite database across deploys:
+    # disk:
+    #   name: apex-data
+    #   mountPath: /opt/render/project/src/apex-assessment/data
+    #   sizeGB: 1
