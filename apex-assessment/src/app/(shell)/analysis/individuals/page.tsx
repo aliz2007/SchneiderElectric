@@ -80,7 +80,7 @@ export default async function IndividualsPage({
                     <td style={{ fontWeight: 600 }}>{am.name}</td>
                     <td><span className="badge badge-zone">{am.zone}</span></td>
                     <td><span className="badge badge-track">{am.track}</span></td>
-                    <td>{am.segment ? <span className="badge badge-segment">{am.segment}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                    <td>{am.segment ? <span className="badge badge-segment">{am.segment}</span> : <span style={{ color: "var(--muted)" }}>n/a</span>}</td>
                     <td>{fmt(avg(levels.self), 2)}</td>
                     <td>{fmt(avg(levels.manager), 2)}</td>
                     <td>{fmt(avg(levels.expert), 2)}</td>

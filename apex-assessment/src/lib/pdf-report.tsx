@@ -74,7 +74,7 @@ const LVL: Record<number, { bg: string; fg: string }> = {
 
 /** Weighted score pill: the decimal, tinted by how it sits against required. */
 function Score({ score, gap }: { score: number | null; gap: number | null }) {
-  if (score == null) return <Text style={s.na}>—</Text>;
+  if (score == null) return <Text style={s.na}>n/a</Text>;
   const c = gap == null ? { bg: CARD, fg: MUTED } : gapColors(gap);
   return (
     <View style={[s.lvl, { backgroundColor: c.bg, minWidth: 30 }]}>
@@ -342,7 +342,7 @@ function ClusterNarrative({ text, clusterNames }: { text: string; clusterNames: 
 }
 
 function Lvl({ level }: { level?: number }) {
-  if (!level) return <Text style={s.na}>—</Text>;
+  if (!level) return <Text style={s.na}>n/a</Text>;
   const c = LVL[level];
   return (
     <View style={[s.lvl, { backgroundColor: c.bg }]}>
@@ -369,7 +369,7 @@ function Chrome({ generatedAt }: { generatedAt: string }) {
         <View style={s.footerLine} />
         <View style={s.footerRow}>
           <Text style={s.footerText}>
-            Schneider Electric · APEX TOP 25 — Confidential assessment report · Generated {generatedAt}
+            Schneider Electric · APEX TOP 25 · Confidential assessment report · Generated {generatedAt}
           </Text>
           <Text
             style={s.footerText}
@@ -479,13 +479,16 @@ function NarrativePage(p: AmReportProps) {
  * tenth apart never get jarringly different colours.
  */
 function gradeColor(diff: number): string {
+  // Hitting the expected average exactly is a PASS, so 0 is already green; the warm
+  // end of the ramp only starts once the score dips below the bar.
   const STOPS: [number, [number, number, number]][] = [
-    [-1.0, [201, 42, 42]], // deep red
-    [-0.5, [224, 107, 47]], // orange
-    [-0.15, [214, 158, 46]], // amber
-    [0.15, [180, 176, 40]], // yellow-green (on the bar)
-    [0.5, [82, 176, 74]], // light green
-    [1.0, [0, 122, 61]], // deep Schneider green
+    [-1.0, [201, 42, 42]], // deep red, well short of the bar
+    [-0.6, [224, 107, 47]], // orange
+    [-0.3, [214, 158, 46]], // amber
+    [-0.1, [154, 170, 52]], // yellow-green, just under the bar
+    [0.0, [61, 155, 70]], // green, exactly on the expected average
+    [0.4, [40, 140, 64]], // deeper green
+    [1.0, [0, 122, 61]], // deep Schneider green, well above
   ];
   const t = Math.max(STOPS[0][0], Math.min(STOPS[STOPS.length - 1][0], diff));
   for (let i = 0; i < STOPS.length - 1; i++) {
@@ -658,7 +661,7 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
             <View key={t.theme} style={s.ctabRow} wrap={false}>
               <Text style={[s.ctabTd, s.ctabTheme]}>{t.theme}</Text>
               <Text style={[s.ctabTd, s.ctabNum, { fontFamily: "Helvetica-Bold" }]}>
-                {t.weighted == null ? "—" : t.weighted.toFixed(2)}
+                {t.weighted == null ? "n/a" : t.weighted.toFixed(2)}
               </Text>
               <Text style={[s.ctabTd, s.ctabNum, { color: MUTED }]}>
                 {t.required == null ? "n/a" : t.required.toFixed(2)}
@@ -670,7 +673,7 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
                   { fontFamily: "Helvetica-Bold", color: gap == null ? MUTED : gapColors(gap).fg },
                 ]}
               >
-                {gap == null ? "—" : `${gap > 0 ? "+" : ""}${gap.toFixed(2)}`}
+                {gap == null ? "n/a" : `${gap > 0 ? "+" : ""}${gap.toFixed(2)}`}
               </Text>
             </View>
           );
@@ -683,7 +686,7 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
 export function AmReportPdf(p: AmReportProps) {
   return (
     <Document
-      title={`APEX Assessment — ${p.amName}`}
+      title={`APEX Assessment · ${p.amName}`}
       author="Schneider Electric"
       subject="APEX TOP 25 individual capability report"
     >
@@ -726,7 +729,7 @@ export function AmReportPdf(p: AmReportProps) {
             ) : (
               <>
                 <Text style={[s.grade, { color: FAINT }]}>
-                  —
+                  n/a
                   {p.overallReq != null && (
                     <>
                       <Text style={s.gradeVs}> vs </Text>
@@ -736,7 +739,7 @@ export function AmReportPdf(p: AmReportProps) {
                 </Text>
                 <Text style={s.gradeExp}>
                   {p.overallReq != null
-                    ? "Final average vs. expected average — awaiting scores"
+                    ? "Final average vs. expected average (awaiting scores)"
                     : "Awaiting submitted assessments"}
                 </Text>
               </>
@@ -811,7 +814,7 @@ export function AmReportPdf(p: AmReportProps) {
             )}
             {p.development.length > OVERVIEW_LIST_MAX && (
               <Text style={s.listMore}>
-                + {p.development.length - OVERVIEW_LIST_MAX} more below target — see the capability
+                + {p.development.length - OVERVIEW_LIST_MAX} more below target, see the capability
                 detail
               </Text>
             )}
@@ -823,7 +826,7 @@ export function AmReportPdf(p: AmReportProps) {
           <View wrap={false}>
             <SectionHead
               title="Perception by theme"
-              sub="Average level per theme — Self, Manager and Panel webs with the weighted average emphasised"
+              sub="Average level per theme. Self, Manager and Panel webs with the weighted average emphasised"
             />
             <ThemeRadar data={p.themeRadar} />
           </View>
@@ -883,14 +886,14 @@ export function AmReportPdf(p: AmReportProps) {
                   <View style={s.cellNum}>
                     {/* weighted, unrounded — a 1.6 and a 2.4 must stay distinguishable */}
                     {r.weighted == null ? (
-                      <Text style={s.na}>—</Text>
+                      <Text style={s.na}>n/a</Text>
                     ) : (
                       <Text style={[s.td, { fontFamily: "Helvetica-Bold" }]}>{r.weighted.toFixed(2)}</Text>
                     )}
                   </View>
                   <View style={s.cellNum}>
                     {r.gap == null ? (
-                      <Text style={s.na}>—</Text>
+                      <Text style={s.na}>n/a</Text>
                     ) : (
                       <View style={[s.lvl, { backgroundColor: gapColors(r.gap).bg, minWidth: 34 }]}>
                         <Text style={[s.lvlText, { color: gapColors(r.gap).fg }]}>

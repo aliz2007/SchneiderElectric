@@ -57,7 +57,7 @@ export default function ExportPdfButton({
   };
 
   const usedKimi = result?.source === "kimi";
-  const reasonText = (result?.reason ?? "").split(" — ").slice(1).join(" — ") || result?.reason || "";
+  const reasonText = (result?.reason ?? "").split(" · ").slice(1).join(" · ") || result?.reason || "";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0, marginTop: 4 }}>
@@ -74,7 +74,7 @@ export default function ExportPdfButton({
             color: usedKimi ? "#5fe57d" : "var(--amber)",
           }}
         >
-          {usedKimi ? "✓ Narrative written by Kimi" : `⚠ Kimi did not run — ${reasonText}`}
+          {usedKimi ? "✓ Narrative written by Kimi" : `⚠ Kimi did not run. ${reasonText}`}
         </span>
       )}
     </div>

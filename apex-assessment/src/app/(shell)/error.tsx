@@ -47,7 +47,7 @@ export default function ShellError({
       <p className="card-sub" style={{ marginBottom: 14 }}>
         {isStaleChunk
           ? "This tab was open on an older version of the app. Reload to pick up the latest one."
-          : "An unexpected error occurred. Your data is safe — try again, or reload the page."}
+          : "An unexpected error occurred. Your data is safe. Try again, or reload the page."}
       </p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button className="btn btn-primary" type="button" onClick={() => window.location.reload()}>

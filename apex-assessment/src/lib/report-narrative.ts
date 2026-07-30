@@ -151,12 +151,12 @@ export function buildNarrative(input: {
         if (leadRow?.manager != null) {
           sentences.push(
             leadRow.manager >= lead.weighted
-              ? `The manager — whose view carries the most weight — reads it at least as strongly (L${leadRow.manager}), which makes this a strength the account can rely on rather than a one-off impression.`
+              ? `The manager, whose view carries the most weight, reads it at least as strongly (L${leadRow.manager}), which makes this a strength the account can rely on rather than a one-off impression.`
               : `The manager is more reserved here (L${leadRow.manager} against a weighted ${fmt1(lead.weighted)}), and their view carries the most weight, so it is worth making this strength more visible day to day.`
           );
         }
         if (leadRow?.self != null && lead.weighted > leadRow.self) {
-          sentences.push(`Notably, ${first} rates themselves only L${leadRow.self} on ${lead.name} — a strength others see more clearly than they do.`);
+          sentences.push(`Notably, ${first} rates themselves only L${leadRow.self} on ${lead.name}, a strength others see more clearly than they do.`);
         }
       } else {
         const parts = list.map((r) => `${r.name} (${fmt1(r.weighted)} vs required L${r.req})`);
@@ -167,7 +167,7 @@ export function buildNarrative(input: {
         const widest = list.reduce((a, b) => (shortfall(a) >= shortfall(b) ? a : b));
         const wRow = rowByName.get(widest.name);
         if (shortfall(widest) > 1) {
-          sentences.push(`${widest.name} is the pressing one — ${fmt1(shortfall(widest))} of a level short of what the ${track} track expects.`);
+          sentences.push(`${widest.name} is the pressing one, ${fmt1(shortfall(widest))} of a level short of what the ${track} track expects.`);
         }
         if (wRow?.manager != null && wRow.manager > widest.weighted) {
           sentences.push(`The manager scores it higher (L${wRow.manager}), a divergence worth resolving in the development conversation.`);
@@ -175,7 +175,7 @@ export function buildNarrative(input: {
           sentences.push(`The manager is the harshest voice here (L${wRow.manager}) and carries the most weight, so their read drives this gap.`);
         }
         if (wRow?.self != null && wRow.self > widest.weighted) {
-          sentences.push(`${first} rates themselves L${wRow.self} here, above the weighted ${fmt1(widest.weighted)} — closing the perception gap is part of closing the capability gap.`);
+          sentences.push(`${first} rates themselves L${wRow.self} here, above the weighted ${fmt1(widest.weighted)}, so closing the perception gap is part of closing the capability gap.`);
         }
         const noteLenses = notesByCluster.get(cl);
         if (noteLenses?.length) {
@@ -199,14 +199,14 @@ export function buildNarrative(input: {
       .sort((a, b) => b.gap! - a.gap!)
       .slice(0, 2);
     strengthsText =
-      `The panel does not yet place ${amName} above the required level on any capability, so this track has no established strengths to build on — the picture is one of a profile still converging on the bar. ` +
+      `The panel does not yet place ${amName} above the required level on any capability, so this track has no established strengths to build on. The picture is one of a profile still converging on the bar. ` +
       (closest.length
         ? `The closest capabilities to crossing it are ${joinNames(closest.map((r) => r.name))}, each within a level of target; consolidating those first would give the profile its first clear anchor points.`
         : "");
   } else {
     strengthsText = clusterParagraphs(strengths, "strength");
     const extra = development.length === 0 && atOrAbove > strengths.length
-      ? `\n\nBeyond these, ${atOrAbove - strengths.length} further ${atOrAbove - strengths.length === 1 ? "capability sits" : "capabilities sit"} solidly at the required level — a stable base rather than a gap.`
+      ? `\n\nBeyond these, ${atOrAbove - strengths.length} further ${atOrAbove - strengths.length === 1 ? "capability sits" : "capabilities sit"} solidly at the required level, a stable base rather than a gap.`
       : "";
     strengthsText += extra;
   }
@@ -224,7 +224,7 @@ export function buildNarrative(input: {
     const priorities = ordered.slice(0, 3).map((r) => r.name);
     developmentText =
       clusterParagraphs(development, "development") +
-      `\n\nTaken together, the first priorities for the development plan are ${joinNames(priorities)} — the widest gaps to the ${track} bar${development.length > priorities.length ? `, with ${development.length - priorities.length} further below-target ${development.length - priorities.length === 1 ? "capability" : "capabilities"} behind them` : ""}.`;
+      `\n\nTaken together, the first priorities for the development plan are ${joinNames(priorities)}, the widest gaps to the ${track} bar${development.length > priorities.length ? `, with ${development.length - priorities.length} further below-target ${development.length - priorities.length === 1 ? "capability" : "capabilities"} behind them` : ""}.`;
   }
 
   // ---- comments (only when evaluators actually wrote notes) ----
@@ -237,7 +237,7 @@ export function buildNarrative(input: {
     const seenL = new Set<string>();
     for (const n of themeNotes) if (!seenL.has(n.lens)) { seenL.add(n.lens); lenses.push(n.lens); }
     commentsText =
-      `${joinNames(lenses)} recorded written justifications on ${clusters.length} of the six ${clusters.length === 1 ? "theme" : "themes"} — ${joinNames(clusters)}. ` +
+      `${joinNames(lenses)} recorded written justifications on ${clusters.length} of the six ${clusters.length === 1 ? "theme" : "themes"}: ${joinNames(clusters)}. ` +
       `They are the qualitative backing for the scores above: concrete situations, actions and outcomes rather than numbers. ` +
       `Each note is reproduced with its theme in the capability detail at the end of this report, and they are the right starting point for the development conversation.`;
   }

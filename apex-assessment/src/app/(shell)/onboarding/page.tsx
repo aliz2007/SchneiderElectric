@@ -44,7 +44,7 @@ export default async function OnboardingPage({
               <label>Region</label>
               <select className="input" name="zone" defaultValue="" required>
                 <option value="" disabled>
-                  — select your region —
+                  select your region
                 </option>
                 {ZONES.map((z) => (
                   <option key={z} value={z}>
@@ -57,7 +57,7 @@ export default async function OnboardingPage({
               <label>Track</label>
               <select className="input" name="track" defaultValue="" required>
                 <option value="" disabled>
-                  — select your track —
+                  select your track
                 </option>
                 <option value="Acquisition">Acquisition</option>
                 <option value="Saturation">Saturation</option>
@@ -68,7 +68,7 @@ export default async function OnboardingPage({
             <label>Segment</label>
             <select className="input" name="segment" defaultValue="" required>
               <option value="" disabled>
-                — select your account&apos;s segment —
+                select your account&apos;s segment
               </option>
               {SEGMENTS.map((s) => (
                 <option key={s} value={s}>

@@ -23,13 +23,13 @@ import ScheduleEditor from "./schedule-editor";
 
 function Chip({ level }: { level: number | null | undefined }) {
   return (
-    <span className={`lvl-chip ${level ? `lvl-${level}` : "lvl-none"}`}>{level ? `L${level}` : "—"}</span>
+    <span className={`lvl-chip ${level ? `lvl-${level}` : "lvl-none"}`}>{level ? `L${level}` : "n/a"}</span>
   );
 }
 
 /** The weighted score, shown as a decimal and coloured by its gap to required. */
 function ScoreChip({ score, gap }: { score: number | null; gap: number | null }) {
-  if (score == null) return <span className="lvl-chip lvl-none">—</span>;
+  if (score == null) return <span className="lvl-chip lvl-none">n/a</span>;
   return (
     <span className={`lvl-chip ${gapClass(gap)}`} style={{ minWidth: 44, fontVariantNumeric: "tabular-nums" }}>
       {fmt(score, 1)}
@@ -138,7 +138,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
           {strengths.length === 0 ? (
             <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
               {hasAnyScores
-                ? "No capability above the required level — the weighted score sits at or below the baseline throughout."
+                ? "No capability above the required level. The weighted score sits at or below the baseline throughout."
                 : "No submitted assessments yet."}
             </p>
           ) : (
@@ -155,7 +155,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
         </div>
         <div className="card card-pad">
           <h2 className="card-title">Development areas</h2>
-          <p className="card-sub">Weighted score below the required level — feed these into the development plan.</p>
+          <p className="card-sub">Weighted score below the required level. Feed these into the development plan.</p>
           {development.length === 0 ? (
             <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
               {hasAnyScores ? "No capability below target. 🎉" : "No submitted assessments yet."}
@@ -177,7 +177,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
       {perceptionGaps.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: 20 }}>
           <h2 className="card-title">Perception gaps</h2>
-          <p className="card-sub">Self-assessment differs from the weighted score by a full level or more — worth a conversation.</p>
+          <p className="card-sub">Self-assessment differs from the weighted score by a full level or more, worth a conversation.</p>
           <ul className="mini-list">
             {perceptionGaps.map((r) => (
               <li key={r.cap.id}>
@@ -299,14 +299,14 @@ function ClusterSection({
           <td>
             {/* weighted, unrounded — 1.6 and 2.4 must NOT read as the same level */}
             {r.weighted == null ? (
-              <span style={{ color: "var(--muted)" }}>—</span>
+              <span style={{ color: "var(--muted)" }}>n/a</span>
             ) : (
               <strong style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(r.weighted, 2)}</strong>
             )}
           </td>
           <td>
             {r.gap == null ? (
-              <span style={{ color: "var(--muted)" }}>—</span>
+              <span style={{ color: "var(--muted)" }}>n/a</span>
             ) : (
               <span
                 className={`lvl-chip ${gapClass(r.gap)}`}

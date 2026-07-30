@@ -156,7 +156,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!aiNarrativeEnabled()) {
     recordAiResult("not attempted: AI feedback is off (no key set, or the toggle is off)");
   } else if (!hasScores) {
-    recordAiResult(`not attempted: no submitted APEX Panel scores for ${am.name} — the APEX Panel assessment must be submitted first`);
+    recordAiResult(`not attempted: no submitted APEX Panel scores for ${am.name}. The APEX Panel assessment must be submitted first`);
   } else {
     const ai = await generateAiNarrative({
       amName: am.name,

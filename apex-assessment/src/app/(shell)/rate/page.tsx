@@ -46,7 +46,7 @@ export default async function RatePage({
         </div>
         <div className="banner banner-info">
           No self-assessment is linked to your account yet. An administrator needs to connect your
-          account to your own Account Manager profile — in <strong>Users &amp; Access</strong>, set
+          account to your own Account Manager profile. In <strong>Users &amp; Access</strong>, set
           your lens to <strong>Self</strong> and pick your name under &ldquo;which Account Manager is
           this person&rdquo;. It will then open here automatically.
         </div>
@@ -72,7 +72,7 @@ export default async function RatePage({
         <h1 className="page-title">My Assessments</h1>
         <p className="page-sub">
           Rate each capability using the L1 / L2 / L3 behavioural anchors. Your answers are
-          confidential — no other evaluator can see them.
+          confidential. No other evaluator can see them.
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export default async function RatePage({
 
       {ams.length === 0 ? (
         <div className="banner banner-info">
-          Nothing on your list yet — type a name above to add your first assessment.
+          Nothing on your list yet. Type a name above to add your first assessment.
         </div>
       ) : (
         <div className="am-grid">

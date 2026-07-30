@@ -42,7 +42,7 @@ export default async function UsersPage({
         <h1 className="page-title">Users & Access</h1>
         <p className="page-sub">
           Provision evaluators and control what they can see. Assessors only ever see their own
-          assessment tasks — analysis and other people&apos;s ratings are superadmin-only.
+          assessment tasks. Analysis and other people&apos;s ratings are superadmin-only.
         </p>
       </div>
 
@@ -52,8 +52,8 @@ export default async function UsersPage({
       <div className="card card-pad" style={{ marginBottom: 22 }}>
         <h2 className="card-title">Create user</h2>
         <p className="card-sub">
-          Pick a lens for assessors — <strong>Self</strong> (a KAM rating themselves),{" "}
-          <strong>Manager</strong>, or <strong>APEX Panel</strong> — then link the right Account
+          Pick a lens for assessors: <strong>Self</strong> (a KAM rating themselves),{" "}
+          <strong>Manager</strong>, or <strong>APEX Panel</strong>, then link the right Account
           Manager(s). The picker below changes to match the lens.
         </p>
         <CreateUserForm ams={ams} />
@@ -93,7 +93,7 @@ export default async function UsersPage({
                     </td>
                     <td>
                       <details className="details-box" style={{ marginTop: 0 }}>
-                        <summary>{u.lens ? LENS_LABELS[u.lens as Lens] : "— none —"}</summary>
+                        <summary>{u.lens ? LENS_LABELS[u.lens as Lens] : "none"}</summary>
                         <div className="details-inner">
                           <form
                             action={updateLens.bind(null, u.id)}
@@ -134,7 +134,7 @@ export default async function UsersPage({
                                 defaultValue={[...assigned][0] ?? ""}
                                 style={{ maxWidth: 280 }}
                               >
-                                <option value="">— none —</option>
+                                <option value="">none</option>
                                 {ams.map((am) => (
                                   <option key={am.id} value={am.id}>
                                     {am.code} · {am.name}
@@ -229,14 +229,14 @@ export default async function UsersPage({
         </p>
         <ul className="tool-notes">
           <li>
-            <strong>Create test sandbox</strong> — makes three ready-to-use logins
+            <strong>Create test sandbox</strong> makes three ready-to-use logins
             (<code>self.demo</code>, <code>manager.demo</code>, <code>panel.demo</code>, password{" "}
             <code>demo1234</code>), all pointed at one Account Manager with a <em>blank</em>{" "}
             assessment. Log in as each to experience assessing from every lens, then come back as
             superadmin to compare them and export the PDF.
           </li>
           <li>
-            <strong>Load demo dataset</strong> — fills all 75 assessments with plausible{" "}
+            <strong>Load demo dataset</strong> fills all 75 assessments with plausible{" "}
             <em>already-submitted</em> scores so the dashboards and heat maps have data. Good for
             exploring analysis, not for practising the assessment flow. Replaces existing ratings.
           </li>

@@ -17,7 +17,7 @@ import { gapClass } from "@/lib/heat";
 import FeedbackDownload from "./feedback-download";
 
 function Chip({ level }: { level: number | null | undefined }) {
-  return <span className={`lvl-chip ${level ? `lvl-${level}` : "lvl-none"}`}>{level ? `L${level}` : "—"}</span>;
+  return <span className={`lvl-chip ${level ? `lvl-${level}` : "lvl-none"}`}>{level ? `L${level}` : "n/a"}</span>;
 }
 
 export default async function FeedbackPage() {
@@ -49,7 +49,7 @@ export default async function FeedbackPage() {
     return (
       <Shell title="My Feedback">
         <div className="banner banner-info">
-          Your feedback will be available here once all three assessments are submitted — your own
+          Your feedback will be available here once all three assessments are submitted: your own
           self-assessment, your manager&apos;s, and the APEX Panel&apos;s.
         </div>
         <div className="card card-pad" style={{ marginTop: 18, maxWidth: 460 }}>
@@ -132,7 +132,7 @@ export default async function FeedbackPage() {
           <p className="card-sub">Where the APEX Panel places you above the required level.</p>
           {strengths.length === 0 ? (
             <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
-              The panel does not yet place you above the required level on any capability — you are on
+              The panel does not yet place you above the required level on any capability. You are on
               the baseline or building toward it.
             </p>
           ) : (
@@ -170,7 +170,7 @@ export default async function FeedbackPage() {
         <div className="card card-pad" style={{ marginBottom: 20 }}>
           <h2 className="card-title">How you saw yourself vs the panel</h2>
           <p className="card-sub">
-            Capabilities where your self-rating differed from the APEX Panel by a full level or more — useful
+            Capabilities where your self-rating differed from the APEX Panel by a full level or more. Useful
             for a development conversation.
           </p>
           <ul className="mini-list">
@@ -249,7 +249,7 @@ function FeedbackClusterRows({
           <td className={`cell ${r.req == null ? "hm-na" : gapClass(r.gap)}`} style={{ minWidth: 64 }}>
             {r.req == null ? "n/a" : <Chip level={r.expert} />}
           </td>
-          <td className="cell" style={{ minWidth: 56, color: "var(--muted)" }}>{r.req == null ? "—" : `L${r.req}`}</td>
+          <td className="cell" style={{ minWidth: 56, color: "var(--muted)" }}>{r.req == null ? "n/a" : `L${r.req}`}</td>
         </tr>
       ))}
       {notes.length > 0 && (

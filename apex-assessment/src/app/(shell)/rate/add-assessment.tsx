@@ -75,7 +75,7 @@ export default function AddAssessment({ options }: { options: AssignOption[] }) 
         {open && q.trim() !== "" && (
           <div className="assign-pop">
             {matches.length === 0 ? (
-              <div className="assign-empty">No match — check the spelling or ask your administrator.</div>
+              <div className="assign-empty">No match. Check the spelling or ask your administrator.</div>
             ) : (
               matches.map((o) => (
                 <button

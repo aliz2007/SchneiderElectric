@@ -46,7 +46,7 @@ export default function CreateUserForm({ ams }: { ams: AmOption[] }) {
         <div className="field">
           <label>Lens{role === "superadmin" ? " (optional)" : ""}</label>
           <select className="input" name="lens" value={lens} onChange={(e) => setLens(e.target.value)}>
-            <option value="">{role === "superadmin" ? "— none (admin only) —" : "— choose a lens —"}</option>
+            <option value="">{role === "superadmin" ? "none (admin only)" : "choose a lens"}</option>
             <option value="self">Self (the KAM rating themselves)</option>
             <option value="manager">Manager</option>
             <option value="expert">APEX Panel</option>
@@ -81,7 +81,7 @@ export default function CreateUserForm({ ams }: { ams: AmOption[] }) {
                 style={{ accentColor: "var(--se-green)", marginTop: 3 }}
               />
               <span>
-                A <strong>new person</strong> — they fill in their region and other details themselves
+                A <strong>new person</strong>, who fills in their region and other details themselves
                 on their first sign-in.
               </span>
             </label>
@@ -101,7 +101,7 @@ export default function CreateUserForm({ ams }: { ams: AmOption[] }) {
           ) : (
             <select className="input" name="am" defaultValue="" required style={{ maxWidth: 320 }}>
               <option value="" disabled>
-                — select their profile —
+                select their profile
               </option>
               {ams.map((am) => (
                 <option key={am.id} value={am.id}>

@@ -38,7 +38,7 @@ const MIN_K = 1;
 const MAX_K = 6;
 const ZONES: MapZone[] = ["MEA", "SAM", "India", "Pacific"];
 
-const fmt = (n: number | null, d = 2) => (n == null ? "—" : n.toFixed(d));
+const fmt = (n: number | null, d = 2) => (n == null ? "n/a" : n.toFixed(d));
 
 /** gap → severity 0 (comfortably above target) … 1 (critical deficit) */
 const severity = (gap: number) => Math.min(1, Math.max(0, (0.5 - gap) / 2));

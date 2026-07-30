@@ -151,7 +151,7 @@ function fullSnapshot() {
   }));
 
   return {
-    scope: "full — this user is a superadmin and may see everything",
+    scope: "full: this user is a superadmin and may see everything",
     levelScale: { L1: "Developing", L2: "Proficient", L3: "Advanced" },
     definitions: {
       strength: "APEX Panel score strictly ABOVE the required level (a capability merely AT the required level is on the baseline, not a strength)",
@@ -209,7 +209,7 @@ function scopedSnapshot(viewer: ChatViewer) {
 
   return {
     scope:
-      "restricted — this user is an assessor and may only see their own assessment work and overall completion counts",
+      "restricted: this user is an assessor and may only see their own assessment work and overall completion counts",
     levelScale: { L1: "Developing", L2: "Proficient", L3: "Advanced" },
     // names and themes only: required/expected levels are hidden from assessors by design
     capabilityCatalogue: caps.map((c) => ({ name: c.name, cluster: c.cluster })),

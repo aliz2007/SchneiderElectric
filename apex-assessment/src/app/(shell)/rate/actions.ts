@@ -45,7 +45,7 @@ export async function selfUnassign(amId: number): Promise<AssignResult> {
   if (!user.lens) return { ok: false, error: "Your account has no assessment lens configured." };
   const assessment = getAssessment(amId, user.lens);
   if (assessment && (assessment.status === "submitted" || ratedCount(assessment.id) > 0)) {
-    return { ok: false, error: "This assessment has already been started — ask your administrator to remove it." };
+    return { ok: false, error: "This assessment has already been started. Ask your administrator to remove it." };
   }
   const db = getDb();
   if (assessment) db.prepare("DELETE FROM assessments WHERE id = ?").run(assessment.id);

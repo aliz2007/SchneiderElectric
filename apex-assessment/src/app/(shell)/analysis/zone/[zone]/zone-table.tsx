@@ -124,7 +124,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                     <span className="zone-am-name" title={am.name}>{am.name}</span>
                     {sort !== "code" && (
                       <span className="zone-am-rank" style={{ color: rankColor(g) }}>
-                        {g == null ? "—" : `${g > 0 ? "+" : ""}${g.toFixed(2)}`}
+                        {g == null ? "n/a" : `${g > 0 ? "+" : ""}${g.toFixed(2)}`}
                       </span>
                     )}
                   </th>
@@ -153,7 +153,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                         className={`cell ${cls}`}
                         title={rq == null ? "Not applicable to this AM's track" : score == null ? "No submitted panel score" : `score L${score} · required L${rq}`}
                       >
-                        {rq == null ? "n/a" : score == null ? "—" : `L${score}`}
+                        {rq == null ? "n/a" : score == null ? "n/a" : `L${score}`}
                       </td>
                     );
                   });
@@ -162,7 +162,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                       <th className="hm-rowhead">{cap.name}</th>
                       {cells}
                       <td className="cell hm-na" style={{ background: "rgba(255,255,255,0.09)", color: "var(--ink)" }}>
-                        {vals.length === 0 ? "—" : fmt(vals.reduce((a, b) => a + b, 0) / vals.length)}
+                        {vals.length === 0 ? "n/a" : fmt(vals.reduce((a, b) => a + b, 0) / vals.length)}
                       </td>
                     </tr>
                   );

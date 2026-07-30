@@ -79,7 +79,7 @@ export default async function AnalysisPage({
         <h1 className="page-title">Capability Dashboard</h1>
         <p className="page-sub">
           Weighted results ({WEIGHTS_LABEL}) vs required levels across the TOP 25. Red cells indicate
-          collective capability deficits — that is where targeted training programs should go.
+          collective capability deficits. That is where targeted training programs should go.
         </p>
       </div>
 
@@ -115,7 +115,7 @@ export default async function AnalysisPage({
         <div className="card kpi">
           <div className="kpi-label">Avg weighted maturity</div>
           <div className="kpi-value">
-            {stats.avgWeighted == null ? "—" : fmt(stats.avgWeighted, 2)}
+            {stats.avgWeighted == null ? "n/a" : fmt(stats.avgWeighted, 2)}
             {stats.avgWeighted != null && (
               <span style={{ fontSize: 16, color: "var(--muted)" }}> / 3</span>
             )}
@@ -147,7 +147,7 @@ export default async function AnalysisPage({
         <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
           <h2 className="card-title">Zone performance map</h2>
           <p className="card-sub">
-            Thermal view of weighted performance vs required levels across Schneider hubs —
+            Thermal view of weighted performance vs required levels across Schneider hubs:
             blue is on target, red is a critical gap. Filter by capability, hover the hubs,
             click a zone to focus.
           </p>
@@ -210,7 +210,7 @@ export default async function AnalysisPage({
         <div className="legend">
           <span><span className="sw" style={{ background: "#3dcd58" }} />At / above required</span>
           <span><span className="sw" style={{ background: "#facc15" }} />Slightly below (&lt; 0.5)</span>
-          <span><span className="sw" style={{ background: "#fb923c" }} />Below (0.5 – 1)</span>
+          <span><span className="sw" style={{ background: "#fb923c" }} />Below (0.5 to 1)</span>
           <span><span className="sw" style={{ background: "#f4564a" }} />Critical gap (&gt; 1)</span>
           <span><span className="sw" style={{ background: "#3a465e" }} />No data / not applicable</span>
         </div>
@@ -249,7 +249,7 @@ export default async function AnalysisPage({
                           ) : s.status === "draft" ? (
                             <span className="badge badge-amber">{s.rated}/22</span>
                           ) : (
-                            <span className="badge badge-gray">—</span>
+                            <span className="badge badge-gray">n/a</span>
                           )}
                         </td>
                       );
@@ -289,7 +289,7 @@ function ClusterRows({
           <th className="hm-rowhead">{row.cap.name}</th>
           {row.cells.map((cell, i) => (
             <td key={i} className={`cell ${gapClass(cell.gap)}`} title={cell.n ? `${cell.n} AM(s) · required ~${fmt(cell.avgReq)}` : "No submitted panel data"}>
-              {cell.avgScore == null ? "—" : (
+              {cell.avgScore == null ? "n/a" : (
                 <>
                   {fmt(cell.avgScore)}
                   <small>req {fmt(cell.avgReq)}</small>

@@ -41,7 +41,7 @@ export default function FeedbackDownload({ amId, amName }: { amId: number; amNam
       </button>
       {error && (
         <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
-          Could not generate the PDF just now — please try again.
+          Could not generate the PDF just now. Please try again.
         </span>
       )}
     </div>

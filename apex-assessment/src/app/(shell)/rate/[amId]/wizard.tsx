@@ -176,7 +176,7 @@ export default function Wizard({
           disabled={frozen}
           placeholder={
             isSelf
-              ? "Describe a concrete example — situation, actions taken, results, impact, and where relevant how it could be replicated."
+              ? "Describe a concrete example: situation, actions taken, results, impact, and where relevant how it could be replicated."
               : `What evidence supports your ratings for ${cluster}? A justification is required for every theme.`
           }
         />
@@ -278,7 +278,7 @@ export default function Wizard({
               return (
                 <div key={c.id} className="review-row">
                   <span className={`lvl-chip ${a?.level ? `lvl-${a.level}` : "lvl-none"}`}>
-                    {a?.level ? `L${a.level}` : "—"}
+                    {a?.level ? `L${a.level}` : "n/a"}
                   </span>
                   <span className="review-cap">{c.name}</span>
                   {!frozen && (
@@ -383,10 +383,10 @@ export default function Wizard({
           <ul className="wizard-help-list">
             {isSelf ? (
               <>
-                <li>Rate yourself on each capability against the three levels — be candid.</li>
+                <li>Rate yourself on each capability against the three levels. Be candid.</li>
                 <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
                 <li>
-                  For every theme, write one <b>concrete example</b> to justify your ratings — structure it as
+                  For every theme, write one <b>concrete example</b> to justify your ratings, structured as
                   situation, actions, results and impact. It is mandatory.
                 </li>
                 <li>Everything saves automatically. You can only submit once all {caps.length} are rated and every theme is justified.</li>
@@ -395,7 +395,7 @@ export default function Wizard({
               <>
                 <li>Rate the Account Manager on each capability against the three levels.</li>
                 <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
-                <li>Write a <b>justification note for every theme</b> — it is mandatory before you can submit.</li>
+                <li>Write a <b>justification note for every theme</b>. It is mandatory before you can submit.</li>
                 <li>Ratings save automatically. Submit once all {caps.length} are rated and every theme is justified.</li>
               </>
             )}

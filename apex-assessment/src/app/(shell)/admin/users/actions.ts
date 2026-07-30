@@ -151,7 +151,7 @@ export async function loadDemoData() {
     }
   });
   tx();
-  redirect("/admin/users?ok=" + encodeURIComponent("Demo dataset loaded — see the Dashboard."));
+  redirect("/admin/users?ok=" + encodeURIComponent("Demo dataset loaded. See the Dashboard."));
 }
 
 /**
@@ -207,7 +207,7 @@ export async function createSandboxAssessors() {
   redirect(
     "/admin/users?ok=" +
       encodeURIComponent(
-        `Sandbox ready. Sign in as self.demo, manager.demo or panel.demo (password ${password}) — all set to assess ${am!.name} (${am!.code}) with a blank assessment. Then return here as superadmin to open Individuals → ${am!.name} and export the PDF.`
+        `Sandbox ready. Sign in as self.demo, manager.demo or panel.demo (password ${password}), all set to assess ${am!.name} (${am!.code}) with a blank assessment. Then return here as superadmin to open Individuals → ${am!.name} and export the PDF.`
       )
   );
 }

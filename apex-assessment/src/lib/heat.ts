@@ -8,5 +8,5 @@ export function gapClass(gap: number | null): string {
 }
 
 export function fmt(n: number | null | undefined, digits = 1): string {
-  return n == null ? "—" : n.toFixed(digits);
+  return n == null ? "n/a" : n.toFixed(digits);
 }

@@ -313,7 +313,7 @@ export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 // ratings. One mandatory free-text answer, gently guided by the APEX framework
 // (situation / actions / results / impact / replication) rather than five fields.
 export const SELF_JUSTIFICATION_PROMPT =
-  "Please share a concrete example to support your rating. You can structure it as: situation, actions taken, results, impact — and, where relevant, how this could be replicated.";
+  "Please share a concrete example to support your rating. You can structure it as: situation, actions taken, results, impact, and where relevant how this could be replicated.";
 
 // Interview / self-reflection question guide, 1:1 from the APEX Question Guide
 // workbook: two guiding questions per capability for EACH lens. Self-assessors get
@@ -349,7 +349,7 @@ export const CAPABILITY_QUESTIONS: Record<string, Record<Lens, string[]>> = {
   "Customer Relationship Management": {
     self: ["How do you build and maintain your network across the customer's functions and levels, beyond deal contacts?", "How do you spot and address a relationship risk before it damages the account?"],
     manager: ["Tell me about a time when a relationship you built opened a door you would otherwise have depended on others to open.", "Tell me about a time when you were trusted to manage a difficult situation with the customer."],
-    expert: ["How do you make sure Schneider — not only you — is seen as a trusted interface across the customer?", "Describe a situation where the trust you built shifted the balance on a strategic account."],
+    expert: ["How do you make sure Schneider, not only you, is seen as a trusted interface across the customer?", "Describe a situation where the trust you built shifted the balance on a strategic account."],
   },
   "Stakeholder Management": {
     self: ["How do you map the stakeholders in an account and keep that view current?", "How do you align stakeholders with different interests around your account priorities?"],
