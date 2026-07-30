@@ -249,7 +249,8 @@ const s = StyleSheet.create({
   coverMeta: { paddingHorizontal: 46, paddingBottom: 44 },
   // overall grade under the CONFIDENTIAL pill on the overview page
   gradeCol: { alignItems: "flex-end" },
-  grade: { fontSize: 26, fontFamily: "Helvetica-Bold", letterSpacing: -0.5, marginTop: 5 },
+  grade: { fontSize: 23, fontFamily: "Helvetica-Bold", letterSpacing: -0.5, marginTop: 5 },
+  gradeVs: { fontSize: 13, fontFamily: "Helvetica", color: MUTED, letterSpacing: 0 },
   gradeExp: { fontSize: 7.5, color: MUTED, marginTop: 1 },
   coverMetaLine: { height: 1, backgroundColor: LINE, marginBottom: 12 },
   coverMetaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
@@ -710,23 +711,33 @@ export function AmReportPdf(p: AmReportProps) {
             <View style={s.confPill}>
               <Text style={s.confPillText}>CONFIDENTIAL</Text>
             </View>
-            {/* headline grade right under the confidential mark: unrounded APEX Panel
-                average across the track's capabilities — green at/above the expected
-                overall, red below it, with the expected overall printed beneath */}
+            {/* headline grade right under the confidential mark: the weighted final average
+                set AGAINST the expected average (not out of 3), coloured on a gradient by
+                how far it sits from what the track expects */}
             {p.overallAvg != null && p.overallReq != null ? (
               <>
                 <Text style={[s.grade, { color: gradeColor(p.overallAvg - p.overallReq) }]}>
-                  {p.overallAvg.toFixed(1)} / 3
+                  {p.overallAvg.toFixed(2)}
+                  <Text style={s.gradeVs}> vs </Text>
+                  {p.overallReq.toFixed(2)}
                 </Text>
-                <Text style={s.gradeExp}>Expected overall · {p.overallReq.toFixed(1)} / 3</Text>
+                <Text style={s.gradeExp}>Final average vs. expected average</Text>
               </>
             ) : (
               <>
-                <Text style={[s.grade, { color: FAINT }]}>— / 3</Text>
+                <Text style={[s.grade, { color: FAINT }]}>
+                  —
+                  {p.overallReq != null && (
+                    <>
+                      <Text style={s.gradeVs}> vs </Text>
+                      {p.overallReq.toFixed(2)}
+                    </>
+                  )}
+                </Text>
                 <Text style={s.gradeExp}>
                   {p.overallReq != null
-                    ? `Awaiting APEX Panel · expected ${p.overallReq.toFixed(1)} / 3`
-                    : "Awaiting APEX Panel scores"}
+                    ? "Final average vs. expected average — awaiting scores"
+                    : "Awaiting submitted assessments"}
                 </Text>
               </>
             )}
