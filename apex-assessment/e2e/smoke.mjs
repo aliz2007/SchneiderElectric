@@ -276,6 +276,17 @@ try {
   (await page.locator(".framework-intro").textContent())?.includes("concrete example")
     ? ok("self-assessor sees the guided justification prompt")
     : fail("self justification prompt", "not shown");
+  // Type character-by-character, NOT fill(): a nested-component regression once remounted
+  // this textarea on every keystroke, so focus was lost after each letter. fill() sets the
+  // value in one shot and would not catch it; pressSequentially reproduces real typing.
+  const TYPED = "Situation: rebuilt the exec map";
+  await page.locator(".framework-note").click();
+  await page.locator(".framework-note").pressSequentially(TYPED, { delay: 15 });
+  const typedValue = await page.locator(".framework-note").inputValue();
+  typedValue === TYPED
+    ? ok("typing in the justification keeps focus (no per-keystroke remount)")
+    : fail("justification typing", `got "${typedValue}" expected "${TYPED}"`);
+
   const SELF_NOTE =
     "Situation: took over a stalled strategic account. Actions: rebuilt the executive map. Results: reopened two deals. Impact: protected the renewal.";
   await page.locator(".framework-note").fill(SELF_NOTE);

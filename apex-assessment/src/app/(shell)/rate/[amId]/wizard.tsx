@@ -154,7 +154,12 @@ export default function Wizard({
 
   // ---- justification block shown under the level cards for the current theme ----
   // One mandatory note per theme for every lens; self-assessors get a guided prompt.
-  function Justification({ cluster }: { cluster: string }) {
+  //
+  // NOTE: this is a plain render helper, NOT a nested component, and it must stay that way.
+  // Declaring a component inside Wizard gives it a new function identity on every render,
+  // so React unmounts and remounts the subtree each time state changes — which made the
+  // textarea lose focus after every single keystroke.
+  const renderJustification = (cluster: string) => {
     const done = themeComplete(cluster);
     return (
       <div className={`framework-block${done ? " done" : ""}`}>
@@ -177,7 +182,7 @@ export default function Wizard({
         />
       </div>
     );
-  }
+  };
 
   return (
     <div className="wizard">
@@ -255,7 +260,7 @@ export default function Wizard({
               );
             })}
           </div>
-          <Justification cluster={cap.cluster} />
+          {renderJustification(cap.cluster)}
         </div>
       )}
 
