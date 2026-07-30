@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-26.
+Last updated: 2026-07-30.
 
 ---
 
@@ -20,7 +20,15 @@ Last updated: 2026-07-26.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-26): a **search bar + Zone / Track / Segment filters** on
+- Most recent additions (2026-07-30): **WEIGHTED SCORING** — every capability's score is now
+  `Self 20% + APEX Panel 35% + Manager 45%`, and that weighted decimal drives every average,
+  gap, strength, development area, heat map, KPI, chatbot answer and PDF figure in the app
+  (see §2b). Also: the PDF radar gained a **fourth, emphasised "weighted average" web** (the
+  three lens webs are now thin), a **per-theme table** (weighted / expected / gap) under it,
+  **decimal gaps** throughout, the detail table's APEX column renamed **Panel**, and the
+  headline grade is now a **continuous colour gradient** by distance from expected
+  (red → orange → amber → light green → deep green).
+- Earlier (2026-07-26): a **search bar + Zone / Track / Segment filters** on
   Individual Results; the PDF **tightened** so the report is 4 pages again (the radar sits on
   the overview page instead of being orphaned onto its own, leaving blank space); a
   **substantially richer narrative page** — both the Kimi prompt and the deterministic
@@ -75,7 +83,8 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   Saturation Excellence.
 - **3 assessment lenses** per AM: **Self** (the KAM), **Manager**, **APEX Panel** (panel of
   Global Account Managers & Segment Leaders). In code the panel lens is called `expert`.
-  The APEX Panel is the authoritative score used in analytics.
+  Historically the APEX Panel score alone drove analytics; since 2026-07-30 the WEIGHTED
+  score does (see §2b).
 - Each AM has a **track**, Acquisition or Saturation, which sets the **required level** per
   capability. 4 capabilities apply only to Acquisition (Pipeline Shaping, Competitive
   Positioning, White-Space Penetration, Preferred Partner Positioning); 3 only to
@@ -113,6 +122,31 @@ All of these live in the `theme_notes.note` column (one row per assessment per c
 `themeJustificationText(row)` returns that note; it still falls back to the legacy five
 framework columns if an old row only has those, so nothing pre-existing is lost.
 
+### 2b. Weighted scoring (the single most important rule)
+
+`LENS_WEIGHTS` in `seed-data.ts`: **Self 20% · APEX Panel 35% · Manager 45%**. The helper
+`weightedScore({self, manager, expert})` combines whichever lenses have a level and
+**re-normalises over the lenses present**, so a partially-assessed person is still scored
+fairly (self 2 + manager 3, no panel → `(0.2·2 + 0.45·3) / 0.65 = 2.69`); it returns null when
+nothing has been submitted.
+
+That weighted value — a DECIMAL, never rounded to a level — is the canonical score everywhere:
+
+- `scoredRows(amId, track)` in `queries.ts` is the shared row builder (three lens levels +
+  `weighted` + `req` + `gap` = weighted − required + `perception` = self − weighted). The
+  individual page, My Feedback and the PDF all consume it, so they cannot drift apart.
+  `averageWeighted` / `averageRequired` roll a row set up; `weightedLevels(amId)` gives the
+  per-capability map used by the maps and heat maps.
+- **Strength** = weighted STRICTLY above required · **development area** = weighted below
+  required · at-required = baseline (neither). **Perception gap** = |self − weighted| >= 1.
+- The zone heat map, training priorities, zone map colouring, the dashboard's
+  "Avg weighted maturity" KPI, the individual "Weighted" column, the PDF's headline grade,
+  radar and per-theme table, the deterministic narrative and both AI prompts all use it.
+- Individual lens levels are still shown (Self / Manager / Panel columns, the radar's three
+  thin webs) — they are the inputs, not the verdict.
+
+Changing the weights is a one-line edit to `LENS_WEIGHTS`; everything downstream follows.
+
 ### The Question Guide (per capability, per lens)
 
 `CAPABILITY_QUESTIONS` in `seed-data.ts` embeds the APEX Question Guide workbook 1:1: for
@@ -142,6 +176,9 @@ Clearing a date in the editor removes its limit.
 
 ### Hard product rules (enforced server-side — keep them)
 
+0. The score of record is the WEIGHTED score (Self 20% / APEX Panel 35% / Manager 45%), kept
+   as a decimal. Never round it to a single level in a metric — a 1.6 and a 2.4 are different
+   situations (§2b).
 1. Evaluators must NEVER see other evaluators' scores (blind assessment).
 2. Required levels are HIDDEN during rating to avoid anchoring bias; shown only in analysis.
 3. Individual results and analysis are superadmin-only. The shared dashboard (zone-level,
@@ -271,15 +308,19 @@ lens rather than a multi-checkbox.
     it shows a status checklist instead. The nav tab only appears for a linked self-assessor.
 - **PDF report** (`GET /analysis/am/[id]/pdf`, superadmin-only): a styled 4-page report
   (`src/lib/pdf-report.tsx`): (1) cover; (2) overview — right under its CONFIDENTIAL pill,
-  a **big bold overall grade /3** (the unrounded APEX Panel average across the track's
-  applicable capabilities, GREEN when at/above the expected overall, RED when below, with
-  the expected overall — the average required level — printed smaller beneath; "— / 3"
-  until the panel submits), then profile + strengths/development + a **spider chart of
-  perception by theme** (`ThemeRadar`, @react-pdf SVG: one web per lens — Self amber,
-  Manager violet, APEX Panel green — across the six themes, each point that lens's average
-  level in the theme); (3) narrative = strengths/weaknesses prose + a definition of every
-  capability it names; (4) capability-detail table with theme notes and the unrounded
-  **Avg** column. See §5–6 for how the narrative and definitions are produced.
+  a **big bold overall grade /3** (the unrounded WEIGHTED average across the track's
+  applicable capabilities, coloured by a **continuous gradient** on its distance from the
+  expected overall — deep red well below, orange, amber on the bar, light green a little
+  above, deep green well above — with the expected overall printed smaller beneath; "— / 3"
+  until something is submitted), then profile + strengths/development (the development card
+  is capped at `OVERVIEW_LIST_MAX` with a "+N more" line so the radar always fits the page;
+  the full list is in the detail table) + a **spider chart of perception by theme**
+  (`ThemeRadar`, @react-pdf SVG: thin webs for Self amber / Manager violet / Panel blue plus
+  a **thick deep-green weighted-average web**) and, under it, a compact **per-theme table**
+  (weighted / expected / gap, decimals); (3) narrative = strengths/weaknesses prose + a
+  definition of every capability it names; (4) capability-detail table with theme notes, the
+  **Panel** column (formerly "APEX"), the **Weighted** column and a **decimal Gap**.
+  Every report is 4 pages — verified across all 25 AMs. See §5–6 for the narrative.
 - **Admin — Users & Access** (`/admin/users`, superadmin):
   - Create user with a **lens-aware picker** (`create-user-form.tsx`): Self shows a
     single-select "which Account Manager is this person"; Manager/Panel show a checkbox grid
@@ -428,7 +469,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 51/51
+node e2e/smoke.mjs                                # in a second shell — currently 51/51 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -510,9 +551,13 @@ env var before putting the app on the open internet.
   evidence note. It is MANDATORY for all three lenses: one note per theme — self-assessors from
   a guided concrete-example prompt, Manager/APEX Panel free text. (A brief experiment split the
   self note into five separate framework questions; that was reverted to one note.)
-- Strength vs development is strict: a strength is a capability where the panel is STRICTLY
-  above required; anything below required is a development area (uncapped, all shown); AT
-  required is the baseline and is neither.
+- Strength vs development is strict, and measured on the WEIGHTED score: a strength is
+  STRICTLY above required; anything below required is a development area; AT required is the
+  baseline and is neither. (The PDF's overview card shows the first few with a "+N more"
+  pointer; the individual page and the PDF detail table list every one.)
+- The lens weighting (Self 20 / Panel 35 / Manager 45) was set by the client. Note it means
+  the MANAGER carries the most weight and the self-assessment the least — which supersedes the
+  earlier "the APEX Panel is authoritative" rule. Change it in `LENS_WEIGHTS` only.
 - Segment is a filter/reporting dimension chosen at account creation; it does not affect
   required levels. All dashboard filters live in one centralized Filters window.
 - The PDF narrative is deterministic by default and reproducible; Kimi is an optional

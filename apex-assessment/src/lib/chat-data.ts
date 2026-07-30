@@ -15,10 +15,12 @@
 // AM (strengths, skill gaps, perception gaps) and per zone (most common skill
 // gaps), so the model answers from explicit fields instead of re-deriving numbers
 // from raw scores — which is where an LLM hallucinates. Definitions match the app:
-//   strength   = APEX Panel STRICTLY ABOVE the required level (gap > 0)
-//   skill gap  = APEX Panel BELOW the required level (gap < 0)
-//   at baseline= APEX Panel EQUAL to the required level (not a strength, not a gap)
-//   perception gap = self and panel differ by a full level or more (|self - panel| >= 1)
+//   weighted   = Self 20% + APEX Panel 35% + Manager 45% (re-normalised over submitted
+//                lenses) — the canonical score behind every metric
+//   strength   = WEIGHTED score STRICTLY ABOVE the required level (gap > 0)
+//   skill gap  = WEIGHTED score BELOW the required level (gap < 0)
+//   at baseline= WEIGHTED score EQUAL to the required level (not a strength, not a gap)
+//   perception gap = self and the weighted score differ by a full level or more
 //
 // Only SUBMITTED assessments feed the full snapshot, matching every analysis view.
 
@@ -36,7 +38,7 @@ import {
   submittedThemeNotes,
   themeJustificationText,
 } from "./queries";
-import { LENS_LABELS, LENSES, type Lens } from "./seed-data";
+import { LENS_LABELS, LENSES, WEIGHTS_LABEL, weightedScore, type Lens } from "./seed-data";
 
 export type ChatViewer = {
   id: number;
@@ -52,8 +54,9 @@ type CapRow = {
   self: number | null;
   manager: number | null;
   panel: number | null;
-  gapVsRequired: number | null;
-  selfMinusPanel: number | null;
+  weighted: number | null; // Self 20% / Panel 35% / Manager 45%
+  gapVsRequired: number | null; // weighted - required
+  selfMinusWeighted: number | null;
 };
 
 function fullSnapshot() {
@@ -67,6 +70,8 @@ function fullSnapshot() {
         const self = levels.self.get(cap.id) ?? null;
         const manager = levels.manager.get(cap.id) ?? null;
         const panel = levels.expert.get(cap.id) ?? null;
+        const weighted = weightedScore({ self, manager, expert: panel });
+        const round2 = (v: number | null) => (v == null ? null : Math.round(v * 100) / 100);
         return {
           capability: cap.name,
           cluster: cap.cluster,
@@ -74,8 +79,9 @@ function fullSnapshot() {
           self,
           manager,
           panel,
-          gapVsRequired: required != null && panel != null ? panel - required : null,
-          selfMinusPanel: self != null && panel != null ? self - panel : null,
+          weighted: round2(weighted),
+          gapVsRequired: required != null && weighted != null ? round2(weighted - required) : null,
+          selfMinusWeighted: self != null && weighted != null ? round2(self - weighted) : null,
         };
       })
       .filter((r) => r.required != null || r.self != null || r.manager != null || r.panel != null);
@@ -84,19 +90,19 @@ function fullSnapshot() {
     const scored = rows.filter((r) => r.gapVsRequired != null);
     const strengths = scored
       .filter((r) => r.gapVsRequired! > 0)
-      .map((r) => ({ capability: r.capability, cluster: r.cluster, panel: r.panel, required: r.required, aboveRequiredBy: r.gapVsRequired }));
+      .map((r) => ({ capability: r.capability, cluster: r.cluster, weighted: r.weighted, required: r.required, aboveRequiredBy: r.gapVsRequired }));
     const skillGaps = scored
       .filter((r) => r.gapVsRequired! < 0)
-      .map((r) => ({ capability: r.capability, cluster: r.cluster, panel: r.panel, required: r.required, belowRequiredBy: -r.gapVsRequired! }));
+      .map((r) => ({ capability: r.capability, cluster: r.cluster, weighted: r.weighted, required: r.required, belowRequiredBy: Math.round(-r.gapVsRequired! * 100) / 100 }));
     const atBaseline = scored.filter((r) => r.gapVsRequired === 0).map((r) => r.capability);
     const perceptionGaps = rows
-      .filter((r) => r.selfMinusPanel != null && Math.abs(r.selfMinusPanel) >= 1)
+      .filter((r) => r.selfMinusWeighted != null && Math.abs(r.selfMinusWeighted) >= 1)
       .map((r) => ({
         capability: r.capability,
         self: r.self,
-        panel: r.panel,
-        direction: r.selfMinusPanel! > 0 ? "over-rates self" : "under-rates self",
-        byLevels: Math.abs(r.selfMinusPanel!),
+        weighted: r.weighted,
+        direction: r.selfMinusWeighted! > 0 ? "over-rates self" : "under-rates self",
+        byLevels: Math.abs(r.selfMinusWeighted!),
       }));
 
     return {
@@ -110,7 +116,7 @@ function fullSnapshot() {
         (lens) => LENS_LABELS[lens]
       ),
       analysis: {
-        hasPanelData: scored.length > 0,
+        hasScores: scored.length > 0,
         strengths,
         skillGaps,
         atBaseline,
@@ -127,7 +133,7 @@ function fullSnapshot() {
   const zones = Array.from(new Set(accountManagers.map((a) => a.zone)));
   const zoneInsights = zones.map((zone) => {
     const inZone = accountManagers.filter((a) => a.zone === zone);
-    const withPanel = inZone.filter((a) => a.analysis.hasPanelData);
+    const withPanel = inZone.filter((a) => a.analysis.hasScores);
     const gapCount = new Map<string, number>();
     for (const am of withPanel) for (const g of am.analysis.skillGaps) gapCount.set(g.capability, (gapCount.get(g.capability) ?? 0) + 1);
     const commonSkillGaps = [...gapCount.entries()]
@@ -160,6 +166,7 @@ function fullSnapshot() {
     })),
     accountManagers,
     zoneInsights,
+    scoringRule: `Weighted score = ${WEIGHTS_LABEL}, re-normalised over the lenses that have submitted. Every gap, strength and metric uses it.`,
     users,
   };
 }

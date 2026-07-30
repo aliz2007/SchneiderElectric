@@ -5,7 +5,9 @@ import {
   assignedAMs,
   getAssessment,
   listCapabilities,
-  requiredLevel,
+  averageRequired,
+  averageWeighted,
+  scoredRows,
   submittedLevels,
   submittedThemeNotes,
   themeJustificationText,
@@ -68,28 +70,11 @@ export default async function FeedbackPage() {
   }
 
   // ---- build the report (same definitions as the individual analysis + PDF) ----
-  const caps = listCapabilities();
-  const levels = submittedLevels(am.id);
-
-  const rows = caps.map((cap) => {
-    const req = requiredLevel(cap, am.track);
-    const self = levels.self.get(cap.id);
-    const manager = levels.manager.get(cap.id);
-    const expert = levels.expert.get(cap.id);
-    return {
-      cap,
-      req,
-      self,
-      manager,
-      expert,
-      gap: req != null && expert != null ? expert - req : null,
-      perception: self != null && expert != null ? self - expert : null,
-    };
-  });
+  const rows = scoredRows(am.id, am.track);
   const applicable = rows.filter((r) => r.req != null);
   const strengths = applicable
-    .filter((r) => r.gap != null && r.gap > 0 && r.expert != null)
-    .sort((a, b) => b.gap! - a.gap! || b.expert! - a.expert!);
+    .filter((r) => r.gap != null && r.gap > 0)
+    .sort((a, b) => b.gap! - a.gap!);
   const development = applicable
     .filter((r) => r.gap != null && r.gap < 0)
     .sort((a, b) => a.gap! - b.gap!);

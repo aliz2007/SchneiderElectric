@@ -5,12 +5,12 @@ import {
   listAMs,
   listCapabilities,
   overviewStats,
-  submittedLevels,
+  weightedLevels,
   trainingPriorities,
   zoneHeatmap,
 } from "@/lib/queries";
 import { gapClass, fmt } from "@/lib/heat";
-import { SEGMENTS, ZONES } from "@/lib/seed-data";
+import { SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
 import ZoneMap, { type MapAM, type MapCap } from "./zone-map";
 import FilterBar from "./filter-bar";
 
@@ -60,7 +60,7 @@ export default async function AnalysisPage({
         name: am.name,
         zone: am.zone as MapAM["zone"],
         track: am.track,
-        scores: Object.fromEntries(submittedLevels(am.id).expert),
+        scores: Object.fromEntries(weightedLevels(am.id)),
       }))
     : [];
 
@@ -78,8 +78,8 @@ export default async function AnalysisPage({
         <div className="page-kicker">Analysis</div>
         <h1 className="page-title">Capability Dashboard</h1>
         <p className="page-sub">
-          APEX Panel results vs required levels across the TOP 25. Red cells indicate collective
-          capability deficits — that is where targeted training programs should go.
+          Weighted results ({WEIGHTS_LABEL}) vs required levels across the TOP 25. Red cells indicate
+          collective capability deficits — that is where targeted training programs should go.
         </p>
       </div>
 
@@ -113,15 +113,14 @@ export default async function AnalysisPage({
           </div>
         </div>
         <div className="card kpi">
-          <div className="kpi-label">Avg APEX maturity</div>
+          <div className="kpi-label">Avg weighted maturity</div>
           <div className="kpi-value">
-            {stats.avgExpert == null ? "—" : `L${Math.min(3, Math.max(1, Math.round(stats.avgExpert)))}`}
+            {stats.avgWeighted == null ? "—" : fmt(stats.avgWeighted, 2)}
+            {stats.avgWeighted != null && (
+              <span style={{ fontSize: 16, color: "var(--muted)" }}> / 3</span>
+            )}
           </div>
-          <div className="kpi-note">
-            {stats.avgExpert == null
-              ? "submitted panel scores"
-              : `avg ${fmt(stats.avgExpert, 2)} · rounded to nearest level`}
-          </div>
+          <div className="kpi-note">{stats.avgWeighted == null ? "submitted scores" : WEIGHTS_LABEL}</div>
         </div>
       </div>
 
@@ -148,7 +147,7 @@ export default async function AnalysisPage({
         <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
           <h2 className="card-title">Zone performance map</h2>
           <p className="card-sub">
-            Thermal view of APEX Panel performance vs required levels across Schneider hubs —
+            Thermal view of weighted performance vs required levels across Schneider hubs —
             blue is on target, red is a critical gap. Filter by capability, hover the hubs,
             click a zone to focus.
           </p>
@@ -159,7 +158,7 @@ export default async function AnalysisPage({
       {priorities.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: 22 }}>
           <h2 className="card-title">Recommended training focus</h2>
-          <p className="card-sub">Largest zone-level deficits (APEX Panel score vs required level).</p>
+          <p className="card-sub">Largest zone-level deficits (weighted score vs required level).</p>
           <ul className="mini-list">
             {priorities.map((p, i) => (
               <li key={i}>
@@ -180,7 +179,7 @@ export default async function AnalysisPage({
       <div className="card card-pad" style={{ marginBottom: 22 }}>
         <h2 className="card-title">Training-needs heat map · capability × zone</h2>
         <p className="card-sub">
-          Cell = average APEX Panel score for the zone (gap to required level drives the colour).
+          Cell = average weighted score for the zone (gap to required level drives the colour).
           Click a zone header for its detailed view.
         </p>
         <div className="hm-scroll">

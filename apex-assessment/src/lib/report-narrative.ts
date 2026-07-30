@@ -1,9 +1,12 @@
 // Deterministic, data-driven narrative for the individual PDF report. No LLM/external
 // calls — the same assessment data always yields the same prose, so the report stays
 // reproducible and the app remains the system of record. The wording is assembled from
-// each person's APEX Panel scores vs the required level for their track, plus the
-// self-vs-panel perception gaps. Capability "definitions" reuse the rubric behavioural
-// anchors (the source Excel labels the L1/L2/L3 anchors as the capability definitions).
+// each person's WEIGHTED score (Self 20% / APEX Panel 35% / Manager 45%) vs the required
+// level for their track, plus the self-vs-weighted perception gaps. Capability
+// "definitions" reuse the rubric behavioural anchors (the source Excel labels the
+// L1/L2/L3 anchors as the capability definitions).
+
+import { WEIGHTS_LABEL } from "./seed-data";
 
 export type NarrRow = {
   name: string;
@@ -12,12 +15,13 @@ export type NarrRow = {
   self?: number;
   manager?: number;
   expert?: number;
-  gap: number | null; // expert - required
-  perception: number | null; // self - expert
+  weighted: number | null; // Self 20% / Panel 35% / Manager 45% — the authoritative score
+  gap: number | null; // weighted - required
+  perception: number | null; // self - weighted
 };
 
 type CapAnchors = { name: string; cluster: string; l1: string; l2: string; l3: string };
-type Ranked = { name: string; expert: number; req: number | null };
+type Ranked = { name: string; weighted: number; req: number | null };
 type Perception = { name: string; perception: number; self?: number; expert?: number };
 
 export type CapabilityDefinition = {
@@ -49,7 +53,7 @@ const possessive = (name: string) => `${name}${name.endsWith("s") ? "'" : "'s"}`
 export function buildNarrative(input: {
   amName: string;
   track: string;
-  hasPanelData: boolean;
+  hasScores: boolean;
   rows: NarrRow[];
   caps: CapAnchors[];
   strengths: Ranked[];
@@ -57,10 +61,10 @@ export function buildNarrative(input: {
   perceptionGaps: Perception[];
   themeNotes: { lens: string; cluster: string; note: string }[];
 }): Narrative {
-  const { amName, track, hasPanelData, rows, caps, strengths, development, perceptionGaps, themeNotes } = input;
+  const { amName, track, hasScores, rows, caps, strengths, development, perceptionGaps, themeNotes } = input;
 
   const applicable = rows.filter((r) => r.req != null);
-  const scored = applicable.filter((r) => r.expert != null);
+  const scored = applicable.filter((r) => r.weighted != null);
   const atOrAbove = applicable.filter((r) => r.gap != null && r.gap >= 0).length;
   const below = applicable.filter((r) => r.gap != null && r.gap < 0).length;
   const first = amName.split(" ")[0];
@@ -78,12 +82,12 @@ export function buildNarrative(input: {
 
   // ---- framing summary ----
   let summary: string;
-  if (!hasPanelData) {
+  if (!hasScores) {
     summary =
       `${amName} is assessed on the ${track} track, which measures ${applicable.length} capabilities against their required levels. ` +
-      `The APEX Panel — the authoritative lens — has not yet submitted its review, so the strengths and development picture below is provisional and will firm up once the panel completes its scoring.`;
+      `No assessment has been submitted yet, so the strengths and development picture below is provisional and will firm up as the Self, Manager and APEX Panel scores arrive.`;
   } else {
-    const overallAvg = scored.reduce((a, r) => a + r.expert!, 0) / Math.max(1, scored.length);
+    const overallAvg = scored.reduce((a, r) => a + r.weighted!, 0) / Math.max(1, scored.length);
     const overallReq = applicable.reduce((a, r) => a + (r.req ?? 0), 0) / Math.max(1, applicable.length);
     // strongest / weakest theme by average panel-vs-required gap
     const clusterGap = clusterOrder
@@ -102,20 +106,20 @@ export function buildNarrative(input: {
     const aligned = rows.filter((r) => r.perception === 0).length;
     const tendency =
       over > under + 2
-        ? `${first} tends to rate themselves above the panel's read (higher on ${over} capabilities, lower on ${under})`
+        ? `${first} tends to rate themselves above the combined view (higher on ${over} capabilities, lower on ${under})`
         : under > over + 2
-          ? `${first} tends to under-rate themselves against the panel's read (lower on ${under} capabilities, higher on ${over})`
-          : `${possessive(first)} self-image is broadly in line with the panel (aligned on ${aligned} capabilities, higher on ${over}, lower on ${under})`;
+          ? `${first} tends to under-rate themselves against the combined view (lower on ${under} capabilities, higher on ${over})`
+          : `${possessive(first)} self-image is broadly in line with the combined view (aligned on ${aligned} capabilities, higher on ${over}, lower on ${under})`;
 
     summary =
       `${amName} is assessed on the ${track} track, which measures ${applicable.length} capabilities against the level that track requires. ` +
-      `Across the ${scored.length} capabilities the APEX Panel has scored, ${first} meets or exceeds the bar on ${atOrAbove} and falls short on ${below}, ` +
+      `Across the ${scored.length} capabilities scored so far, ${first} meets or exceeds the bar on ${atOrAbove} and falls short on ${below}, ` +
       `for an overall average of ${fmt1(overallAvg)} against an expected ${fmt1(overallReq)}. ` +
       (strongest && weakest && strongest.cl !== weakest.cl
         ? `The strongest theme is ${strongest.cl}; the furthest from the bar is ${weakest.cl}. `
         : "") +
       `Comparing lenses, ${tendency}. ` +
-      `The panel is the authoritative view, so the read below is anchored to its scores; the manager and self views are used as corroboration or contrast.`;
+      `Scores are weighted ${WEIGHTS_LABEL}, so the read below reflects that combined view rather than any single evaluator.`;
   }
 
   // ---- helpers for cluster-organised prose (same "Cluster: " lead the AI uses,
@@ -141,36 +145,37 @@ export function buildNarrative(input: {
       if (kind === "strength") {
         sentences.push(
           list.length === 1
-            ? `${cl}: the panel places ${first} above the bar on ${names}, at L${lead.expert} against a required L${lead.req}.`
-            : `${cl}: ${first} stands above the bar on ${names}, led by ${lead.name} at L${lead.expert} against a required L${lead.req}.`
+            ? `${cl}: the weighted view places ${first} above the bar on ${names}, at ${fmt1(lead.weighted)} against a required L${lead.req}.`
+            : `${cl}: ${first} stands above the bar on ${names}, led by ${lead.name} at ${fmt1(lead.weighted)} against a required L${lead.req}.`
         );
         if (leadRow?.manager != null) {
           sentences.push(
-            leadRow.manager >= lead.expert
-              ? `The manager reads it the same way (L${leadRow.manager}), which makes this a strength the account can rely on rather than a one-off impression.`
-              : `The manager is more reserved here (L${leadRow.manager} against the panel's L${lead.expert}), so it is worth making this strength more visible day to day.`
+            leadRow.manager >= lead.weighted
+              ? `The manager — whose view carries the most weight — reads it at least as strongly (L${leadRow.manager}), which makes this a strength the account can rely on rather than a one-off impression.`
+              : `The manager is more reserved here (L${leadRow.manager} against a weighted ${fmt1(lead.weighted)}), and their view carries the most weight, so it is worth making this strength more visible day to day.`
           );
         }
-        if (leadRow?.self != null && lead.expert > leadRow.self) {
+        if (leadRow?.self != null && lead.weighted > leadRow.self) {
           sentences.push(`Notably, ${first} rates themselves only L${leadRow.self} on ${lead.name} — a strength others see more clearly than they do.`);
         }
       } else {
-        const parts = list.map((r) => `${r.name} (L${r.expert} vs required L${r.req})`);
+        const parts = list.map((r) => `${r.name} (${fmt1(r.weighted)} vs required L${r.req})`);
         sentences.push(
           `${cl}: ${list.length === 1 ? "the gap to close is" : "the gaps to close are"} ${joinNames(parts)}.`
         );
-        const widest = list.reduce((a, b) => ((a.req ?? 0) - a.expert >= (b.req ?? 0) - b.expert ? a : b));
+        const shortfall = (r: Ranked) => (r.req ?? 0) - r.weighted;
+        const widest = list.reduce((a, b) => (shortfall(a) >= shortfall(b) ? a : b));
         const wRow = rowByName.get(widest.name);
-        if ((widest.req ?? 0) - widest.expert > 1) {
-          sentences.push(`${widest.name} is the pressing one — a full ${(widest.req ?? 0) - widest.expert} levels short of what the ${track} track expects.`);
+        if (shortfall(widest) > 1) {
+          sentences.push(`${widest.name} is the pressing one — ${fmt1(shortfall(widest))} of a level short of what the ${track} track expects.`);
         }
-        if (wRow?.manager != null && wRow.manager > widest.expert) {
+        if (wRow?.manager != null && wRow.manager > widest.weighted) {
           sentences.push(`The manager scores it higher (L${wRow.manager}), a divergence worth resolving in the development conversation.`);
-        } else if (wRow?.manager != null && wRow.manager === widest.expert) {
-          sentences.push(`The manager sees the same gap (L${wRow.manager}), so evaluators agree on where the work is.`);
+        } else if (wRow?.manager != null && wRow.manager < widest.weighted) {
+          sentences.push(`The manager is the harshest voice here (L${wRow.manager}) and carries the most weight, so their read drives this gap.`);
         }
-        if (wRow?.self != null && wRow.self > widest.expert) {
-          sentences.push(`${first} rates themselves L${wRow.self} here, above the panel's L${widest.expert} — closing the perception gap is part of closing the capability gap.`);
+        if (wRow?.self != null && wRow.self > widest.weighted) {
+          sentences.push(`${first} rates themselves L${wRow.self} here, above the weighted ${fmt1(widest.weighted)} — closing the perception gap is part of closing the capability gap.`);
         }
         const noteLenses = notesByCluster.get(cl);
         if (noteLenses?.length) {
@@ -186,11 +191,11 @@ export function buildNarrative(input: {
 
   // ---- strengths ----
   let strengthsText: string;
-  if (!hasPanelData) {
+  if (!hasScores) {
     strengthsText = "A strengths summary will appear here once the APEX Panel assessment is submitted.";
   } else if (strengths.length === 0) {
     const closest = [...applicable]
-      .filter((r) => r.expert != null && r.gap != null && r.gap < 0)
+      .filter((r) => r.weighted != null && r.gap != null && r.gap < 0)
       .sort((a, b) => b.gap! - a.gap!)
       .slice(0, 2);
     strengthsText =
@@ -208,14 +213,14 @@ export function buildNarrative(input: {
 
   // ---- development / weaknesses ----
   let developmentText: string;
-  if (!hasPanelData) {
+  if (!hasScores) {
     developmentText = "Development priorities will appear here once the APEX Panel assessment is submitted.";
   } else if (development.length === 0) {
     developmentText =
       `No capability currently falls below its required level, so there is no pressing capability gap on the ${track} track. ` +
       `The development conversation can shift from remediation to stretch: deepening the strongest themes, widening executive exposure, and converting at-level capabilities into clear strengths.`;
   } else {
-    const ordered = [...development].sort((a, b) => ((b.req ?? 0) - b.expert) - ((a.req ?? 0) - a.expert));
+    const ordered = [...development].sort((a, b) => ((b.req ?? 0) - b.weighted) - ((a.req ?? 0) - a.weighted));
     const priorities = ordered.slice(0, 3).map((r) => r.name);
     developmentText =
       clusterParagraphs(development, "development") +

@@ -20,7 +20,8 @@ export type ReportRow = {
   self?: number;
   manager?: number;
   expert?: number;
-  gap: number | null;
+  weighted: number | null; // Self 20% / Panel 35% / Manager 45% — the authoritative score
+  gap: number | null; // weighted − required (decimal)
 };
 
 export type AmReportProps = {
@@ -30,10 +31,17 @@ export type AmReportProps = {
   track: string;
   generatedAt: string;
   lensStatus: { label: string; submitted: boolean; rater?: string }[];
-  strengths: { name: string; expert: number; req: number | null }[];
-  development: { name: string; expert: number; req: number | null }[];
-  /** per-theme (cluster) average level per lens, for the perception radar */
-  themeRadar: { theme: string; self: number | null; manager: number | null; expert: number | null }[];
+  strengths: { name: string; weighted: number; req: number | null }[];
+  development: { name: string; weighted: number; req: number | null }[];
+  /** per-theme (cluster) averages: one per lens, the weighted score, and the expected level */
+  themeRadar: {
+    theme: string;
+    self: number | null;
+    manager: number | null;
+    expert: number | null;
+    weighted: number | null;
+    required: number | null;
+  }[];
   /** overall APEX Panel average across the track's applicable capabilities (unrounded, /3) */
   overallAvg: number | null;
   /** overall expected level — average of the required levels on their track (/3) */
@@ -42,8 +50,12 @@ export type AmReportProps = {
   narrative: Narrative;
   narrativeSource: "kimi" | "auto";
   logoDataUri: string; // brand mark PNG as a data URI ("" = fall back to the "SE" text mark)
-  hasPanelData: boolean;
+  hasScores: boolean;
 };
+
+// Keep the overview cards bounded so the perception radar always fits on the same page;
+// the complete list lives in the capability-detail table at the end of the report.
+const OVERVIEW_LIST_MAX = 7;
 
 const INK = "#17203a";
 const MUTED = "#64748b";
@@ -59,6 +71,17 @@ const LVL: Record<number, { bg: string; fg: string }> = {
   2: { bg: "#fdf1de", fg: "#b45309" },
   3: { bg: GREEN_BG, fg: GREEN },
 };
+
+/** Weighted score pill: the decimal, tinted by how it sits against required. */
+function Score({ score, gap }: { score: number | null; gap: number | null }) {
+  if (score == null) return <Text style={s.na}>—</Text>;
+  const c = gap == null ? { bg: CARD, fg: MUTED } : gapColors(gap);
+  return (
+    <View style={[s.lvl, { backgroundColor: c.bg, minWidth: 30 }]}>
+      <Text style={[s.lvlText, { color: c.fg }]}>{score.toFixed(1)}</Text>
+    </View>
+  );
+}
 
 function gapColors(gap: number): { bg: string; fg: string } {
   if (gap >= 0) return { bg: GREEN_BG, fg: GREEN };
@@ -146,6 +169,7 @@ const s = StyleSheet.create({
   listName: { flex: 1, fontSize: 9.5, fontFamily: "Helvetica-Bold", marginRight: 8 },
   listMeta: { fontSize: 8, color: MUTED },
   emptyText: { fontSize: 8.5, color: FAINT, paddingVertical: 4 },
+  listMore: { fontSize: 7.8, color: FAINT, paddingTop: 3 },
 
   lvl: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, minWidth: 24, alignItems: "center" },
   percePill: { width: 68, borderRadius: 5, paddingVertical: 2, alignItems: "center" },
@@ -154,6 +178,14 @@ const s = StyleSheet.create({
   perceptSwatch: { width: 9, height: 9, borderRadius: 2, marginRight: 5 },
   perceptKeyText: { fontSize: 8, color: MUTED },
   perceptKeyNote: { fontSize: 8, color: FAINT },
+  // compact per-theme table sitting under the radar
+  ctab: { marginTop: 8, borderWidth: 1, borderColor: LINE, borderRadius: 6 },
+  ctabHead: { flexDirection: "row", backgroundColor: CARD, paddingVertical: 3, paddingHorizontal: 8 },
+  ctabRow: { flexDirection: "row", paddingVertical: 2.4, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: "#f0f3f8" },
+  ctabTh: { fontSize: 6.8, fontFamily: "Helvetica-Bold", color: MUTED, letterSpacing: 0.6, textTransform: "uppercase" },
+  ctabTd: { fontSize: 8 },
+  ctabTheme: { width: "46%" },
+  ctabNum: { width: "18%", textAlign: "center" },
   lvlText: { fontSize: 8, fontFamily: "Helvetica-Bold" },
   na: { fontSize: 8.5, color: FAINT, textAlign: "center" },
 
@@ -226,8 +258,8 @@ const s = StyleSheet.create({
   coverLensRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
 
   // ---- narrative page ----
-  para: { fontSize: 9.5, color: "#31405e", lineHeight: 1.55, marginBottom: 11 },
-  paraHead: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: INK, marginTop: 3, marginBottom: 4 },
+  para: { fontSize: 9, color: "#31405e", lineHeight: 1.45, marginBottom: 8 },
+  paraHead: { fontSize: 10, fontFamily: "Helvetica-Bold", color: INK, marginTop: 2, marginBottom: 3 },
   clusterLead: { fontFamily: "Helvetica-Bold", color: INK },
   sourceTag: {
     fontSize: 7.5,
@@ -236,11 +268,11 @@ const s = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginTop: -4,
-    marginBottom: 10,
+    marginBottom: 7,
   },
-  listRow: { flexDirection: "row", marginBottom: 7 },
-  listMarker: { width: 11, fontSize: 9.5, color: GREEN_DEEP, fontFamily: "Helvetica-Bold" },
-  listItemText: { flex: 1, fontSize: 9.5, color: "#31405e", lineHeight: 1.5 },
+  listRow: { flexDirection: "row", marginBottom: 5 },
+  listMarker: { width: 11, fontSize: 9, color: GREEN_DEEP, fontFamily: "Helvetica-Bold" },
+  listItemText: { flex: 1, fontSize: 9, color: "#31405e", lineHeight: 1.42 },
 });
 
 /**
@@ -439,10 +471,39 @@ function NarrativePage(p: AmReportProps) {
   );
 }
 
+/**
+ * Continuous colour for the headline grade, by how far the weighted score sits from the
+ * expected overall: clearly below → red, just below → orange, on the bar → amber/yellow,
+ * a little above → light green, well above → deep green. Interpolated so two people a
+ * tenth apart never get jarringly different colours.
+ */
+function gradeColor(diff: number): string {
+  const STOPS: [number, [number, number, number]][] = [
+    [-1.0, [201, 42, 42]], // deep red
+    [-0.5, [224, 107, 47]], // orange
+    [-0.15, [214, 158, 46]], // amber
+    [0.15, [180, 176, 40]], // yellow-green (on the bar)
+    [0.5, [82, 176, 74]], // light green
+    [1.0, [0, 122, 61]], // deep Schneider green
+  ];
+  const t = Math.max(STOPS[0][0], Math.min(STOPS[STOPS.length - 1][0], diff));
+  for (let i = 0; i < STOPS.length - 1; i++) {
+    const [x0, c0] = STOPS[i];
+    const [x1, c1] = STOPS[i + 1];
+    if (t >= x0 && t <= x1) {
+      const f = x1 === x0 ? 0 : (t - x0) / (x1 - x0);
+      const ch = (a: number, b: number) => Math.round(a + (b - a) * f);
+      return `rgb(${ch(c0[0], c1[0])}, ${ch(c0[1], c1[1])}, ${ch(c0[2], c1[2])})`;
+    }
+  }
+  return `rgb(${STOPS[STOPS.length - 1][1].join(", ")})`;
+}
+
 // lens colours for the perception radar (self / manager / APEX Panel webs)
 const RADAR_SELF = "#e0912f"; // amber
 const RADAR_MANAGER = "#7c5cd6"; // violet
-const RADAR_PANEL = GREEN; // Schneider green - the authoritative lens
+const RADAR_PANEL = "#2f8fd0"; // blue
+const RADAR_AVG = GREEN_DEEP; // the weighted average - the emphasised web
 
 // @react-pdf's SVG <Text> type omits fontSize/fontFamily, though its renderer honours
 // them — widen the typing so the chart labels can be sized without a cast at each call.
@@ -469,10 +530,10 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
   const n = themes.length;
   if (n < 3) return null;
   const W = 511;
-  const H = 236;
+  const H = 196;
   const CX = W / 2;
-  const CY = 118;
-  const R = 78; // radius of the L3 ring
+  const CY = 98;
+  const R = 64; // radius of the L3 ring
   const angle = (i: number) => (-90 + (360 / n) * i) * (Math.PI / 180);
   const pt = (i: number, v: number): [number, number] => [
     CX + Math.cos(angle(i)) * (R * v) / 3,
@@ -495,10 +556,12 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
     return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
   };
 
+  // the three lens webs are drawn thin; the weighted average is the emphasised one
   const LENSES_META = [
-    { key: "self" as const, label: "Self", color: RADAR_SELF },
-    { key: "manager" as const, label: "Manager", color: RADAR_MANAGER },
-    { key: "expert" as const, label: "APEX Panel", color: RADAR_PANEL },
+    { key: "self" as const, label: "Self", color: RADAR_SELF, width: 0.9, fill: 0.05 },
+    { key: "manager" as const, label: "Manager", color: RADAR_MANAGER, width: 0.9, fill: 0.05 },
+    { key: "expert" as const, label: "APEX Panel", color: RADAR_PANEL, width: 0.9, fill: 0.05 },
+    { key: "weighted" as const, label: "Weighted average", color: RADAR_AVG, width: 2.6, fill: 0.14 },
   ];
   const active = LENSES_META.filter((l) => themes.some((t) => t[l.key] != null));
   if (active.length === 0) return null;
@@ -527,10 +590,17 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
             .join(" ");
           return (
             <G key={l.key}>
-              <Polygon points={points} fill={l.color} fillOpacity={0.11} stroke={l.color} strokeWidth={1.5} />
+              <Polygon
+                points={points}
+                fill={l.color}
+                fillOpacity={l.fill}
+                stroke={l.color}
+                strokeWidth={l.width}
+              />
               {themes.map((t, i) => {
                 const [x, y] = pt(i, t[l.key] ?? 0);
-                return <Rect key={i} x={x - 1.6} y={y - 1.6} width={3.2} height={3.2} rx={1.6} fill={l.color} />;
+                const r = l.key === "weighted" ? 2.4 : 1.5;
+                return <Rect key={i} x={x - r} y={y - r} width={r * 2} height={r * 2} rx={r} fill={l.color} />;
               })}
             </G>
           );
@@ -552,7 +622,7 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
                   x={lx}
                   y={baseY + ri * 9 - (rows.length - 1) * 4}
                   fill={INK}
-                  fontSize={7.2}
+                  fontSize={6.8}
                   fontFamily="Helvetica-Bold"
                   textAnchor={anchor}
                 >
@@ -570,7 +640,40 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
             <Text style={s.perceptKeyText}>{l.label}</Text>
           </View>
         ))}
-        <Text style={s.perceptKeyNote}>Each point is the lens's average level (L1-L3) across the theme's capabilities.</Text>
+        <Text style={s.perceptKeyNote}>Points are average levels (L1-L3) across each theme's capabilities.</Text>
+      </View>
+
+      {/* per-theme weighted average vs the level the track expects */}
+      <View style={s.ctab}>
+        <View style={s.ctabHead}>
+          <Text style={[s.ctabTh, s.ctabTheme]}>Theme</Text>
+          <Text style={[s.ctabTh, s.ctabNum]}>Weighted</Text>
+          <Text style={[s.ctabTh, s.ctabNum]}>Expected</Text>
+          <Text style={[s.ctabTh, s.ctabNum]}>Gap</Text>
+        </View>
+        {themes.map((t) => {
+          const gap = t.weighted != null && t.required != null ? t.weighted - t.required : null;
+          return (
+            <View key={t.theme} style={s.ctabRow} wrap={false}>
+              <Text style={[s.ctabTd, s.ctabTheme]}>{t.theme}</Text>
+              <Text style={[s.ctabTd, s.ctabNum, { fontFamily: "Helvetica-Bold" }]}>
+                {t.weighted == null ? "—" : t.weighted.toFixed(2)}
+              </Text>
+              <Text style={[s.ctabTd, s.ctabNum, { color: MUTED }]}>
+                {t.required == null ? "n/a" : t.required.toFixed(2)}
+              </Text>
+              <Text
+                style={[
+                  s.ctabTd,
+                  s.ctabNum,
+                  { fontFamily: "Helvetica-Bold", color: gap == null ? MUTED : gapColors(gap).fg },
+                ]}
+              >
+                {gap == null ? "—" : `${gap > 0 ? "+" : ""}${gap.toFixed(2)}`}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -612,9 +715,7 @@ export function AmReportPdf(p: AmReportProps) {
                 overall, red below it, with the expected overall printed beneath */}
             {p.overallAvg != null && p.overallReq != null ? (
               <>
-                <Text
-                  style={[s.grade, { color: p.overallAvg >= p.overallReq ? GREEN_DEEP : "#c92a2a" }]}
-                >
+                <Text style={[s.grade, { color: gradeColor(p.overallAvg - p.overallReq) }]}>
                   {p.overallAvg.toFixed(1)} / 3
                 </Text>
                 <Text style={s.gradeExp}>Expected overall · {p.overallReq.toFixed(1)} / 3</Text>
@@ -659,14 +760,16 @@ export function AmReportPdf(p: AmReportProps) {
               <View style={[s.dot, { backgroundColor: GREEN }]} />
               <Text style={s.cardTitle}>Strengths</Text>
             </View>
-            <Text style={s.cardSub}>APEX Panel at or above the required level</Text>
+            <Text style={s.cardSub}>Weighted score above the required level</Text>
             {p.strengths.length === 0 ? (
-              <Text style={s.emptyText}>No submitted panel data yet.</Text>
+              <Text style={s.emptyText}>
+                {p.hasScores ? "No capability above target yet." : "No submitted assessments yet."}
+              </Text>
             ) : (
               p.strengths.map((r) => (
                 <View key={r.name} style={s.listItem} wrap={false}>
                   <View style={s.listItemLead}>
-                    <Lvl level={r.expert} />
+                    <Score score={r.weighted} gap={r.req == null ? null : r.weighted - r.req} />
                   </View>
                   <Text style={s.listName}>{r.name}</Text>
                   <Text style={s.listMeta}>required L{r.req}</Text>
@@ -679,21 +782,27 @@ export function AmReportPdf(p: AmReportProps) {
               <View style={[s.dot, { backgroundColor: "#c92a2a" }]} />
               <Text style={s.cardTitle}>Development areas</Text>
             </View>
-            <Text style={s.cardSub}>APEX Panel below the required level</Text>
+            <Text style={s.cardSub}>Weighted score below the required level</Text>
             {p.development.length === 0 ? (
               <Text style={s.emptyText}>
-                {p.hasPanelData ? "No capability below target." : "No submitted panel data yet."}
+                {p.hasScores ? "No capability below target." : "No submitted assessments yet."}
               </Text>
             ) : (
-              p.development.map((r) => (
+              p.development.slice(0, OVERVIEW_LIST_MAX).map((r) => (
                 <View key={r.name} style={s.listItem} wrap={false}>
                   <View style={s.listItemLead}>
-                    <Lvl level={r.expert} />
+                    <Score score={r.weighted} gap={r.req == null ? null : r.weighted - r.req} />
                   </View>
                   <Text style={s.listName}>{r.name}</Text>
                   <Text style={s.listMeta}>required L{r.req}</Text>
                 </View>
               ))
+            )}
+            {p.development.length > OVERVIEW_LIST_MAX && (
+              <Text style={s.listMore}>
+                + {p.development.length - OVERVIEW_LIST_MAX} more below target — see the capability
+                detail
+              </Text>
             )}
           </View>
         </View>
@@ -703,7 +812,7 @@ export function AmReportPdf(p: AmReportProps) {
           <View wrap={false}>
             <SectionHead
               title="Perception by theme"
-              sub="Average level per theme — the Self, Manager and APEX Panel webs overlaid"
+              sub="Average level per theme — Self, Manager and Panel webs with the weighted average emphasised"
             />
             <ThemeRadar data={p.themeRadar} />
           </View>
@@ -718,7 +827,7 @@ export function AmReportPdf(p: AmReportProps) {
         <Chrome generatedAt={p.generatedAt} />
         <SectionHead
           title="Capability detail"
-          sub="Three lenses vs the required level, grouped by cluster"
+          sub="Three lenses, the weighted score and the gap to required, grouped by cluster"
         />
         <View style={s.table}>
           <View style={s.thead}>
@@ -726,8 +835,8 @@ export function AmReportPdf(p: AmReportProps) {
             <Text style={[s.th, s.cellText]}>Required</Text>
             <Text style={[s.th, s.cellText]}>Self</Text>
             <Text style={[s.th, s.cellText]}>Manager</Text>
-            <Text style={[s.th, s.cellText]}>APEX</Text>
-            <Text style={[s.th, s.cellText]}>Avg</Text>
+            <Text style={[s.th, s.cellText]}>Panel</Text>
+            <Text style={[s.th, s.cellText]}>Weighted</Text>
             <Text style={[s.th, s.cellText]}>Gap</Text>
           </View>
           {p.clusters.map((cl) => (
@@ -761,25 +870,20 @@ export function AmReportPdf(p: AmReportProps) {
                     <Lvl level={r.expert} />
                   </View>
                   <View style={s.cellNum}>
-                    {/* unrounded three-lens mean, so a 1.6 and a 2.4 stay distinguishable */}
-                    {(() => {
-                      const scores = [r.self, r.manager, r.expert].filter((v): v is number => v != null);
-                      return scores.length === 0 ? (
-                        <Text style={s.na}>—</Text>
-                      ) : (
-                        <Text style={[s.td, { fontFamily: "Helvetica-Bold" }]}>
-                          {(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}
-                        </Text>
-                      );
-                    })()}
+                    {/* weighted, unrounded — a 1.6 and a 2.4 must stay distinguishable */}
+                    {r.weighted == null ? (
+                      <Text style={s.na}>—</Text>
+                    ) : (
+                      <Text style={[s.td, { fontFamily: "Helvetica-Bold" }]}>{r.weighted.toFixed(2)}</Text>
+                    )}
                   </View>
                   <View style={s.cellNum}>
                     {r.gap == null ? (
                       <Text style={s.na}>—</Text>
                     ) : (
-                      <View style={[s.lvl, { backgroundColor: gapColors(r.gap).bg }]}>
+                      <View style={[s.lvl, { backgroundColor: gapColors(r.gap).bg, minWidth: 34 }]}>
                         <Text style={[s.lvlText, { color: gapColors(r.gap).fg }]}>
-                          {r.gap > 0 ? `+${r.gap}` : r.gap}
+                          {`${r.gap > 0 ? "+" : ""}${r.gap.toFixed(2)}`}
                         </Text>
                       </View>
                     )}

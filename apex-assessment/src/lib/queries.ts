@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { ZONES, type Lens } from "./seed-data";
+import { LENSES, LENS_WEIGHTS, ZONES, weightedScore, type Lens } from "./seed-data";
 
 export type AM = {
   id: number;
@@ -403,10 +403,78 @@ export type HeatCell = {
   n: number; // number of AMs contributing
 };
 
+/** One capability's full picture for an AM: the three lens levels, the weighted score,
+ *  the required level, and the gap (weighted − required). Shared by the individual
+ *  analysis page, My Feedback and the PDF so they can never drift apart. */
+export type ScoredRow = {
+  cap: Capability;
+  req: number | null;
+  self?: number;
+  manager?: number;
+  expert?: number;
+  weighted: number | null; // Self 20% / Panel 35% / Manager 45%, re-normalised
+  gap: number | null; // weighted − required (decimal)
+  perception: number | null; // self − weighted, for the perception views
+};
+
+/** Every capability scored for one AM, in rubric order. */
+export function scoredRows(amId: number, track: AM["track"]): ScoredRow[] {
+  const levels = submittedLevels(amId);
+  return listCapabilities().map((cap) => {
+    const self = levels.self.get(cap.id);
+    const manager = levels.manager.get(cap.id);
+    const expert = levels.expert.get(cap.id);
+    const req = requiredLevel(cap, track);
+    const weighted = weightedScore({ self, manager, expert });
+    return {
+      cap,
+      req,
+      self,
+      manager,
+      expert,
+      weighted,
+      gap: req != null && weighted != null ? weighted - req : null,
+      perception: self != null && weighted != null ? self - weighted : null,
+    };
+  });
+}
+
+/** Weighted average of a set of scored rows (only rows that have a weighted score). */
+export function averageWeighted(rows: ScoredRow[]): number | null {
+  const vals = rows.map((r) => r.weighted).filter((v): v is number => v != null);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+/** Average required level across rows that apply to the AM's track. */
+export function averageRequired(rows: ScoredRow[]): number | null {
+  const vals = rows.map((r) => r.req).filter((v): v is number => v != null);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
 /**
- * Training-needs heat map: zone x capability, based on submitted APEX Panel scores
- * vs the required level for each AM's track. Capabilities not applicable to an AM's
- * track are skipped for that AM.
+ * Per-capability WEIGHTED score for one AM (Self 20% / APEX Panel 35% / Manager 45%),
+ * built from the submitted assessments. This is the canonical score behind every average,
+ * gap and metric in the app — see `weightedScore` in seed-data.ts for the re-normalisation
+ * rule when a lens has not submitted yet.
+ */
+export function weightedLevels(amId: number): Map<number, number> {
+  const levels = submittedLevels(amId);
+  const out = new Map<number, number>();
+  for (const cap of listCapabilities()) {
+    const score = weightedScore({
+      self: levels.self.get(cap.id),
+      manager: levels.manager.get(cap.id),
+      expert: levels.expert.get(cap.id),
+    });
+    if (score != null) out.set(cap.id, score);
+  }
+  return out;
+}
+
+/**
+ * Training-needs heat map: zone x capability, based on the WEIGHTED score of the submitted
+ * assessments vs the required level for each AM's track. Capabilities not applicable to an
+ * AM's track are skipped for that AM.
  */
 export function zoneHeatmap(
   track?: AM["track"],
@@ -418,8 +486,8 @@ export function zoneHeatmap(
   for (const z of ZONES) byZone.set(z, []);
   for (const am of ams) byZone.get(am.zone)!.push(am);
 
-  const levels = new Map<number, Map<number, number>>(); // amId -> capId -> expert level
-  for (const am of ams) levels.set(am.id, submittedLevels(am.id).expert);
+  const levels = new Map<number, Map<number, number>>(); // amId -> capId -> weighted score
+  for (const am of ams) levels.set(am.id, weightedLevels(am.id));
 
   const rows = caps.map((cap) => {
     const cells: HeatCell[] = ZONES.map((zone) => {
@@ -467,13 +535,19 @@ export function overviewStats() {
   const byLens: Record<Lens, number> = { self: 0, manager: 0, expert: 0 };
   for (const s of submitted) byLens[s.lens] = s.n;
 
-  const avgRow = db
+  // Programme-wide maturity is the WEIGHTED average: average each lens's submitted ratings,
+  // then combine those means with the lens weights (re-normalised over the lenses present).
+  const perLens = db
     .prepare(
-      `SELECT AVG(r.level) AS avg FROM ratings r
+      `SELECT a.lens AS lens, AVG(r.level) AS avg FROM ratings r
        JOIN assessments a ON a.id = r.assessment_id
-       WHERE a.status = 'submitted' AND a.lens = 'expert' AND r.level IS NOT NULL`
+       WHERE a.status = 'submitted' AND r.level IS NOT NULL
+       GROUP BY a.lens`
     )
-    .get() as { avg: number | null };
+    .all() as { lens: Lens; avg: number | null }[];
+  const meanByLens: Partial<Record<Lens, number>> = {};
+  for (const row of perLens) if (row.avg != null) meanByLens[row.lens] = row.avg;
+  const avgWeighted = weightedScore(meanByLens);
 
-  return { amCount, byLens, avgExpert: avgRow.avg };
+  return { amCount, byLens, avgWeighted, weights: LENS_WEIGHTS, lenses: LENSES };
 }

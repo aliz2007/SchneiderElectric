@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSuperadmin } from "@/lib/session";
-import { assessmentStatuses, listAMs, submittedLevels, listCapabilities, requiredLevel } from "@/lib/queries";
-import { SEGMENTS, ZONES } from "@/lib/seed-data";
+import { averageWeighted, listAMs, scoredRows, submittedLevels } from "@/lib/queries";
+import { SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
 import { fmt } from "@/lib/heat";
 import IndividualsFilters from "./filters";
 
@@ -27,8 +27,6 @@ export default async function IndividualsPage({
       (!track || am.track === track) &&
       (!segment || am.segment === segment)
   );
-  const statuses = assessmentStatuses();
-  const caps = listCapabilities();
   const filtered = ams.length !== allAMs.length;
 
   return (
@@ -37,8 +35,8 @@ export default async function IndividualsPage({
         <div className="page-kicker">Analysis</div>
         <h1 className="page-title">Individual Results</h1>
         <p className="page-sub">
-          Per-person comparison of the three assessment lenses, perception gaps, strengths and
-          development areas.
+          Per-person comparison of the three assessment lenses and the weighted score
+          ({WEIGHTS_LABEL}), plus perception gaps, strengths and development areas.
         </p>
       </div>
 
@@ -62,23 +60,21 @@ export default async function IndividualsPage({
                 <th>Segment</th>
                 <th>Self avg</th>
                 <th>Mgr avg</th>
-                <th>APEX avg</th>
+                <th>Panel avg</th>
+                <th>Weighted</th>
                 <th>Below target</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {ams.map((am) => {
-                const st = statuses.get(am.id)!;
                 const levels = submittedLevels(am.id);
                 const avg = (m: Map<number, number>) =>
                   m.size === 0 ? null : [...m.values()].reduce((a, b) => a + b, 0) / m.size;
-                let below = 0;
-                for (const cap of caps) {
-                  const req = requiredLevel(cap, am.track);
-                  const score = levels.expert.get(cap.id);
-                  if (req != null && score != null && score < req) below++;
-                }
+                // "below target" now counts weighted scores under the required level
+                const rows = scoredRows(am.id, am.track);
+                const below = rows.filter((r) => r.gap != null && r.gap < 0).length;
+                const weighted = averageWeighted(rows.filter((r) => r.req != null));
                 return (
                   <tr key={am.id} className="rowlink">
                     <td style={{ fontWeight: 600 }}>{am.name}</td>
@@ -87,10 +83,11 @@ export default async function IndividualsPage({
                     <td>{am.segment ? <span className="badge badge-segment">{am.segment}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                     <td>{fmt(avg(levels.self), 2)}</td>
                     <td>{fmt(avg(levels.manager), 2)}</td>
-                    <td style={{ fontWeight: 700 }}>{fmt(avg(levels.expert), 2)}</td>
+                    <td>{fmt(avg(levels.expert), 2)}</td>
+                    <td style={{ fontWeight: 700 }}>{fmt(weighted, 2)}</td>
                     <td>
-                      {st.expert.status !== "submitted" ? (
-                        <span className="badge badge-gray">awaiting panel</span>
+                      {!rows.some((r) => r.weighted != null) ? (
+                        <span className="badge badge-gray">awaiting scores</span>
                       ) : below === 0 ? (
                         <span className="badge badge-green">0 gaps</span>
                       ) : (

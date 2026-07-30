@@ -6,13 +6,14 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { requireUser } from "@/lib/session";
 import {
   allLensesSubmitted,
+  averageRequired,
+  averageWeighted,
   getAM,
   getAssessment,
   isAssigned,
   listCapabilities,
   ratersByLens,
-  requiredLevel,
-  submittedLevels,
+  scoredRows,
   submittedThemeNotes,
   themeJustificationText,
 } from "@/lib/queries";
@@ -53,7 +54,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const caps = listCapabilities();
-  const levels = submittedLevels(am.id);
 
   // Theme notes (Self / Manager / APEX Panel), grouped by cluster and ordered by lens.
   const themeNotes = submittedThemeNotes(am.id);
@@ -69,62 +69,63 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     for (const item of list) item.lens = LENS_LABELS[item.lens as Lens];
   }
 
+  // Weighted score (Self 20% / Panel 35% / Manager 45%) drives every figure in the report.
   type FullRow = ReportRow & { perception: number | null };
-  const rows: FullRow[] = caps.map((cap) => {
-    const req = requiredLevel(cap, am.track);
-    const self = levels.self.get(cap.id);
-    const manager = levels.manager.get(cap.id);
-    const expert = levels.expert.get(cap.id);
-    return {
-      name: cap.name,
-      cluster: cap.cluster,
-      req,
-      self,
-      manager,
-      expert,
-      gap: req != null && expert != null ? expert - req : null,
-      perception: self != null && expert != null ? self - expert : null,
-    };
-  });
+  const scored = scoredRows(am.id, am.track);
+  const rows: FullRow[] = scored.map((r) => ({
+    name: r.cap.name,
+    cluster: r.cap.cluster,
+    req: r.req,
+    self: r.self,
+    manager: r.manager,
+    expert: r.expert,
+    weighted: r.weighted,
+    gap: r.gap,
+    perception: r.perception,
+  }));
 
   const applicable = rows.filter((r) => r.req != null);
   // Strength = strictly ABOVE required (at-level is baseline, not a strength).
   const strengths = applicable
-    .filter((r) => r.gap != null && r.gap > 0 && r.expert != null)
-    .sort((a, b) => b.gap! - a.gap! || b.expert! - a.expert!)
+    .filter((r) => r.gap != null && r.gap > 0 && r.weighted != null)
+    .sort((a, b) => b.gap! - a.gap!)
     .slice(0, 6)
-    .map((r) => ({ name: r.name, expert: r.expert!, req: r.req }));
+    .map((r) => ({ name: r.name, weighted: r.weighted!, req: r.req }));
   const development = applicable
-    .filter((r) => r.gap != null && r.gap < 0)
+    .filter((r) => r.gap != null && r.gap < 0 && r.weighted != null)
     .sort((a, b) => a.gap! - b.gap!)
-    .map((r) => ({ name: r.name, expert: r.expert!, req: r.req }));
+    .map((r) => ({ name: r.name, weighted: r.weighted!, req: r.req }));
   // for the narrative prose: only the meaningful divergences (a full level or more)
   const perceptionGaps = rows
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!))
     .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
+  void perceptionGaps;
 
   // Perception radar: the average level per theme (cluster) for each lens.
   const clusterOrder: string[] = [];
   for (const r of rows) if (!clusterOrder.includes(r.cluster)) clusterOrder.push(r.cluster);
   const themeRadar = clusterOrder.map((cluster) => {
     const inCluster = rows.filter((r) => r.cluster === cluster);
-    const mean = (k: "self" | "manager" | "expert") => {
+    const mean = (k: "self" | "manager" | "expert" | "weighted") => {
       const vals = inCluster.map((r) => r[k]).filter((v): v is number => v != null);
       return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     };
-    return { theme: cluster, self: mean("self"), manager: mean("manager"), expert: mean("expert") };
+    const reqVals = inCluster.map((r) => r.req).filter((v): v is number => v != null);
+    return {
+      theme: cluster,
+      self: mean("self"),
+      manager: mean("manager"),
+      expert: mean("expert"),
+      weighted: mean("weighted"),
+      required: reqVals.length ? reqVals.reduce((a, b) => a + b, 0) / reqVals.length : null,
+    };
   });
 
-  // Cover grade: unrounded APEX Panel average across the track's applicable capabilities,
+  // Headline grade: unrounded WEIGHTED average across the track's applicable capabilities,
   // against the expected overall (average of the required levels).
-  const withPanel = applicable.filter((r) => r.expert != null);
-  const overallAvg = withPanel.length
-    ? withPanel.reduce((a, r) => a + r.expert!, 0) / withPanel.length
-    : null;
-  const overallReq = applicable.length
-    ? applicable.reduce((a, r) => a + r.req!, 0) / applicable.length
-    : null;
+  const overallAvg = averageWeighted(scored.filter((r) => r.req != null));
+  const overallReq = averageRequired(scored);
 
   const clusters: { name: string; rows: ReportRow[]; notes: { lens: string; note: string }[] }[] = [];
   for (const row of rows) {
@@ -134,11 +135,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     } else last.rows.push(row);
   }
 
-  const hasPanelData = levels.expert.size > 0;
+  const hasScores = rows.some((r) => r.weighted != null);
   const narrative = buildNarrative({
     amName: am.name,
     track: am.track,
-    hasPanelData,
+    hasScores,
     rows,
     caps,
     strengths,
@@ -154,7 +155,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   let narrativeSource: "kimi" | "auto" = "auto";
   if (!aiNarrativeEnabled()) {
     recordAiResult("not attempted: AI feedback is off (no key set, or the toggle is off)");
-  } else if (!hasPanelData) {
+  } else if (!hasScores) {
     recordAiResult(`not attempted: no submitted APEX Panel scores for ${am.name} — the APEX Panel assessment must be submitted first`);
   } else {
     const ai = await generateAiNarrative({
@@ -169,7 +170,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           self: r.self ?? null,
           manager: r.manager ?? null,
           panel: r.expert ?? null,
-          gapVsRequired: r.gap,
+          weighted: r.weighted == null ? null : Math.round(r.weighted * 100) / 100,
+          gapVsRequired: r.gap == null ? null : Math.round(r.gap * 100) / 100,
         })),
       themeNotes: themeNotes.map((n) => ({
         lens: LENS_LABELS[n.lens],
@@ -213,7 +215,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       narrative,
       narrativeSource,
       logoDataUri: LOGO_DATA_URI,
-      hasPanelData,
+      hasScores,
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );
 

@@ -442,6 +442,43 @@ export const LENS_LABELS: Record<Lens, string> = {
   expert: "APEX Panel",
 };
 
+/**
+ * How much each lens counts toward a capability's score. The WEIGHTED score — not any
+ * single lens — is the canonical figure behind every average, gap, strength, development
+ * area, heat map and KPI in the app.
+ *
+ * When a lens has not submitted, its weight is dropped and the remaining weights are
+ * re-normalised, so a partially assessed person is still scored fairly on what exists
+ * (see `weightedScore`).
+ */
+export const LENS_WEIGHTS: Record<Lens, number> = {
+  self: 0.2,
+  expert: 0.35, // the APEX Panel
+  manager: 0.45,
+};
+
+/** "Self 20% · APEX Panel 35% · Manager 45%" — for footnotes and tooltips. */
+export const WEIGHTS_LABEL = `Self ${LENS_WEIGHTS.self * 100}% · APEX Panel ${
+  LENS_WEIGHTS.expert * 100
+}% · Manager ${LENS_WEIGHTS.manager * 100}%`;
+
+/**
+ * The weighted score for one capability from whichever lenses have a level.
+ * Returns null when no lens has scored it. Weights are re-normalised over the lenses
+ * present, so (self 2, manager 3) → (0.2*2 + 0.45*3) / 0.65 = 2.69.
+ */
+export function weightedScore(scores: Partial<Record<Lens, number | null | undefined>>): number | null {
+  let total = 0;
+  let weight = 0;
+  for (const lens of LENSES) {
+    const value = scores[lens];
+    if (value == null) continue;
+    total += value * LENS_WEIGHTS[lens];
+    weight += LENS_WEIGHTS[lens];
+  }
+  return weight === 0 ? null : total / weight;
+}
+
 export const LEVEL_LABELS: Record<number, string> = {
   1: "L1 · Developing",
   2: "L2 · Proficient",

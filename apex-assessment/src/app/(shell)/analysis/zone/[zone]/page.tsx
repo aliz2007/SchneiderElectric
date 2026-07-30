@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSuperadmin } from "@/lib/session";
-import { listAMs, listCapabilities, submittedLevels } from "@/lib/queries";
+import { listAMs, listCapabilities, weightedLevels } from "@/lib/queries";
 import { ZONES } from "@/lib/seed-data";
 import ZoneTable, { type ZoneAM, type ZoneCap } from "./zone-table";
 
@@ -26,7 +26,7 @@ export default async function ZonePage({ params }: { params: Promise<{ zone: str
       code: am.code,
       name: am.name,
       track: am.track,
-      scores: Object.fromEntries(submittedLevels(am.id).expert),
+      scores: Object.fromEntries(weightedLevels(am.id)),
     }));
 
   return (

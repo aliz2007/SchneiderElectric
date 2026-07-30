@@ -2,17 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSuperadmin } from "@/lib/session";
 import {
+  averageRequired,
+  averageWeighted,
   formatScheduleDate,
   getAM,
   getAssessment,
-  listCapabilities,
   ratersByLens,
-  requiredLevel,
+  scoredRows,
   submittedLevels,
   submittedThemeNotes,
   themeJustificationText,
+  type ScoredRow,
 } from "@/lib/queries";
-import { LENS_LABELS, LENSES, type Lens } from "@/lib/seed-data";
+import { LENS_LABELS, LENSES, WEIGHTS_LABEL, type Lens } from "@/lib/seed-data";
 import { fmt, gapClass } from "@/lib/heat";
 import { aiNarrativeEnabled } from "@/lib/ai-narrative";
 import { reopen } from "./actions";
@@ -25,13 +27,22 @@ function Chip({ level }: { level: number | null | undefined }) {
   );
 }
 
+/** The weighted score, shown as a decimal and coloured by its gap to required. */
+function ScoreChip({ score, gap }: { score: number | null; gap: number | null }) {
+  if (score == null) return <span className="lvl-chip lvl-none">—</span>;
+  return (
+    <span className={`lvl-chip ${gapClass(gap)}`} style={{ minWidth: 44, fontVariantNumeric: "tabular-nums" }}>
+      {fmt(score, 1)}
+    </span>
+  );
+}
+
 export default async function AmAnalysisPage({ params }: { params: Promise<{ id: string }> }) {
   await requireSuperadmin();
   const { id } = await params;
   const am = getAM(Number(id));
   if (!am) notFound();
 
-  const caps = listCapabilities();
   const levels = submittedLevels(am.id);
 
   // Theme notes (Self / Manager / APEX Panel) grouped by cluster, shown inside the
@@ -48,47 +59,27 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
     list.sort((a, b) => LENSES.indexOf(a.lens) - LENSES.indexOf(b.lens));
   }
 
-  type Row = {
-    cap: (typeof caps)[number];
-    req: number | null;
-    self?: number;
-    manager?: number;
-    expert?: number;
-    avg: number | null; // unrounded mean of the submitted lens scores (e.g. 2.3)
-    gap: number | null; // expert - required
-    perception: number | null; // self - expert
-  };
-
-  const rows: Row[] = caps.map((cap) => {
-    const req = requiredLevel(cap, am.track);
-    const self = levels.self.get(cap.id);
-    const manager = levels.manager.get(cap.id);
-    const expert = levels.expert.get(cap.id);
-    const scores = [self, manager, expert].filter((v): v is number => v != null);
-    return {
-      cap,
-      req,
-      self,
-      manager,
-      expert,
-      avg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
-      gap: req != null && expert != null ? expert - req : null,
-      perception: self != null && expert != null ? self - expert : null,
-    };
-  });
+  // Weighted score (Self 20% / APEX Panel 35% / Manager 45%) is the canonical figure:
+  // gaps, strengths and development areas are all derived from it.
+  type Row = ScoredRow;
+  const rows: Row[] = scoredRows(am.id, am.track);
 
   const applicable = rows.filter((r) => r.req != null);
   // Strength = strictly ABOVE the required level. At-level is on the baseline, not a
   // strength. Development = every capability BELOW required (all of them, uncapped).
   const strengths = applicable
-    .filter((r) => r.gap != null && r.gap > 0 && r.expert != null)
-    .sort((a, b) => b.gap! - a.gap! || b.expert! - a.expert!);
+    .filter((r) => r.gap != null && r.gap > 0)
+    .sort((a, b) => b.gap! - a.gap!);
   const development = applicable
     .filter((r) => r.gap != null && r.gap < 0)
     .sort((a, b) => a.gap! - b.gap!);
   const perceptionGaps = rows
     .filter((r) => r.perception != null && Math.abs(r.perception) >= 1)
     .sort((a, b) => Math.abs(b.perception!) - Math.abs(a.perception!));
+
+  const overallWeighted = averageWeighted(applicable);
+  const overallRequired = averageRequired(applicable);
+  const hasAnyScores = rows.some((r) => r.weighted != null);
 
   const raters = ratersByLens(am.id);
   const lensStatus = LENSES.map((lens) => ({ lens, a: getAssessment(am.id, lens), rater: raters[lens] }));
@@ -143,18 +134,18 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
       <div className="two-col" style={{ marginBottom: 20 }}>
         <div className="card card-pad">
           <h2 className="card-title">Strengths</h2>
-          <p className="card-sub">APEX Panel above the required level.</p>
+          <p className="card-sub">Weighted score above the required level.</p>
           {strengths.length === 0 ? (
             <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
-              {levels.expert.size === 0
-                ? "No submitted panel data yet."
-                : "No capability above the required level — the panel places this person at or below the baseline throughout."}
+              {hasAnyScores
+                ? "No capability above the required level — the weighted score sits at or below the baseline throughout."
+                : "No submitted assessments yet."}
             </p>
           ) : (
             <ul className="mini-list">
               {strengths.map((r) => (
                 <li key={r.cap.id}>
-                  <Chip level={r.expert} />
+                  <ScoreChip score={r.weighted} gap={r.gap} />
                   <strong>{r.cap.name}</strong>
                   <span style={{ color: "var(--muted)", fontSize: 12.5 }}>required L{r.req}</span>
                 </li>
@@ -164,16 +155,16 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
         </div>
         <div className="card card-pad">
           <h2 className="card-title">Development areas</h2>
-          <p className="card-sub">APEX Panel below the required level — feed these into the development plan.</p>
+          <p className="card-sub">Weighted score below the required level — feed these into the development plan.</p>
           {development.length === 0 ? (
             <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
-              {levels.expert.size === 0 ? "No submitted panel data yet." : "No capability below target. 🎉"}
+              {hasAnyScores ? "No capability below target. 🎉" : "No submitted assessments yet."}
             </p>
           ) : (
             <ul className="mini-list">
               {development.map((r) => (
                 <li key={r.cap.id}>
-                  <Chip level={r.expert} />
+                  <ScoreChip score={r.weighted} gap={r.gap} />
                   <strong>{r.cap.name}</strong>
                   <span className="badge badge-red">required L{r.req}</span>
                 </li>
@@ -186,16 +177,16 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
       {perceptionGaps.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: 20 }}>
           <h2 className="card-title">Perception gaps</h2>
-          <p className="card-sub">Self-assessment differs from the APEX Panel by a full level or more — worth a conversation.</p>
+          <p className="card-sub">Self-assessment differs from the weighted score by a full level or more — worth a conversation.</p>
           <ul className="mini-list">
             {perceptionGaps.map((r) => (
               <li key={r.cap.id}>
                 <span className={`badge ${r.perception! > 0 ? "badge-amber" : "badge-gray"}`}>
-                  {r.perception! > 0 ? "overrates" : "underrates"} {Math.abs(r.perception!)}
+                  {r.perception! > 0 ? "overrates" : "underrates"} {fmt(Math.abs(r.perception!), 1)}
                 </span>
                 <strong>{r.cap.name}</strong>
                 <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                  self L{r.self} vs panel L{r.expert}
+                  self L{r.self} vs weighted {fmt(r.weighted, 1)}
                 </span>
               </li>
             ))}
@@ -204,9 +195,15 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
       )}
 
       <div className="card card-pad" style={{ marginBottom: 20 }}>
-        <h2 className="card-title">Capability detail · three lenses vs required</h2>
+        <h2 className="card-title">Capability detail · three lenses, weighted vs required</h2>
         <p className="card-sub" style={{ marginTop: -2, marginBottom: 10 }}>
-          Manager &amp; APEX Panel notes appear under each theme.
+          Weighted score = {WEIGHTS_LABEL}. Theme justifications appear under each theme.
+          {overallWeighted != null && overallRequired != null && (
+            <>
+              {" "}Overall <strong>{fmt(overallWeighted, 2)}</strong> vs expected{" "}
+              <strong>{fmt(overallRequired, 2)}</strong>.
+            </>
+          )}
         </p>
         <div className="legend" style={{ marginTop: 0, marginBottom: 12 }}>
           <span><span className="lens-dot ld-self" />Self</span>
@@ -222,8 +219,8 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
                 <th>Required</th>
                 <th><span className="lens-dot ld-self" />Self</th>
                 <th><span className="lens-dot ld-manager" />Manager</th>
-                <th><span className="lens-dot ld-expert" />APEX</th>
-                <th>Avg</th>
+                <th><span className="lens-dot ld-expert" />Panel</th>
+                <th>Weighted</th>
                 <th>Gap vs req</th>
               </tr>
             </thead>
@@ -264,15 +261,7 @@ function ClusterSection({
   notes,
 }: {
   name: string;
-  rows: {
-    cap: { id: number; name: string };
-    req: number | null;
-    self?: number;
-    manager?: number;
-    expert?: number;
-    avg: number | null;
-    gap: number | null;
-  }[];
+  rows: ScoredRow[];
   notes: { lens: Lens; note: string }[];
 }) {
   return (
@@ -308,19 +297,22 @@ function ClusterSection({
           <td><Chip level={r.manager} /></td>
           <td><Chip level={r.expert} /></td>
           <td>
-            {/* unrounded three-lens mean — 1.6 and 2.4 must NOT read as the same level */}
-            {r.avg == null ? (
+            {/* weighted, unrounded — 1.6 and 2.4 must NOT read as the same level */}
+            {r.weighted == null ? (
               <span style={{ color: "var(--muted)" }}>—</span>
             ) : (
-              <strong style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(r.avg, 1)}</strong>
+              <strong style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(r.weighted, 2)}</strong>
             )}
           </td>
           <td>
             {r.gap == null ? (
               <span style={{ color: "var(--muted)" }}>—</span>
             ) : (
-              <span className={`lvl-chip ${gapClass(r.gap)}`} style={{ minWidth: 40 }}>
-                {r.gap > 0 ? `+${r.gap}` : r.gap}
+              <span
+                className={`lvl-chip ${gapClass(r.gap)}`}
+                style={{ minWidth: 46, fontVariantNumeric: "tabular-nums" }}
+              >
+                {r.gap > 0 ? `+${fmt(r.gap, 2)}` : fmt(r.gap, 2)}
               </span>
             )}
           </td>
