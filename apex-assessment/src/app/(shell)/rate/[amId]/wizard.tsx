@@ -152,21 +152,37 @@ export default function Wizard({
     if (i >= 0) setIdx(i);
   };
 
-  // ---- justification block shown under the level cards for the current theme ----
-  // One mandatory note per theme for every lens; self-assessors get a guided prompt.
+  // ---- justification block shown under the level cards for the current cluster ----
+  // ONE mandatory note per cluster for every lens; self-assessors get a guided prompt.
+  //
+  // The block is titled "Justification · <cluster>" and lists the capabilities it covers,
+  // on purpose: assessors were seeing the same text reappear under each capability of a
+  // cluster and reading it as a per-question box that repeated their previous answer.
+  // Nothing repeats — it is one shared note, and the heading now says so.
   //
   // NOTE: this is a plain render helper, NOT a nested component, and it must stay that way.
   // Declaring a component inside Wizard gives it a new function identity on every render,
   // so React unmounts and remounts the subtree each time state changes — which made the
   // textarea lose focus after every single keystroke.
-  const renderJustification = (cluster: string) => {
+  const renderJustification = (cluster: string, currentCapId: number) => {
     const done = themeComplete(cluster);
+    const inCluster = caps.filter((c) => c.cluster === cluster);
     return (
       <div className={`framework-block${done ? " done" : ""}`}>
         <div className="framework-head">
-          <span className="framework-kicker">Justify your rating for this theme · {cluster}</span>
+          <span className="framework-kicker">Justification · {cluster}</span>
           <span className={`framework-status ${done ? "ok" : "todo"}`}>{done ? "✓ complete" : "required"}</span>
         </div>
+        <p className="framework-shared">
+          One justification for the {inCluster.length} capabilities of this cluster:{" "}
+          {inCluster.map((c, i) => (
+            <span key={c.id}>
+              {i > 0 && ", "}
+              <span className={c.id === currentCapId ? "framework-cap-current" : undefined}>{c.name}</span>
+            </span>
+          ))}
+          . The same text shows on each of them, so it only has to be written once.
+        </p>
         {isSelf && <p className="framework-intro">{SELF_JUSTIFICATION_PROMPT}</p>}
         <textarea
           className="input framework-note"
@@ -177,7 +193,7 @@ export default function Wizard({
           placeholder={
             isSelf
               ? "Describe a concrete example: situation, actions taken, results, impact, and where relevant how it could be replicated."
-              : `What evidence supports your ratings for ${cluster}? A justification is required for every theme.`
+              : `What evidence supports your ratings across ${cluster}? A justification is required for every cluster.`
           }
         />
       </div>
@@ -260,7 +276,7 @@ export default function Wizard({
               );
             })}
           </div>
-          {renderJustification(cap.cluster)}
+          {renderJustification(cap.cluster, cap.id)}
         </div>
       )}
 
@@ -291,10 +307,10 @@ export default function Wizard({
 
           <div className="theme-notes-review">
             <h3 className="card-title" style={{ fontSize: 15, marginTop: 22 }}>
-              Theme justifications
+              Cluster justifications
             </h3>
             <p className="card-sub" style={{ marginBottom: 12 }}>
-              A justification is required for every theme.
+              One justification is required per cluster, shared by every capability in it.
             </p>
             {themes.map((t) => {
               const done = themeComplete(t);
@@ -386,17 +402,21 @@ export default function Wizard({
                 <li>Rate yourself on each capability against the three levels. Be candid.</li>
                 <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
                 <li>
-                  For every theme, write one <b>concrete example</b> to justify your ratings, structured as
-                  situation, actions, results and impact. It is mandatory.
+                  For every <b>cluster</b>, write one <b>concrete example</b> to justify your ratings, structured as
+                  situation, actions, results and impact. It is mandatory, and the same note covers every capability
+                  in that cluster, so you write it once.
                 </li>
-                <li>Everything saves automatically. You can only submit once all {caps.length} are rated and every theme is justified.</li>
+                <li>Everything saves automatically. You can only submit once all {caps.length} are rated and all 6 clusters are justified.</li>
               </>
             ) : (
               <>
                 <li>Rate the Account Manager on each capability against the three levels.</li>
                 <li>Press <b>1</b>, <b>2</b> or <b>3</b> to choose a level; use the arrows or the dots to move.</li>
-                <li>Write a <b>justification note for every theme</b>. It is mandatory before you can submit.</li>
-                <li>Ratings save automatically. Submit once all {caps.length} are rated and every theme is justified.</li>
+                <li>
+                  Write one <b>justification note per cluster</b>. It is mandatory before you can submit, and the
+                  same note covers every capability in that cluster, so you write it once.
+                </li>
+                <li>Ratings save automatically. Submit once all {caps.length} are rated and all 6 clusters are justified.</li>
               </>
             )}
           </ul>

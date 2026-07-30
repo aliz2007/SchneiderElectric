@@ -276,6 +276,19 @@ try {
   (await page.locator(".framework-intro").textContent())?.includes("concrete example")
     ? ok("self-assessor sees the guided justification prompt")
     : fail("self justification prompt", "not shown");
+  // the note is shared by the whole cluster: the block must say so and name what it covers,
+  // otherwise it reads as a per-question box repeating the previous answer
+  const kicker = await page.locator(".framework-kicker").textContent();
+  kicker?.startsWith("Justification ·") && !kicker.toLowerCase().includes("theme")
+    ? ok('justification block is titled "Justification · <cluster>"')
+    : fail("justification title", kicker ?? "(none)");
+  const shared = await page.locator(".framework-shared").textContent();
+  shared?.includes("capabilities of this cluster") && shared.includes("written once")
+    ? ok("the block lists the capabilities the shared note covers")
+    : fail("shared-note wording", shared ?? "(none)");
+  (await page.locator(".framework-cap-current").count()) === 1
+    ? ok("the capability being rated is highlighted in that list")
+    : fail("current capability highlight", "not found");
   // Type character-by-character, NOT fill(): a nested-component regression once remounted
   // this textarea on every keystroke, so focus was lost after each letter. fill() sets the
   // value in one shot and would not catch it; pressSequentially reproduces real typing.
