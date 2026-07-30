@@ -21,8 +21,10 @@ Last updated: 2026-07-30.
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
 - Most recent additions (2026-07-30, later same day): the mandatory justification block is now
-  headed **`Justification - <cluster>`** and lists the capabilities it covers, with the current
-  one in bold, so nobody reads the shared note as a per-question box repeating itself (see §3).
+  headed **`Justification - <cluster>`** with an italic lead and **one numbered line per
+  capability** it covers (current one in bold), and the textarea placeholder seeds that same
+  numbering, so nobody reads the shared note as a per-question box repeating itself. The
+  duplicated prose that used to sit above it was removed (see §3).
   Also: **PDF wording aligned with the client's
   vocabulary** — the per-cluster table under the radar now reads
   `Cluster capability / Score / Average score expected / Gap`, the radar section is titled
@@ -133,16 +135,25 @@ under the level cards and required before the assessment can be submitted:
   that was reverted to a single note at the user's request.)
 - **Manager / APEX Panel** write a free justification note per theme.
 
-**The block says out loud that the note is shared.** It is headed `Justification - <cluster>`
-and, underneath, names every capability the note covers, with the one currently being rated
-in bold: *"One justification for the 3 capabilities of this cluster: Share of Wallet Expansion,
-Retention & Loss Prevention, **Software & Services Attach**. The same text shows on each of
-them, so it only has to be written once."* This is not cosmetic. Assessors were seeing their
-own text reappear under the next capability of the cluster and reading it as a per-question
-box that repeated the previous answer, so they reported it as a bug. A distinct box per
-capability was considered and explicitly rejected by the client in favour of this labelling:
-if that comes back, note it would take the mandatory count from 6 to 22 per assessment
-(450 to 1 650 across a 25-AM campaign) and would need somewhere to land in the PDF.
+**The block names its cluster and lists what the note must cover.** It is headed
+`Justification - <cluster>`, then an italic lead, then ONE NUMBERED LINE PER CAPABILITY in
+the cluster with the one currently being rated in bold, and the textarea's placeholder seeds
+the same numbering (`1. Account Management: ` / `2. Strategic Account Ambition: `). So the
+box itself shows that a single note has to cover every capability of the cluster.
+
+This is not cosmetic. Assessors were seeing their own text reappear under the next capability
+of the cluster and reading it as a per-question box repeating the previous answer, so they
+reported it as a bug. A distinct box per capability was considered and explicitly rejected by
+the client in favour of this labelling: if it comes back, note it would take the mandatory
+count from 6 to 22 per assessment (450 to 1 650 across a 25-AM campaign) and would need
+somewhere to land in the PDF.
+
+Keep the lead and the placeholder saying DIFFERENT things. A first pass had a prose paragraph
+plus `SELF_JUSTIFICATION_PROMPT` plus a placeholder all restating "describe a concrete
+example"; the client's note was that it was too much text and that the two visible strings
+were near-identical. The lead now carries the guidance once, the list carries the scope, and
+the placeholder carries only the structure. An e2e check asserts the placeholder does not
+repeat the lead's wording.
 
 All of these live in the `theme_notes.note` column (one row per assessment per cluster).
 `themeJustificationText(row)` returns that note; it still falls back to the legacy five

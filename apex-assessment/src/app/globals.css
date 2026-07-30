@@ -1110,10 +1110,18 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .framework-status.todo { color: #0b1424; background: var(--amber); }
 .framework-intro { font-size: 13px; color: var(--ink-2); margin: 0 0 12px; line-height: 1.55; font-weight: 550; }
 .framework-note { width: 100%; resize: vertical; }
-/* names the capabilities the one shared note covers, so nobody reads it as a box that
-   repeats itself from one capability to the next */
-.framework-shared { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.55; }
-.framework-cap-current { color: var(--ink); font-weight: 700; }
+/* italic lead + one numbered line per capability the single note has to cover, so nobody
+   reads the shared note as a box that repeats itself from one capability to the next */
+.framework-lead {
+  font-size: 13px; color: var(--ink-2); font-style: italic;
+  margin: 0 0 8px; line-height: 1.55;
+}
+.framework-caps {
+  margin: 0 0 12px; padding-left: 20px;
+  font-size: 13px; color: var(--ink-2); line-height: 1.7;
+}
+.framework-caps li::marker { color: var(--muted); }
+.framework-caps .framework-cap-current { color: var(--ink); font-weight: 700; }
 
 /* ---- per-capability question guide (lens-specific, from the APEX Question Guide) ---- */
 .qguide {

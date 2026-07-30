@@ -173,28 +173,26 @@ export default function Wizard({
           <span className="framework-kicker">Justification · {cluster}</span>
           <span className={`framework-status ${done ? "ok" : "todo"}`}>{done ? "✓ complete" : "required"}</span>
         </div>
-        <p className="framework-shared">
-          One justification for the {inCluster.length} capabilities of this cluster:{" "}
-          {inCluster.map((c, i) => (
-            <span key={c.id}>
-              {i > 0 && ", "}
-              <span className={c.id === currentCapId ? "framework-cap-current" : undefined}>{c.name}</span>
-            </span>
-          ))}
-          . The same text shows on each of them, so it only has to be written once.
+        {/* One numbered line per capability, so it is obvious the single note has to cover
+            all of them. This replaces a prose paragraph that said the same thing at length
+            and duplicated the placeholder underneath. */}
+        <p className="framework-lead">
+          {isSelf ? SELF_JUSTIFICATION_PROMPT : "Give the evidence behind your ratings, for each capability below."}
         </p>
-        {isSelf && <p className="framework-intro">{SELF_JUSTIFICATION_PROMPT}</p>}
+        <ol className="framework-caps">
+          {inCluster.map((c) => (
+            <li key={c.id} className={c.id === currentCapId ? "framework-cap-current" : undefined}>
+              {c.name}
+            </li>
+          ))}
+        </ol>
         <textarea
           className="input framework-note"
-          rows={isSelf ? 5 : 3}
+          rows={isSelf ? 6 : 5}
           value={themeData[cluster]?.note ?? ""}
           onChange={(e) => setThemeField(cluster, "note", e.target.value)}
           disabled={frozen}
-          placeholder={
-            isSelf
-              ? "Describe a concrete example: situation, actions taken, results, impact, and where relevant how it could be replicated."
-              : `What evidence supports your ratings across ${cluster}? A justification is required for every cluster.`
-          }
+          placeholder={inCluster.map((c, i) => `${i + 1}. ${c.name}: `).join("\n")}
         />
       </div>
     );

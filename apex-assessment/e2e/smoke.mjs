@@ -273,7 +273,7 @@ try {
   await page.waitForSelector(".framework-block");
   const selfFields = await page.locator(".framework-note").count();
   selfFields === 1 ? ok("self-assessor sees one justification note per theme") : fail("self note field", `${selfFields}`);
-  (await page.locator(".framework-intro").textContent())?.includes("concrete example")
+  (await page.locator(".framework-lead").textContent())?.includes("concrete example")
     ? ok("self-assessor sees the guided justification prompt")
     : fail("self justification prompt", "not shown");
   // the note is shared by the whole cluster: the block must say so and name what it covers,
@@ -282,13 +282,19 @@ try {
   kicker?.startsWith("Justification ·") && !kicker.toLowerCase().includes("theme")
     ? ok('justification block is titled "Justification · <cluster>"')
     : fail("justification title", kicker ?? "(none)");
-  const shared = await page.locator(".framework-shared").textContent();
-  shared?.includes("capabilities of this cluster") && shared.includes("written once")
-    ? ok("the block lists the capabilities the shared note covers")
-    : fail("shared-note wording", shared ?? "(none)");
-  (await page.locator(".framework-cap-current").count()) === 1
+  const capLines = await page.locator(".framework-caps li").allTextContents();
+  capLines.length >= 2
+    ? ok(`the block lists the ${capLines.length} capabilities the note must cover`)
+    : fail("covered-capability list", `${capLines.length} entries`);
+  (await page.locator(".framework-caps .framework-cap-current").count()) === 1
     ? ok("the capability being rated is highlighted in that list")
     : fail("current capability highlight", "not found");
+  // the lead and the placeholder must not say the same thing twice
+  const lead = (await page.locator(".framework-lead").textContent()) ?? "";
+  const ph = (await page.locator(".framework-note").getAttribute("placeholder")) ?? "";
+  ph.startsWith("1. ") && ph.includes("\n2. ") && !ph.includes("concrete example")
+    ? ok("the placeholder seeds one numbered line per capability, no duplicated prose")
+    : fail("placeholder", `lead="${lead.slice(0, 40)}" placeholder="${ph.slice(0, 60)}"`);
   // Type character-by-character, NOT fill(): a nested-component regression once remounted
   // this textarea on every keystroke, so focus was lost after each letter. fill() sets the
   // value in one shot and would not catch it; pressSequentially reproduces real typing.

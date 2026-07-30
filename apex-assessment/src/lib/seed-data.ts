@@ -313,7 +313,7 @@ export const ZONES = ["MEA", "SAM", "India", "Pacific"] as const;
 // ratings. One mandatory free-text answer, gently guided by the APEX framework
 // (situation / actions / results / impact / replication) rather than five fields.
 export const SELF_JUSTIFICATION_PROMPT =
-  "Please share a concrete example to support your rating. You can structure it as: situation, actions taken, results, impact, and where relevant how this could be replicated.";
+  "Share a concrete example for each capability below: situation, actions taken, results, impact, and where relevant how it could be replicated.";
 
 // Interview / self-reflection question guide, 1:1 from the APEX Question Guide
 // workbook: two guiding questions per capability for EACH lens. Self-assessors get
