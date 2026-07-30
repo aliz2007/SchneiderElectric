@@ -1,6 +1,11 @@
-import { Document, G, Image, Line, Page, Polygon, Rect, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
+import { Document, Font, G, Image, Line, Page, Polygon, Rect, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 import type { Narrative } from "./report-narrative";
+
+// Never break a word across lines with a hyphen. The renderer hyphenates by
+// default, which turned "AVERAGE SCORE EXPECTED" into "EX-PECTED" in the
+// cluster table; words now wrap whole, on spaces only.
+Font.registerHyphenationCallback((word) => [word]);
 
 /**
  * Individual APEX assessment report — printable PDF mirror of /analysis/am/[id].
@@ -184,8 +189,8 @@ const s = StyleSheet.create({
   ctabRow: { flexDirection: "row", paddingVertical: 2.4, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: "#f0f3f8" },
   ctabTh: { fontSize: 6.8, fontFamily: "Helvetica-Bold", color: MUTED, letterSpacing: 0.6, textTransform: "uppercase" },
   ctabTd: { fontSize: 8 },
-  ctabTheme: { width: "46%" },
-  ctabNum: { width: "18%", textAlign: "center" },
+  ctabTheme: { width: "40%" },
+  ctabNum: { width: "20%", textAlign: "center" },
   lvlText: { fontSize: 8, fontFamily: "Helvetica-Bold" },
   na: { fontSize: 8.5, color: FAINT, textAlign: "center" },
 
@@ -440,13 +445,16 @@ function CoverPage(p: AmReportProps) {
   );
 }
 
-function NarrativePage(p: AmReportProps) {
+/**
+ * The narrative is a section, not a page: it opens page 3 and whatever follows it
+ * (the capability detail) continues in the same flow. Giving it its own <Page> used
+ * to strand two orphan lines on a page of their own with the rest left blank.
+ */
+function NarrativeSection(p: AmReportProps) {
   const n = p.narrative;
   const clusterNames = p.clusters.map((c) => c.name);
   return (
-    <Page size="A4" style={s.page}>
-      <Chrome generatedAt={p.generatedAt} />
-
+    <>
       <SectionHead
         title="Strengths & development summary"
         sub="A narrative read of the APEX Panel scores, by capability cluster"
@@ -468,7 +476,7 @@ function NarrativePage(p: AmReportProps) {
           <NarrativeBody text={n.comments} />
         </>
       ) : null}
-    </Page>
+    </>
   );
 }
 
@@ -565,7 +573,7 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
     { key: "self" as const, label: "Self", color: RADAR_SELF, width: 0.9, fill: 0.05 },
     { key: "manager" as const, label: "Manager", color: RADAR_MANAGER, width: 0.9, fill: 0.05 },
     { key: "expert" as const, label: "APEX Panel", color: RADAR_PANEL, width: 0.9, fill: 0.05 },
-    { key: "weighted" as const, label: "Weighted average", color: RADAR_AVG, width: 2.6, fill: 0.14 },
+    { key: "weighted" as const, label: "Final score", color: RADAR_AVG, width: 2.6, fill: 0.14 },
   ];
   const active = LENSES_META.filter((l) => themes.some((t) => t[l.key] != null));
   if (active.length === 0) return null;
@@ -644,15 +652,15 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
             <Text style={s.perceptKeyText}>{l.label}</Text>
           </View>
         ))}
-        <Text style={s.perceptKeyNote}>Points are average levels (L1-L3) across each theme's capabilities.</Text>
+        <Text style={s.perceptKeyNote}>Points are average levels (L1 to L3) across each cluster capability.</Text>
       </View>
 
       {/* per-theme weighted average vs the level the track expects */}
       <View style={s.ctab}>
         <View style={s.ctabHead}>
-          <Text style={[s.ctabTh, s.ctabTheme]}>Theme</Text>
-          <Text style={[s.ctabTh, s.ctabNum]}>Weighted</Text>
-          <Text style={[s.ctabTh, s.ctabNum]}>Expected</Text>
+          <Text style={[s.ctabTh, s.ctabTheme]}>Cluster capability</Text>
+          <Text style={[s.ctabTh, s.ctabNum]}>Score</Text>
+          <Text style={[s.ctabTh, s.ctabNum]}>Average score expected</Text>
           <Text style={[s.ctabTh, s.ctabNum]}>Gap</Text>
         </View>
         {themes.map((t) => {
@@ -724,7 +732,7 @@ export function AmReportPdf(p: AmReportProps) {
                   <Text style={s.gradeVs}> vs </Text>
                   {p.overallReq.toFixed(2)}
                 </Text>
-                <Text style={s.gradeExp}>Final average vs. expected average</Text>
+                <Text style={s.gradeExp}>Final score vs. average score expected</Text>
               </>
             ) : (
               <>
@@ -739,7 +747,7 @@ export function AmReportPdf(p: AmReportProps) {
                 </Text>
                 <Text style={s.gradeExp}>
                   {p.overallReq != null
-                    ? "Final average vs. expected average (awaiting scores)"
+                    ? "Final score vs. average score expected (awaiting scores)"
                     : "Awaiting submitted assessments"}
                 </Text>
               </>
@@ -822,11 +830,12 @@ export function AmReportPdf(p: AmReportProps) {
         </View>
 
         {/* perception profile — diverging over/under-rating chart across all capabilities */}
-        {p.themeRadar.length >= 3 && (
+        {/* no scores yet means an empty web and a table of n/a, so the whole block is skipped */}
+        {p.hasScores && p.themeRadar.length >= 3 && (
           <View wrap={false}>
             <SectionHead
-              title="Perception by theme"
-              sub="Average level per theme. Self, Manager and Panel webs with the weighted average emphasised"
+              title="Perception by cluster capability"
+              sub="Average level per cluster capability. Self, Manager and Panel webs with the final score emphasised"
             />
             <ThemeRadar data={p.themeRadar} />
           </View>
@@ -834,15 +843,20 @@ export function AmReportPdf(p: AmReportProps) {
 
       </Page>
 
-      <NarrativePage {...p} />
-
-      {/* capability detail — three lenses vs required, grouped by cluster */}
+      {/* narrative then capability detail, one continuous flow so no page is left half empty */}
       <Page size="A4" style={s.page}>
         <Chrome generatedAt={p.generatedAt} />
-        <SectionHead
-          title="Capability detail"
-          sub="Three lenses, the weighted score and the gap to required, grouped by cluster"
-        />
+
+        <NarrativeSection {...p} />
+
+        {/* capability detail — three lenses vs required, grouped by cluster.
+            minPresenceAhead keeps the heading from stranding at the foot of a page. */}
+        <View style={{ marginTop: 16 }} minPresenceAhead={70}>
+          <SectionHead
+            title="Capability detail"
+            sub="Three lenses, the score and the gap to required, grouped by cluster capability"
+          />
+        </View>
         <View style={s.table}>
           <View style={s.thead}>
             <Text style={[s.th, s.cellCap]}>Capability</Text>
@@ -850,7 +864,7 @@ export function AmReportPdf(p: AmReportProps) {
             <Text style={[s.th, s.cellText]}>Self</Text>
             <Text style={[s.th, s.cellText]}>Manager</Text>
             <Text style={[s.th, s.cellText]}>Panel</Text>
-            <Text style={[s.th, s.cellText]}>Weighted</Text>
+            <Text style={[s.th, s.cellText]}>Score</Text>
             <Text style={[s.th, s.cellText]}>Gap</Text>
           </View>
           {p.clusters.map((cl) => (

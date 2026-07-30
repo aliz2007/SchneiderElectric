@@ -20,7 +20,19 @@ Last updated: 2026-07-30.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-30): **WEIGHTED SCORING** — every capability's score is now
+- Most recent additions (2026-07-30, later same day): **PDF wording aligned with the client's
+  vocabulary** — the per-cluster table under the radar now reads
+  `Cluster capability / Score / Average score expected / Gap`, the radar section is titled
+  "Perception by cluster capability" with "Final score" as its emphasised web, the detail
+  table's Weighted column is "Score", and the headline caption is
+  "Final score vs. average score expected". Two layout fixes shipped with it: word
+  hyphenation is **disabled** in the PDF (the renderer was splitting "EXPECTED" as "EX-PECTED",
+  and a mid-word hyphen breaks the no-dashes rule), and the narrative and capability detail
+  now share **one continuous page flow** instead of two separate `<Page>` elements, so a
+  narrative that overflows by a line or two no longer strands a near-empty page. The radar and
+  its table are skipped entirely when no lens has been submitted (they used to draw an empty
+  web plus a table of n/a).
+- Earlier (2026-07-30): **WEIGHTED SCORING** — every capability's score is now
   `Self 20% + APEX Panel 35% + Manager 45%`, and that weighted decimal drives every average,
   gap, strength, development area, heat map, KPI, chatbot answer and PDF figure in the app
   (see §2b). Also: the PDF radar gained a **fourth, emphasised "weighted average" web** (the
@@ -314,13 +326,21 @@ lens rather than a multi-checkbox.
   above, deep green well above — with the expected overall printed smaller beneath; "— / 3"
   until something is submitted), then profile + strengths/development (the development card
   is capped at `OVERVIEW_LIST_MAX` with a "+N more" line so the radar always fits the page;
-  the full list is in the detail table) + a **spider chart of perception by theme**
-  (`ThemeRadar`, @react-pdf SVG: thin webs for Self amber / Manager violet / Panel blue plus
-  a **thick deep-green weighted-average web**) and, under it, a compact **per-theme table**
-  (weighted / expected / gap, decimals); (3) narrative = strengths/weaknesses prose + a
-  definition of every capability it names; (4) capability-detail table with theme notes, the
-  **Panel** column (formerly "APEX"), the **Weighted** column and a **decimal Gap**.
-  Every report is 4 pages — verified across all 25 AMs. See §5–6 for the narrative.
+  the full list is in the detail table) + a **spider chart, "Perception by cluster
+  capability"** (`ThemeRadar`, @react-pdf SVG: thin webs for Self amber / Manager violet /
+  Panel blue plus a **thick deep-green "Final score" web**) and, under it, a compact
+  **per-cluster table** headed `Cluster capability / Score / Average score expected / Gap`
+  (decimals). The radar block is skipped when nothing has been submitted yet; (3) the
+  narrative (strengths/weaknesses prose + a definition of every capability it names) followed
+  in the SAME page flow by (4) the capability-detail table with theme notes, the **Panel**
+  column (formerly "APEX"), the **Score** column (formerly "Weighted") and a **decimal Gap**.
+  Narrative and detail deliberately share one `<Page>`: when they were separate, a narrative
+  that ran two lines long stranded an almost-empty page between them.
+  Hyphenation is disabled document-wide (`Font.registerHyphenationCallback`) so no word ever
+  breaks with a "-". Page count is 4 for a typical report and grows only with the volume of
+  written justifications — verified across all 25 AMs on both an empty roster (4 pages each)
+  and a worst-case fill with a long note on every capability and every cluster field (5 pages,
+  6 for the two longest). See §5–6 for the narrative.
 - **Admin — Users & Access** (`/admin/users`, superadmin):
   - Create user with a **lens-aware picker** (`create-user-form.tsx`): Self shows a
     single-select "which Account Manager is this person"; Manager/Panel show a checkbox grid
@@ -433,7 +453,7 @@ src/lib/session.ts           getCurrentUser / requireUser / requireSuperadmin, c
 src/lib/auth.ts              scrypt hashing + session token
 src/lib/report-narrative.ts  deterministic strengths/weaknesses prose + capability definitions
 src/lib/ai-narrative.ts      optional Kimi (Moonshot) feedback, with graceful fallback
-src/lib/pdf-report.tsx       4-page @react-pdf report (cover / overview / narrative / detail)
+src/lib/pdf-report.tsx       @react-pdf report (cover / overview / narrative + detail in one flow)
 src/lib/heat.ts              heat-map colour helpers
 src/app/login/               login page + action
 src/lib/chat-data.ts         role-scoped live snapshot for the APEX Assistant chatbot
