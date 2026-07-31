@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-30.
+Last updated: 2026-07-31.
 
 ---
 
@@ -20,7 +20,10 @@ Last updated: 2026-07-30.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-30, later same day): the mandatory justification block is now
+- Most recent additions (2026-07-30, later same day): **fixed a float-formatting bug on the
+  zone benchmark** — it interpolated the weighted score raw, so `L2.3000000000000003` and
+  `L2.3499999999999996` were showing across the grid (see §2b, "Never print a weighted score
+  raw"). Also: the mandatory justification block is now
   headed **`Justification - <cluster>`** with an italic lead and **one numbered line per
   capability** it covers (current one in bold), and the textarea placeholder seeds that same
   numbering, so nobody reads the shared note as a per-question box repeating itself. The
@@ -123,9 +126,9 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
   database. Any resemblance is coincidental. (The original Excel had some real-looking names;
   they were all replaced.) If the client later provides a real, cleared roster, edit `ROSTER`.
 
-### Per-theme justification (the self-assessor's concrete example)
+### Per-cluster justification (the self-assessor's concrete example)
 
-Every lens justifies each theme (cluster) with ONE mandatory free-text note, written in-context
+Every lens justifies each cluster with ONE mandatory free-text note, written in-context
 under the level cards and required before the assessment can be submitted:
 
 - **Self-assessors** get a guided prompt (`SELF_JUSTIFICATION_PROMPT` in `seed-data.ts`): "Please
@@ -181,6 +184,16 @@ That weighted value — a DECIMAL, never rounded to a level — is the canonical
   radar and per-theme table, the deterministic narrative and both AI prompts all use it.
 - Individual lens levels are still shown (Self / Manager / Panel columns, the radar's three
   thin webs) — they are the inputs, not the verdict.
+
+**Never print a weighted score raw.** It is a computed float, so binary floating point shows
+through the moment it is interpolated into a string: 11 of the 27 possible level triples land
+on a value that does not print cleanly, e.g. self 3 / panel 1 / manager 3 is
+`2.3000000000000003`, and self 2 / panel 3 / manager 2 is `2.3499999999999996`.
+Always go through `fmt(value, 2)` (`src/lib/heat.ts`) or `.toFixed(2)`. This bit us once, on the zone benchmark, which printed `` `L${score}` `` and
+filled a third of the grid with 16-digit numbers; an e2e check now walks every cell of that
+table and fails on anything that is not `n/a` or a level with at most two decimals. Individual
+lens levels (`self` / `manager` / `expert`) are integers and are safe to interpolate; the
+weighted score, gaps, and any average are NOT.
 
 Changing the weights is a one-line edit to `LENS_WEIGHTS`; everything downstream follows.
 
@@ -303,13 +316,15 @@ lens rather than a multi-checkbox.
     assessment from the individual analysis page. **Assessment windows** apply per lens: a
     📅 banner shows the manager deadline / panel call while open, and past the window the
     wizard goes read-only with a 🔒 banner (see §2 Assessment scheduling; server-enforced).
-  - **Per-theme justification (mandatory)**: below the level cards, each capability screen
-    shows the justification block for that capability's theme (cluster) — one required note.
-    For a **self-assessor** it is a bigger/wider text box carrying the guided prompt (a concrete
+  - **Per-cluster justification (mandatory)**: below the level cards, each capability screen
+    shows the justification block for that capability's cluster — one required note, headed
+    `Justification · <cluster>` with an italic lead, a numbered line per capability the note
+    covers (current one bold) and a placeholder seeding that same numbering (see §3).
+    For a **self-assessor** the lead is the guided prompt (a concrete
     example: situation, actions, results, impact, and where relevant replication). For a
-    **Manager / APEX Panel** evaluator it is a single required note. Autosaved (700 ms
+    **Manager / APEX Panel** evaluator it is a one-line lead. Autosaved (700 ms
     debounce) via `saveThemeNote → saveThemeField`. The review screen shows a completion badge
-    per theme, and **Submit is disabled** until every capability is rated AND every theme is
+    per cluster, and **Submit is disabled** until every capability is rated AND every cluster is
     justified; the server re-checks with `unjustifiedThemes()` and rejects an early submit.
 - **Analysis**:
   - `/analysis` (any signed-in user): completion KPIs including "Avg APEX maturity" shown as
@@ -326,7 +341,9 @@ lens rather than a multi-checkbox.
     window (the capability filter now re-colours the thermal map via the `capFilter` prop).
   - `/analysis/zone/[zone]` (superadmin): AM x capability heat maps, track-aware; the zone
     benchmark ranking can sort AMs and (for admins) shows each AM's name in a low-opacity font
-    under their AM number.
+    under their AM number. Every cell is the WEIGHTED score formatted to two decimals
+    (`L2.80`), as is the Zone avg column — see the formatting rule in §2b, this table is the
+    one that shipped raw floats once.
   - `/analysis/individuals` + `/analysis/am/[id]` (superadmin): the list carries a **search
     bar** (name / account / AM code, debounced) and **Zone / Track / Segment filters** —
     URL-param driven (`filters.tsx`), with a "Showing N of 25" note and Clear all. Per person:
@@ -514,17 +531,28 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 51/51 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 57/57 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
 the centralized Filters window, the APEX Assistant round-trip, individual analysis (incl. the
 segment badge), PDF export, zone view, assessor creation and confidentiality, the rating
-wizard, the mandatory per-theme justification note for BOTH the Manager (walking every theme)
-and the self-assessor (the guided concrete-example prompt), justification end-to-end (wizard ->
-analysis -> PDF), the self-assessor direct landing, onboarding (now incl. segment), the test
-sandbox, and account
-deletion. Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
+wizard, the mandatory per-cluster justification note for BOTH the Manager (walking every
+cluster) and the self-assessor (the guided concrete-example prompt), justification end-to-end
+(wizard -> analysis -> PDF), the self-assessor direct landing, onboarding (now incl. segment),
+the test sandbox, and account deletion.
+
+Three checks exist because a specific bug got shipped once, so do not delete them lightly:
+
+- **focus retention** in the justification textarea, typed with `pressSequentially` rather
+  than `fill()` — a nested-component regression once remounted the box on every keystroke, and
+  `fill()` sets the value in one shot so it cannot catch it (see §12).
+- **justification block layout** — the `Justification - <cluster>` heading, the numbered list
+  of covered capabilities, the highlight on the current one, and the fact that the placeholder
+  does NOT repeat the lead's wording (the client rejected an earlier version for saying the
+  same thing twice).
+- **zone benchmark number formatting** — every cell must be `n/a` or a level with at most two
+  decimals, which catches raw floats leaking into the UI (see §2b). Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
 narrative, the chatbot returns its fixed "turned off" reply, no external call). The e2e header
 comments explain the `CHROMIUM` / `BASE` env vars.
 
@@ -587,15 +615,34 @@ env var before putting the app on the open internet.
 3. **Production concerns** in §10 (Postgres / SSO / hosting) are unaddressed by design.
 4. `demo.bat` sets `APEX_DEMO=1` but no code reads it (vestigial). Demo data loads from the
    admin button.
+5. **Two security items were raised with the repo owner and never answered.** They are not
+   bugs and were not changed unilaterally, but whoever picks this up should raise them again
+   before anything real is loaded into the deployment:
+   - the hardcoded Kimi key (§12) is readable by anyone who finds the public repo or the
+     deployed bundle; moving it to an env var is a small change the owner has to approve.
+   - the seeded superadmin `vladimir` / `apex2026` is reachable on the public Render URL.
 
 ## 12. Decisions (do not relitigate without the user)
 
 - SQLite is deliberate (zero infra); move to Postgres only if asked.
 - v1 auth is username/password managed by the superadmin; SSO is a later concern.
-- Justification is per-theme (one row per cluster), **replacing** the old per-capability
-  evidence note. It is MANDATORY for all three lenses: one note per theme — self-assessors from
-  a guided concrete-example prompt, Manager/APEX Panel free text. (A brief experiment split the
-  self note into five separate framework questions; that was reverted to one note.)
+- Justification is per-cluster (one row per cluster), **replacing** the old per-capability
+  evidence note. It is MANDATORY for all three lenses: one note per cluster — self-assessors
+  from a guided concrete-example prompt, Manager/APEX Panel free text. (A brief experiment
+  split the self note into five separate framework questions; that was reverted to one note.)
+- **A distinct comment box per capability was built and then rejected.** The client reported
+  that the shared cluster note looked like a per-question box repeating the previous answer,
+  and offered two fixes: 22 separate boxes, or clearer labelling. The 22-box version was
+  implemented in full (per-capability storage in `ratings.note`, PDF and analysis rendering,
+  AI prompt) and then reverted at the client's explicit instruction in favour of the labelling
+  fix now in §3. If it is ever revisited: it takes the mandatory count from 6 to 22 per
+  assessment, i.e. 450 to 1 650 written paragraphs across a 25-AM campaign, and the notes need
+  somewhere to land in the PDF. Do not re-propose it unprompted.
+- **Justification wording is deliberately terse.** An earlier version carried a prose
+  paragraph, a guidance sentence AND a placeholder that all said "describe a concrete
+  example". The client's note was that it was too much text and the strings were near
+  identical. The rule now: the lead carries the guidance ONCE, the numbered list carries the
+  scope, the placeholder carries only the structure. An e2e check enforces the last part.
 - Strength vs development is strict, and measured on the WEIGHTED score: a strength is
   STRICTLY above required; anything below required is a development area; AT required is the
   baseline and is neither. (The PDF's overview card shows the first few with a "+N more"
