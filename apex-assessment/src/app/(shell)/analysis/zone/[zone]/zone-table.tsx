@@ -151,9 +151,11 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                       <td
                         key={am.id}
                         className={`cell ${cls}`}
-                        title={rq == null ? "Not applicable to this AM's track" : score == null ? "No submitted panel score" : `score L${score} · required L${rq}`}
+                        title={rq == null ? "Not applicable to this AM's track" : score == null ? "No submitted panel score" : `score L${fmt(score, 2)} · required L${rq}`}
                       >
-                        {rq == null ? "n/a" : score == null ? "n/a" : `L${score}`}
+                        {/* the weighted score is a float: always format it, never interpolate
+                            it raw, or a 2.3 renders as L2.3000000000000003 */}
+                        {rq == null ? "n/a" : score == null ? "n/a" : `L${fmt(score, 2)}`}
                       </td>
                     );
                   });
@@ -162,7 +164,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                       <th className="hm-rowhead">{cap.name}</th>
                       {cells}
                       <td className="cell hm-na" style={{ background: "rgba(255,255,255,0.09)", color: "var(--ink)" }}>
-                        {vals.length === 0 ? "n/a" : fmt(vals.reduce((a, b) => a + b, 0) / vals.length)}
+                        {vals.length === 0 ? "n/a" : fmt(vals.reduce((a, b) => a + b, 0) / vals.length, 2)}
                       </td>
                     </tr>
                   );

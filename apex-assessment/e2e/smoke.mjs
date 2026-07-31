@@ -119,6 +119,13 @@ try {
   await page.goto(`${BASE}/analysis/zone/MEA`);
   await page.waitForSelector("text=Zone benchmark");
   ok("zone MEA heat map renders");
+  // The weighted score is a float, so every cell MUST be formatted. Interpolating it raw
+  // once printed "L2.3000000000000003" across the whole benchmark.
+  const zoneCells = await page.locator("table.hm td.cell").allTextContents();
+  const rawFloats = zoneCells.filter((t) => !/^(n\/a|L?\d+(\.\d{1,2})?)$/.test(t.trim()));
+  zoneCells.length > 0 && rawFloats.length === 0
+    ? ok(`zone benchmark scores are all formatted (${zoneCells.length} cells)`)
+    : fail("zone score formatting", rawFloats.slice(0, 3).join(" | ") || "no cells");
 
   // ---- 6. create an assessor (manager lens, assigned AM02) ----
   // Manager lens → the AM picker renders as a checkbox grid inside the create card.
