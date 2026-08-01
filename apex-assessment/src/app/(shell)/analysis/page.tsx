@@ -4,6 +4,7 @@ import {
   assessmentStatuses,
   listAMs,
   listCapabilities,
+  formatScheduleDate,
   overviewStats,
   weightedLevels,
   trainingPriorities,
@@ -38,6 +39,8 @@ export default async function AnalysisPage({
   const ams = listAMs().filter((am) => (!track || am.track === track) && (!segment || am.segment === segment));
   const capOptions = listCapabilities().map((c) => ({ id: c.id, name: c.name, cluster: c.cluster }));
 
+  const maturityGap =
+    stats.avgWeighted == null || stats.avgRequired == null ? null : stats.avgWeighted - stats.avgRequired;
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
   const completionPct = Math.round((submittedTotal / (stats.amCount * 3)) * 100);
 
@@ -120,6 +123,18 @@ export default async function AnalysisPage({
               <span style={{ fontSize: 16, color: "var(--muted)" }}> / 3</span>
             )}
           </div>
+          {/* the score on its own says nothing; the expected average and the gap are what
+              make it readable as good or bad */}
+          {stats.avgRequired != null && (
+            <div className="kpi-bench">
+              vs <strong>{fmt(stats.avgRequired, 2)}</strong> expected
+              {maturityGap != null && (
+                <span className={`lvl-chip ${gapClass(maturityGap)} kpi-bench-chip`}>
+                  {maturityGap > 0 ? `+${fmt(maturityGap, 2)}` : fmt(maturityGap, 2)}
+                </span>
+              )}
+            </div>
+          )}
           <div className="kpi-note">{stats.avgWeighted == null ? "submitted scores" : WEIGHTS_LABEL}</div>
         </div>
       </div>
@@ -217,8 +232,14 @@ export default async function AnalysisPage({
       </div>
 
       <div className="card card-pad">
-        <h2 className="card-title">TOP 25 roster</h2>
-        <p className="card-sub">Assessment progress per lens. Open an Account Manager for the individual analysis.</p>
+        {/* the count is read from the roster, not hardcoded: "TOP 25" went stale the moment
+            anyone was added or removed */}
+        <h2 className="card-title">Roster · {ams.length} Account Manager{ams.length === 1 ? "" : "s"}</h2>
+        <p className="card-sub">
+          Where each assessment stands, per lens. A tick means submitted and locked; an amber
+          count is a draft in progress out of the 22 capabilities. The dates are the manager
+          deadline and the APEX Panel call, set per person on their individual page.
+        </p>
         <div className="hm-scroll">
           <table className="table">
             <thead>
@@ -229,6 +250,7 @@ export default async function AnalysisPage({
                 <th>Self</th>
                 <th>Manager</th>
                 <th>APEX Panel</th>
+                <th>Upcoming</th>
                 {isAdmin && <th></th>}
               </tr>
             </thead>
@@ -254,6 +276,9 @@ export default async function AnalysisPage({
                         </td>
                       );
                     })}
+                    <td>
+                      <ScheduleCell am={am} status={st} />
+                    </td>
                     {isAdmin && (
                       <td>
                         <Link className="btn btn-sm btn-outline" href={`/analysis/am/${am.id}`}>
@@ -268,6 +293,58 @@ export default async function AnalysisPage({
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "What is the next step for this person, and how much is still to do."
+ *
+ * The dates were only visible on each individual page, so a superadmin who had just set a
+ * panel call had no way to see the schedule across the roster. This surfaces the nearest
+ * upcoming date and, when a lens is mid-draft, how many capabilities are left to score.
+ */
+function ScheduleCell({
+  am,
+  status,
+}: {
+  am: { manager_deadline: string | null; panel_datetime: string | null };
+  status: Record<"self" | "manager" | "expert", { status: string; rated: number }>;
+}) {
+  const now = Date.now();
+  const dates: { label: string; value: string; withTime: boolean; when: Date; overdue: boolean }[] = [];
+  const push = (label: string, value: string | null, withTime: boolean, done: boolean) => {
+    if (!value || done) return; // a date on a submitted lens is history, not a next step
+    const when = new Date(`${value.slice(0, 10)}T23:59:59.999`);
+    if (Number.isNaN(when.getTime())) return;
+    // a passed date on an UNSUBMITTED lens is the most important thing on this row
+    dates.push({ label, value, withTime, when, overdue: when.getTime() < now });
+  };
+  push("Manager", am.manager_deadline, false, status.manager.status === "submitted");
+  push("Panel", am.panel_datetime, true, status.expert.status === "submitted");
+  // overdue first, then soonest
+  dates.sort((a, b) => Number(b.overdue) - Number(a.overdue) || a.when.getTime() - b.when.getTime());
+
+  // capabilities still unscored across the lenses that have started but not submitted
+  const left = (["self", "manager", "expert"] as const)
+    .filter((l) => status[l].status === "draft")
+    .reduce((n, l) => n + (22 - status[l].rated), 0);
+
+  if (dates.length === 0 && left === 0) {
+    const allDone = (["self", "manager", "expert"] as const).every((l) => status[l].status === "submitted");
+    return <span style={{ color: "var(--muted)", fontSize: 12.5 }}>{allDone ? "complete" : "no date set"}</span>;
+  }
+
+  const next = dates[0];
+  return (
+    <div className="sched-cell">
+      {next && (
+        <span className={`badge ${next.overdue ? "badge-red" : "badge-sched"}`}>
+          {next.label} · {formatScheduleDate(next.value, next.withTime)}
+          {next.overdue ? " · overdue" : ""}
+        </span>
+      )}
+      {left > 0 && <span className="sched-left">{left} left to score</span>}
     </div>
   );
 }

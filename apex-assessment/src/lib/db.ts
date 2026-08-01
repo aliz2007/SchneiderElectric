@@ -141,6 +141,13 @@ function migrate(db: Database.Database) {
     );
     for (const am of ROSTER) setSeg.run(am.segment, am.code);
   }
+  // The CS&P segment label used to contain a standalone "-", which the client asked us to
+  // remove from every user-facing string. The label is stored on the row, so existing
+  // databases need the value rewritten or the segment filter stops matching. Idempotent.
+  db.prepare("UPDATE account_managers SET segment = ? WHERE segment = ?").run(
+    "CS&P · Cloud & Service Providers",
+    "CS&P - Cloud & Service Providers"
+  );
   // Heal demo databases seeded BEFORE the roster names were made fictional: bring each
   // seeded AM's name in line with ROSTER by code. Idempotent (no-op once names match). This
   // is safe because the seeded 25 AMs have no in-app name-edit path — onboarding only fills

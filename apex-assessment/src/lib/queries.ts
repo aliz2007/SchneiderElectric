@@ -549,5 +549,16 @@ export function overviewStats() {
   for (const row of perLens) if (row.avg != null) meanByLens[row.lens] = row.avg;
   const avgWeighted = weightedScore(meanByLens);
 
-  return { amCount, byLens, avgWeighted, weights: LENS_WEIGHTS, lenses: LENSES };
+  // The benchmark the maturity score should be read against: the average required level
+  // across every AM's own track. A score without it is just a number.
+  const reqRow = db
+    .prepare(
+      `SELECT AVG(CASE WHEN am.track = 'Acquisition' THEN c.req_acq ELSE c.req_sat END) AS avg
+       FROM account_managers am CROSS JOIN capabilities c
+       WHERE (CASE WHEN am.track = 'Acquisition' THEN c.req_acq ELSE c.req_sat END) IS NOT NULL`
+    )
+    .get() as { avg: number | null };
+  const avgRequired = reqRow.avg;
+
+  return { amCount, byLens, avgWeighted, avgRequired, weights: LENS_WEIGHTS, lenses: LENSES };
 }

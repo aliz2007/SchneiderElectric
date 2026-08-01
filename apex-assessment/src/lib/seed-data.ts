@@ -272,7 +272,7 @@ export type SeedAM = {
 export const SEGMENTS = [
   "Power & Grid",
   "Energy & Chemicals",
-  "CS&P - Cloud & Service Providers",
+  "CS&P · Cloud & Service Providers",
   "Multi-segment",
 ] as const;
 export type Segment = (typeof SEGMENTS)[number];
@@ -282,28 +282,28 @@ export type Segment = (typeof SEGMENTS)[number];
 export const ROSTER: SeedAM[] = [
   { code: "AM01", name: "Adam Fisher", account: "Account 1", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
   { code: "AM02", name: "Layla Haddad", account: "Account 2", zone: "MEA", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM03", name: "Omar Nasri", account: "Account 3", zone: "MEA", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM03", name: "Omar Nasri", account: "Account 3", zone: "MEA", track: "Acquisition", segment: "CS&P · Cloud & Service Providers" },
   { code: "AM04", name: "Sofia Rahman", account: "Account 4", zone: "MEA", track: "Saturation", segment: "Multi-segment" },
   { code: "AM05", name: "Karim Belhaj", account: "Account 5", zone: "MEA", track: "Acquisition", segment: "Power & Grid" },
   { code: "AM06", name: "Nadia Toure", account: "Account 6", zone: "MEA", track: "Acquisition", segment: "Energy & Chemicals" },
   { code: "AM07", name: "Lucas Moreira", account: "Account 7", zone: "SAM", track: "Saturation", segment: "Power & Grid" },
-  { code: "AM08", name: "Camila Rojas", account: "Account 8", zone: "SAM", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM08", name: "Camila Rojas", account: "Account 8", zone: "SAM", track: "Acquisition", segment: "CS&P · Cloud & Service Providers" },
   { code: "AM09", name: "Mateo Silva", account: "Account 9", zone: "SAM", track: "Saturation", segment: "Energy & Chemicals" },
   { code: "AM10", name: "Valentina Cruz", account: "Account 10", zone: "SAM", track: "Saturation", segment: "Multi-segment" },
   { code: "AM11", name: "Diego Fernandes", account: "Account 11", zone: "SAM", track: "Acquisition", segment: "Power & Grid" },
   { code: "AM12", name: "Isabela Costa", account: "Account 12", zone: "SAM", track: "Acquisition", segment: "Energy & Chemicals" },
-  { code: "AM13", name: "Rohan Mehta", account: "Account 13", zone: "India", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM13", name: "Rohan Mehta", account: "Account 13", zone: "India", track: "Saturation", segment: "CS&P · Cloud & Service Providers" },
   { code: "AM14", name: "Priya Nair", account: "Account 14", zone: "India", track: "Acquisition", segment: "Power & Grid" },
   { code: "AM15", name: "Arjun Kapoor", account: "Account 15", zone: "India", track: "Saturation", segment: "Multi-segment" },
   { code: "AM16", name: "Ananya Rao", account: "Account 16", zone: "India", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM17", name: "Vikram Shah", account: "Account 17", zone: "India", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM17", name: "Vikram Shah", account: "Account 17", zone: "India", track: "Acquisition", segment: "CS&P · Cloud & Service Providers" },
   { code: "AM18", name: "Neha Iyer", account: "Account 18", zone: "India", track: "Acquisition", segment: "Power & Grid" },
   { code: "AM19", name: "Ethan Walker", account: "Account 19", zone: "Pacific", track: "Acquisition", segment: "Energy & Chemicals" },
-  { code: "AM20", name: "Mia Chen", account: "Account 20", zone: "Pacific", track: "Saturation", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM20", name: "Mia Chen", account: "Account 20", zone: "Pacific", track: "Saturation", segment: "CS&P · Cloud & Service Providers" },
   { code: "AM21", name: "Liam Tan", account: "Account 21", zone: "Pacific", track: "Saturation", segment: "Multi-segment" },
   { code: "AM22", name: "Grace Wong", account: "Account 22", zone: "Pacific", track: "Acquisition", segment: "Power & Grid" },
   { code: "AM23", name: "Noah Park", account: "Account 23", zone: "Pacific", track: "Saturation", segment: "Energy & Chemicals" },
-  { code: "AM24", name: "Olivia Lim", account: "Account 24", zone: "Pacific", track: "Acquisition", segment: "CS&P - Cloud & Service Providers" },
+  { code: "AM24", name: "Olivia Lim", account: "Account 24", zone: "Pacific", track: "Acquisition", segment: "CS&P · Cloud & Service Providers" },
   { code: "AM25", name: "Jack Nguyen", account: "Account 25", zone: "Pacific", track: "Acquisition", segment: "Multi-segment" },
 ];
 

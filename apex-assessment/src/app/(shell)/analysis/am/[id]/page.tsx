@@ -20,6 +20,7 @@ import { aiNarrativeEnabled } from "@/lib/ai-narrative";
 import { reopen } from "./actions";
 import ExportPdfButton from "./export-pdf-button";
 import ScheduleEditor from "./schedule-editor";
+import ThemeRadar, { type RadarTheme } from "./theme-radar";
 
 function Chip({ level }: { level: number | null | undefined }) {
   return (
@@ -92,6 +93,32 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
     else last.rows.push(row);
   }
 
+  // One radar point per cluster: the mean of each lens, the weighted score, and the level
+  // the track expects (the benchmark web).
+  //
+  // Only clusters that APPLY to this AM's track are plotted. An Acquisition AM has no
+  // required level anywhere in Saturation Excellence (and vice versa), so that axis would
+  // drag the expected web to the centre; those capabilities are also excluded from the
+  // final score, so plotting them here would contradict the number next to the chart.
+  const themeRadar: RadarTheme[] = clusters
+    .filter((cl) => cl.rows.some((r) => r.req != null))
+    .map((cl) => {
+      const mean = (pick: (r: Row) => number | null | undefined) => {
+        const vals = cl.rows.map(pick).filter((v): v is number => v != null);
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+      };
+      return {
+        theme: cl.name,
+        self: mean((r) => r.self),
+        manager: mean((r) => r.manager),
+        expert: mean((r) => r.expert),
+        weighted: mean((r) => r.weighted),
+        required: mean((r) => r.req),
+      };
+    });
+  const overallGap =
+    overallWeighted == null || overallRequired == null ? null : overallWeighted - overallRequired;
+
   return (
     <div>
       <div className="page-head">
@@ -127,6 +154,38 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
           )}
           {am.panel_datetime && (
             <span className="badge badge-sched">Panel call · {formatScheduleDate(am.panel_datetime, true)}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Overall standing first: the number, its benchmark, and the shape of the profile.
+          Everything below is the detail behind these two things. */}
+      <div className="card card-pad standing-card" style={{ marginBottom: 20 }}>
+        <div className="standing-score">
+          <div className="kpi-label">Final score</div>
+          <div className={`standing-value ${gapClass(overallGap)}`}>
+            {overallWeighted == null ? "n/a" : fmt(overallWeighted, 2)}
+            <span className="standing-outof">/3</span>
+          </div>
+          <div className="standing-vs">
+            {overallRequired == null
+              ? "No expected level for this track yet"
+              : <>vs <strong>{fmt(overallRequired, 2)}</strong> average score expected</>}
+          </div>
+          {overallGap != null && (
+            <span className={`lvl-chip ${gapClass(overallGap)}`} style={{ marginTop: 10, minWidth: 64 }}>
+              {overallGap > 0 ? `+${fmt(overallGap, 2)}` : fmt(overallGap, 2)}
+            </span>
+          )}
+          <p className="standing-note">{WEIGHTS_LABEL}</p>
+        </div>
+        <div className="standing-radar">
+          {hasAnyScores ? (
+            <ThemeRadar data={themeRadar} />
+          ) : (
+            <p style={{ color: "var(--muted)", fontSize: 13.5, margin: 0 }}>
+              The profile chart appears once an assessment has been submitted.
+            </p>
           )}
         </div>
       </div>
@@ -264,11 +323,42 @@ function ClusterSection({
   rows: ScoredRow[];
   notes: { lens: Lens; note: string }[];
 }) {
+  // the cluster's own standing, so the six themes can be compared without adding up
+  // 22 rows by eye. Averaged over the capabilities that apply to this AM's track.
+  const applicable = rows.filter((r) => r.req != null);
+  const clusterWeighted = averageWeighted(applicable);
+  const clusterRequired = averageRequired(applicable);
+  const clusterGap =
+    clusterWeighted == null || clusterRequired == null ? null : clusterWeighted - clusterRequired;
   return (
     <>
       <tr>
-        <td colSpan={7} style={{ paddingTop: 14 }}>
+        <td colSpan={2} style={{ paddingTop: 14 }}>
           <span className="cluster-kicker">{name}</span>
+        </td>
+        <td colSpan={3} style={{ paddingTop: 14 }}>
+          <span className="cluster-avg-label">
+            cluster average{clusterRequired == null ? "" : ` · expected ${fmt(clusterRequired, 2)}`}
+          </span>
+        </td>
+        <td style={{ paddingTop: 14 }}>
+          {clusterWeighted == null ? (
+            <span style={{ color: "var(--muted)" }}>n/a</span>
+          ) : (
+            <strong style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(clusterWeighted, 2)}</strong>
+          )}
+        </td>
+        <td style={{ paddingTop: 14 }}>
+          {clusterGap == null ? (
+            <span style={{ color: "var(--muted)" }}>n/a</span>
+          ) : (
+            <span
+              className={`lvl-chip ${gapClass(clusterGap)}`}
+              style={{ minWidth: 46, fontVariantNumeric: "tabular-nums" }}
+            >
+              {clusterGap > 0 ? `+${fmt(clusterGap, 2)}` : fmt(clusterGap, 2)}
+            </span>
+          )}
         </td>
       </tr>
       {notes.length > 0 && (

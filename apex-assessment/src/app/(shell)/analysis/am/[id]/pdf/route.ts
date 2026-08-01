@@ -102,9 +102,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .map((r) => ({ name: r.name, perception: r.perception!, self: r.self, expert: r.expert }));
   void perceptionGaps;
 
-  // Perception radar: the average level per theme (cluster) for each lens.
+  // Perception radar: the average level per cluster for each lens, plus the expected level.
+  //
+  // Only clusters that APPLY to this AM's track are plotted. An Acquisition AM has no
+  // required level anywhere in Saturation Excellence (and vice versa), so that axis would
+  // drag the expected web to the centre; those capabilities are also excluded from the
+  // headline score, so plotting them would contradict the grade on the same page.
   const clusterOrder: string[] = [];
-  for (const r of rows) if (!clusterOrder.includes(r.cluster)) clusterOrder.push(r.cluster);
+  for (const r of rows) {
+    if (r.req == null) continue;
+    if (!clusterOrder.includes(r.cluster)) clusterOrder.push(r.cluster);
+  }
   const themeRadar = clusterOrder.map((cluster) => {
     const inCluster = rows.filter((r) => r.cluster === cluster);
     const mean = (k: "self" | "manager" | "expert" | "weighted") => {

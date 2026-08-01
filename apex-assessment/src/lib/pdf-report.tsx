@@ -60,7 +60,7 @@ export type AmReportProps = {
 
 // Keep the overview cards bounded so the perception radar always fits on the same page;
 // the complete list lives in the capability-detail table at the end of the report.
-const OVERVIEW_LIST_MAX = 7;
+const OVERVIEW_LIST_MAX = 6;
 
 const INK = "#17203a";
 const MUTED = "#64748b";
@@ -181,6 +181,8 @@ const s = StyleSheet.create({
   perceptLegend: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", marginTop: 4, gap: 14 },
   perceptKey: { flexDirection: "row", alignItems: "center" },
   perceptSwatch: { width: 9, height: 9, borderRadius: 2, marginRight: 5 },
+  // the dashed target line has no fill, so its key is an outline
+  perceptSwatchTarget: { backgroundColor: "transparent", borderWidth: 1, borderColor: INK, borderStyle: "dashed" },
   perceptKeyText: { fontSize: 8, color: MUTED },
   perceptKeyNote: { fontSize: 8, color: FAINT },
   // compact per-theme table sitting under the radar
@@ -542,10 +544,10 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
   const n = themes.length;
   if (n < 3) return null;
   const W = 511;
-  const H = 196;
+  const H = 178;
   const CX = W / 2;
-  const CY = 98;
-  const R = 64; // radius of the L3 ring
+  const CY = 89;
+  const R = 58; // radius of the L3 ring
   const angle = (i: number) => (-90 + (360 / n) * i) * (Math.PI / 180);
   const pt = (i: number, v: number): [number, number] => [
     CX + Math.cos(angle(i)) * (R * v) / 3,
@@ -577,6 +579,10 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
   ];
   const active = LENSES_META.filter((l) => themes.some((t) => t[l.key] != null));
   if (active.length === 0) return null;
+  // the level the track expects, drawn as a dashed target line under the score webs. Without
+  // it a shape is unreadable: you cannot tell a small hexagon that is on target from one
+  // that is failing.
+  const hasRequired = themes.every((t) => t.required != null);
 
   return (
     <View wrap={false}>
@@ -595,6 +601,16 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
             {`L${v}`}
           </SvgText>
         ))}
+        {/* the expected level, dashed, beneath the score webs */}
+        {hasRequired && (
+          <Polygon
+            points={themes.map((t, i) => pt(i, t.required!).map((c) => c.toFixed(1)).join(",")).join(" ")}
+            fill="none"
+            stroke={INK}
+            strokeWidth={1.1}
+            strokeDasharray="3 2.5"
+          />
+        )}
         {/* one web per lens with submitted data */}
         {active.map((l) => {
           const points = themes
@@ -652,6 +668,12 @@ function ThemeRadar({ data }: { data: AmReportProps["themeRadar"] }) {
             <Text style={s.perceptKeyText}>{l.label}</Text>
           </View>
         ))}
+        {hasRequired && (
+          <View style={s.perceptKey}>
+            <View style={[s.perceptSwatch, s.perceptSwatchTarget]} />
+            <Text style={s.perceptKeyText}>Expected level</Text>
+          </View>
+        )}
         <Text style={s.perceptKeyNote}>Points are average levels (L1 to L3) across each cluster capability.</Text>
       </View>
 

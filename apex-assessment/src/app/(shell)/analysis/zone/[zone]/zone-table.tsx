@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gapClass, fmt } from "@/lib/heat";
 
 export type ZoneCap = { id: number; name: string; cluster: string; reqAcq: number | null; reqSat: number | null };
@@ -16,7 +16,7 @@ export type ZoneAM = {
 const req = (cap: ZoneCap, track: ZoneAM["track"]) => (track === "Acquisition" ? cap.reqAcq : cap.reqSat);
 
 type Track = "all" | "Acquisition" | "Saturation";
-type Sort = "code" | "top" | "bottom";
+type Sort = "code" | "name" | "top" | "bottom";
 
 /**
  * Zone benchmark table (superadmin-only page). Capabilities are rows, Account
@@ -47,6 +47,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
   const visibleAMs = useMemo(() => {
     const list = (track === "all" ? ams : ams.filter((a) => a.track === track)).slice();
     if (sort === "code") return list.sort((a, b) => a.code.localeCompare(b.code));
+    if (sort === "name") return list.sort((a, b) => a.name.localeCompare(b.name));
     return list.sort((a, b) => {
       const ga = overall.get(a.id)?.gap ?? null;
       const gb = overall.get(b.id)?.gap ?? null;
@@ -69,6 +70,32 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
 
   const rankColor = (gap: number | null) =>
     gap == null ? "var(--muted)" : gap > 0 ? "#5fe57d" : gap < 0 ? "var(--red)" : "var(--muted)";
+
+  // Horizontal paging. The native scrollbar sits at the BOTTOM of a table this tall, so
+  // reaching it means scrolling the page down and losing sight of the header. These arrows
+  // scroll the container from the top, and the capability column is sticky, so the row you
+  // are reading stays labelled while the AM columns move.
+  const scroller = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  const syncEdges = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setEdges({ left: el.scrollLeft > 4, right: max > 4 && el.scrollLeft < max - 4 });
+  }, []);
+
+  useEffect(() => {
+    syncEdges();
+    window.addEventListener("resize", syncEdges);
+    return () => window.removeEventListener("resize", syncEdges);
+  }, [syncEdges, visibleAMs.length]);
+
+  const page = (dir: -1 | 1) => {
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.max(240, el.clientWidth * 0.7), behavior: "smooth" });
+  };
 
   return (
     <div>
@@ -98,6 +125,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
             aria-label="Rank the Account Managers"
           >
             <option value="code">By AM code</option>
+            <option value="name">By AM name (A to Z)</option>
             <option value="top">Strongest first (highest vs required)</option>
             <option value="bottom">Weakest first (lowest vs required)</option>
           </select>
@@ -107,9 +135,19 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
             {visibleAMs.length} {track} Account Manager{visibleAMs.length === 1 ? "" : "s"} in {zone}
           </span>
         )}
+        {(edges.left || edges.right) && (
+          <div className="hm-pager" role="group" aria-label="Scroll the Account Manager columns">
+            <button type="button" className="hm-pager-btn" onClick={() => page(-1)} disabled={!edges.left} aria-label="Scroll left">
+              ←
+            </button>
+            <button type="button" className="hm-pager-btn" onClick={() => page(1)} disabled={!edges.right} aria-label="Scroll right">
+              →
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="hm-scroll">
+      <div className="hm-scroll hm-zone" ref={scroller} onScroll={syncEdges}>
         <table className="hm">
           <thead>
             <tr>
@@ -118,10 +156,12 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                 const g = overall.get(am.id)?.gap ?? null;
                 return (
                   <th key={am.id} title={`${am.name} · ${am.track}`}>
-                    <Link href={`/analysis/am/${am.id}`} style={{ color: "var(--blue)" }}>
-                      {am.code}
+                    {/* the NAME is the label people read, so it leads and carries the link;
+                        the code is the secondary reference underneath */}
+                    <Link className="zone-am-name" href={`/analysis/am/${am.id}`} title={am.name}>
+                      {am.name}
                     </Link>
-                    <span className="zone-am-name" title={am.name}>{am.name}</span>
+                    <span className="zone-am-code">{am.code}</span>
                     {sort !== "code" && (
                       <span className="zone-am-rank" style={{ color: rankColor(g) }}>
                         {g == null ? "n/a" : `${g > 0 ? "+" : ""}${g.toFixed(2)}`}
@@ -136,15 +176,20 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
           <tbody>
             {clusters.map((cl) => (
               <Fragment key={cl.name}>
+                {/* the name lives in the sticky first column; the rest of the row is a
+                    filler cell, otherwise a colSpan cell pinned at left:0 drags its text
+                    off screen as the columns scroll */}
                 <tr className="cluster-row">
-                  <td colSpan={visibleAMs.length + 2}>{cl.name}</td>
+                  <td className="hm-rowhead">{cl.name}</td>
+                  <td colSpan={visibleAMs.length + 1} />
                 </tr>
                 {cl.caps.map((cap) => {
                   const vals: number[] = [];
+                  const reqVals: number[] = [];
                   const cells = visibleAMs.map((am) => {
                     const rq = req(cap, am.track);
                     const score = am.scores[cap.id];
-                    if (rq != null && score != null) vals.push(score);
+                    if (rq != null && score != null) { vals.push(score); reqVals.push(rq); }
                     const gap = rq == null || score == null ? null : score - rq;
                     const cls = rq == null ? "hm-na" : gapClass(gap);
                     return (
@@ -154,8 +199,16 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                         title={rq == null ? "Not applicable to this AM's track" : score == null ? "No submitted panel score" : `score L${fmt(score, 2)} · required L${rq}`}
                       >
                         {/* the weighted score is a float: always format it, never interpolate
-                            it raw, or a 2.3 renders as L2.3000000000000003 */}
-                        {rq == null ? "n/a" : score == null ? "n/a" : `L${fmt(score, 2)}`}
+                            it raw, or a 2.3 renders as L2.3000000000000003. The required level
+                            rides underneath so a number can be read as good or bad on sight. */}
+                        {rq == null || score == null ? (
+                          "n/a"
+                        ) : (
+                          <>
+                            {fmt(score, 2)}
+                            <small>req {rq.toFixed(1)}</small>
+                          </>
+                        )}
                       </td>
                     );
                   });
@@ -163,8 +216,18 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                     <tr key={cap.id}>
                       <th className="hm-rowhead">{cap.name}</th>
                       {cells}
-                      <td className="cell hm-na" style={{ background: "rgba(255,255,255,0.09)", color: "var(--ink)" }}>
-                        {vals.length === 0 ? "n/a" : fmt(vals.reduce((a, b) => a + b, 0) / vals.length, 2)}
+                      {/* the zone average needs its benchmark too, or it is just a number.
+                          Required is averaged over the SAME AMs, so mixed-track zones compare
+                          like for like. */}
+                      <td className="cell hm-na zone-avg-cell">
+                        {vals.length === 0 ? (
+                          "n/a"
+                        ) : (
+                          <>
+                            {fmt(vals.reduce((a, b) => a + b, 0) / vals.length, 2)}
+                            <small>req {fmt(reqVals.reduce((a, b) => a + b, 0) / reqVals.length, 1)}</small>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );

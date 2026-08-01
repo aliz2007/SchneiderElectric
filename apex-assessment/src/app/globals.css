@@ -451,13 +451,18 @@ input, select, textarea { font: inherit; }
   text-align: left; text-transform: none; letter-spacing: 0;
   font-size: 12.5px; font-weight: 600; color: var(--ink-2); min-width: 210px;
 }
-/* faint AM name under the code on the (superadmin-only) zone benchmark */
+/* AM name leads the column on the (superadmin-only) zone benchmark, code underneath */
 .zone-am-name {
-  display: block; margin-top: 3px;
-  font-size: 9.5px; font-weight: 400; letter-spacing: 0; text-transform: none;
-  color: var(--muted); opacity: 0.55;
-  max-width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-left: auto; margin-right: auto;
+  display: block;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0; text-transform: none;
+  color: var(--blue); line-height: 1.25;
+  max-width: 84px; margin-left: auto; margin-right: auto;
+  overflow-wrap: break-word;
+}
+.zone-am-code {
+  display: block; margin-top: 2px;
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--muted); opacity: 0.7;
 }
 .hm td.cell {
   min-width: 86px; height: 42px; border-radius: 11px; text-align: center;
@@ -485,6 +490,46 @@ input, select, textarea { font: inherit; }
 .cell.hm-na { background: rgba(255, 255, 255, 0.04); color: #46536b; font-weight: 500; box-shadow: none; }
 .cell.hm-na:hover { transform: none; box-shadow: none; }
 .cell small { display: block; font-size: 10px; font-weight: 650; opacity: 0.72; margin-top: -2px; }
+
+/* ---- zone benchmark: many AM columns on one screen ----
+   Tighter cells fit more Account Managers, and the capability column is sticky so the row
+   you are reading stays labelled while the columns scroll. Without it you had to scroll to
+   the bottom of the table to reach the native scrollbar, which put the header off screen. */
+.hm-zone { position: relative; }
+.hm-zone .hm td.cell { min-width: 66px; height: 46px; font-size: 12.5px; padding: 0 5px; }
+.hm-zone .hm th { padding: 6px 5px; }
+/* the sticky column needs an OPAQUE background: --card is rgba(...,0.6), which would let
+   the scrolling cells show straight through it */
+.hm-zone .hm th.hm-rowhead {
+  min-width: 176px; font-size: 12px;
+  position: sticky; left: 0; z-index: 2;
+  background: #0d1424;
+  box-shadow: 6px 0 12px -8px rgba(0, 0, 0, 0.85);
+}
+.hm-zone .hm .cluster-row td.hm-rowhead {
+  position: sticky; left: 0; z-index: 2;
+  background: #0d1424;
+  white-space: nowrap;
+}
+/* border-spacing leaves a 4px gap to the right of the sticky column that scrolling cells
+   show through; this covers it */
+.hm-zone .hm th.hm-rowhead::after,
+.hm-zone .hm .cluster-row td.hm-rowhead::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 100%; width: 6px;
+  background: #0d1424;
+}
+.zone-avg-cell { background: rgba(255, 255, 255, 0.09); color: var(--ink); }
+
+/* arrows that page the columns from the TOP of the table */
+.hm-pager { display: flex; gap: 6px; margin-left: auto; }
+.hm-pager-btn {
+  width: 34px; height: 32px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04);
+  color: var(--ink); font-size: 15px; line-height: 1;
+  transition: background 0.18s var(--ease-out), opacity 0.18s var(--ease-out);
+}
+.hm-pager-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.hm-pager-btn:disabled { opacity: 0.3; cursor: default; }
 
 .legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); margin-top: 16px; }
 .legend .sw {
@@ -601,6 +646,11 @@ select.input option { background: #0e1729; color: var(--ink); }
 .wizard { max-width: 880px; }
 .wizard-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
 .wizard-counter { font-size: 13px; color: var(--muted); font-weight: 650; font-variant-numeric: tabular-nums; }
+/* label on the cluster header row that names what the two figures to its right are */
+.cluster-avg-label {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 650;
+}
 .cluster-kicker {
   font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase;
   font-weight: 800; margin-bottom: 7px;
@@ -1183,3 +1233,66 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 
 /* individual-results search box (sits with the zone/track/segment selects) */
 .ifilter-search { width: 250px; max-width: 100%; }
+
+/* ---- individual page: overall standing (score + profile radar) ----
+   Sits directly under the profile header, because "how are they doing" is the first
+   question anyone opens this page with. The radar carries the expected level as a dashed
+   web, so a shape can be read as on or off target without cross-checking the table. */
+.standing-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) 1fr;
+  gap: 26px;
+  align-items: center;
+}
+.standing-score { min-width: 0; }
+.standing-value {
+  font-size: 54px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05;
+  font-variant-numeric: tabular-nums; margin-top: 4px;
+  background: none; color: var(--ink);
+}
+.standing-value.hm-good { color: #6ee98a; }
+.standing-value.hm-mild { color: #ffd84d; }
+.standing-value.hm-warn { color: #ffa457; }
+.standing-value.hm-crit { color: #ff8177; }
+.standing-outof { font-size: 20px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.standing-vs { font-size: 13.5px; color: var(--ink-2); margin-top: 6px; }
+.standing-note { font-size: 11.5px; color: var(--muted); margin: 12px 0 0; }
+.standing-radar { min-width: 0; display: flex; justify-content: center; }
+
+.radar-wrap { width: 100%; max-width: 560px; }
+.radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.radar-legend {
+  display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+  font-size: 12px; color: var(--muted); margin-top: 4px;
+}
+.radar-legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 5px; vertical-align: -1px; }
+.radar-legend .sw-dashed { background: none; border: 1.5px dashed #e8edf7; border-radius: 3px; }
+
+@media (max-width: 900px) {
+  .standing-card { grid-template-columns: 1fr; }
+}
+
+/* ---- sortable table headings (Individual Results) ----
+   Sorting is a link, not client state, so the order survives a reload and can be shared. */
+.th-sort { padding: 0; }
+.th-sort a {
+  display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  padding: 10px 12px; color: inherit;
+  transition: color 0.18s var(--ease-out);
+}
+.th-sort a:hover { color: var(--ink); }
+.th-sort .th-arrow { font-size: 9px; opacity: 0.35; }
+.th-sort.active a { color: var(--se-green-bright); }
+.th-sort.active .th-arrow { opacity: 1; }
+
+/* account + AM code stacked in one cell */
+.am-account { display: block; }
+.am-code { display: block; font-size: 11px; color: var(--muted); letter-spacing: 0.05em; }
+
+/* benchmark line under a KPI value, so the figure can be read as on or off target */
+.kpi-bench { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kpi-bench-chip { min-width: 52px; font-size: 11.5px; }
+
+/* "what happens next" cell on the roster */
+.sched-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.sched-left { font-size: 11.5px; color: var(--amber); }

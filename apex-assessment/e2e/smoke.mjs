@@ -60,7 +60,35 @@ try {
   anyCells > 80 && goodCells > 0 ? ok(`heat map renders (${anyCells} cells)`) : fail("heat map cells", `${anyCells}`);
   const completion = await page.locator(".kpi-value").first().textContent();
   completion?.trim() === "100%" ? ok("completion KPI = 100% after demo load") : fail("completion KPI", completion ?? "");
+  // the maturity KPI has to carry its benchmark, or the number means nothing
+  (await page.locator(".kpi-bench").textContent())?.includes("expected")
+    ? ok("maturity KPI shows the expected average")
+    : fail("KPI benchmark", "not shown");
+  // the roster title counts the roster instead of hardcoding "TOP 25"
+  const rosterTitle = await page.locator(".card-title", { hasText: "Roster" }).textContent();
+  /Roster · \d+ Account Manager/.test(rosterTitle ?? "")
+    ? ok(`roster title counts the roster ("${rosterTitle?.trim()}")`)
+    : fail("roster title", rosterTitle ?? "(none)");
   await page.screenshot({ path: `${SHOTS}/2-dashboard.png`, fullPage: false });
+
+  // ---- 3c. Individual Results: account column + sortable headings ----
+  await page.goto(`${BASE}/analysis/individuals`);
+  await page.waitForSelector("table.table");
+  (await page.locator(".th-sort").count()) >= 9
+    ? ok("individual results headings are sortable")
+    : fail("sortable headings", "not found");
+  (await page.locator(".am-account").count()) > 0
+    ? ok("individual results shows the account")
+    : fail("account column", "not found");
+  await page.locator('.th-sort a:has-text("Weighted")').click();
+  await page.waitForURL(/sort=weighted/);
+  const weightedCol = await page.locator("table.table tbody tr td:nth-child(9)").allTextContents();
+  const nums = weightedCol.map((t) => parseFloat(t)).filter((n) => !Number.isNaN(n));
+  nums.every((n, i) => i === 0 || nums[i - 1] >= n)
+    ? ok(`sorting by weighted orders the table (${nums.length} rows, high to low)`)
+    : fail("weighted sort", nums.slice(0, 5).join(" "));
+  await page.goto(`${BASE}/analysis`); // the steps below continue on the dashboard
+  await page.waitForSelector(".hm");
 
   // ---- 3a. centralized filters window (track / segment / capability in one panel) ----
   await page.locator(".filter-toggle").click();
@@ -99,12 +127,37 @@ try {
   (await page.locator(".am-meta .badge-segment").count()) === 1
     ? ok("segment shown in the individual profile header")
     : fail("segment badge on detail", "not found");
+  // the overall standing sits above the fold: the score, its benchmark, and the radar
+  (await page.locator(".standing-card .standing-value").count()) === 1
+    ? ok("individual page leads with the final score")
+    : fail("standing card", "not found");
+  (await page.locator(".standing-card .radar-svg").count()) === 1
+    ? ok("individual page shows the profile radar")
+    : fail("radar on individual page", "not found");
+  // the radar is unreadable without its benchmark web
+  (await page.locator(".radar-legend").textContent())?.includes("Expected level")
+    ? ok("radar plots the expected level")
+    : fail("radar benchmark", "no expected-level web");
+  // an Acquisition AM has no required level in Saturation Excellence, so that axis must be
+  // dropped rather than dragging the expected web to the centre
+  const radarAxes = await page.locator(".radar-svg text").allTextContents();
+  !radarAxes.some((t) => t.includes("Saturation"))
+    ? ok("radar drops the cluster that does not apply to the track")
+    : fail("radar axes", "plots a cluster with no required level");
+  // each cluster header carries its own average
+  (await page.locator(".cluster-avg-label").count()) >= 5
+    ? ok("capability detail shows an average per cluster")
+    : fail("cluster averages", "not found");
   await page.waitForTimeout(700); // let entrance animation settle
   await page.screenshot({ path: `${SHOTS}/3-individual.png` });
 
   // ---- 5. PDF export ----
   const pdfResp = await page.context().request.get(`${BASE}/analysis/am/1/pdf`);
   const pdfBuf = await pdfResp.body();
+  // 4 pages exactly: a 5th means the radar block was orphaned onto a page of its own,
+  // which is the layout regression the client reported twice
+  const pdfPages = (pdfBuf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
+  pdfPages === 4 ? ok("PDF is 4 pages (radar not orphaned)") : fail("PDF page count", `${pdfPages}`);
   const pdfOk =
     pdfResp.status() === 200 &&
     pdfResp.headers()["content-type"] === "application/pdf" &&
@@ -121,11 +174,24 @@ try {
   ok("zone MEA heat map renders");
   // The weighted score is a float, so every cell MUST be formatted. Interpolating it raw
   // once printed "L2.3000000000000003" across the whole benchmark.
+  // cells read "<score>req <level>" once the required level is stacked underneath
   const zoneCells = await page.locator("table.hm td.cell").allTextContents();
-  const rawFloats = zoneCells.filter((t) => !/^(n\/a|L?\d+(\.\d{1,2})?)$/.test(t.trim()));
+  const rawFloats = zoneCells.filter(
+    (t) => !/^(n\/a|\d+(\.\d{1,2})?(req \d+(\.\d)?)?)$/.test(t.trim())
+  );
   zoneCells.length > 0 && rawFloats.length === 0
     ? ok(`zone benchmark scores are all formatted (${zoneCells.length} cells)`)
     : fail("zone score formatting", rawFloats.slice(0, 3).join(" | ") || "no cells");
+  // every scored cell must carry its benchmark, otherwise a number cannot be read as good or bad
+  const withReq = zoneCells.filter((t) => t.includes("req ")).length;
+  const scored = zoneCells.filter((t) => t.trim() !== "n/a").length;
+  scored > 0 && withReq === scored
+    ? ok(`every scored zone cell shows its required level (${scored})`)
+    : fail("zone benchmark req", `${withReq}/${scored} carry a required level`);
+  // sorting by AM name must be offered, not just by code
+  (await page.locator('.zone-sort option[value="name"]').count()) === 1
+    ? ok("zone benchmark can sort by AM name")
+    : fail("sort by name", "option missing");
 
   // ---- 6. create an assessor (manager lens, assigned AM02) ----
   // Manager lens → the AM picker renders as a checkbox grid inside the create card.
