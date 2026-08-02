@@ -250,7 +250,7 @@ export default async function AnalysisPage({
                 <th>Self</th>
                 <th>Manager</th>
                 <th>APEX Panel</th>
-                <th>Upcoming</th>
+                <th>Schedule</th>
                 {isAdmin && <th></th>}
               </tr>
             </thead>
@@ -298,11 +298,17 @@ export default async function AnalysisPage({
 }
 
 /**
- * "What is the next step for this person, and how much is still to do."
+ * The assessment schedule for one person, on the roster.
  *
- * The dates were only visible on each individual page, so a superadmin who had just set a
- * panel call had no way to see the schedule across the roster. This surfaces the nearest
- * upcoming date and, when a lens is mid-draft, how many capabilities are left to score.
+ * EVERY scheduled date is shown, always. An earlier version hid the date once its lens had
+ * been submitted, on the theory that a past deadline is not a "next step" — but the client
+ * set a schedule, looked at a roster where everything was already submitted, and saw only
+ * "complete". If someone sets a date, they have to be able to find it again; the state of
+ * the assessment changes how the date READS, never whether it is shown.
+ *
+ * done    = the assessment came in, the date is history (muted)
+ * overdue = the day has passed and that lens has still not submitted (red)
+ * pending = the date is ahead (normal)
  */
 function ScheduleCell({
   am,
@@ -312,38 +318,50 @@ function ScheduleCell({
   status: Record<"self" | "manager" | "expert", { status: string; rated: number }>;
 }) {
   const now = Date.now();
-  const dates: { label: string; value: string; withTime: boolean; when: Date; overdue: boolean }[] = [];
-  const push = (label: string, value: string | null, withTime: boolean, done: boolean) => {
-    if (!value || done) return; // a date on a submitted lens is history, not a next step
-    const when = new Date(`${value.slice(0, 10)}T23:59:59.999`);
-    if (Number.isNaN(when.getTime())) return;
-    // a passed date on an UNSUBMITTED lens is the most important thing on this row
-    dates.push({ label, value, withTime, when, overdue: when.getTime() < now });
+  type Entry = { label: string; value: string; withTime: boolean; when: number; state: "done" | "overdue" | "pending" };
+  const dates: Entry[] = [];
+  const push = (label: string, value: string | null, withTime: boolean, submitted: boolean) => {
+    if (!value) return;
+    const when = new Date(`${value.slice(0, 10)}T23:59:59.999`).getTime();
+    if (Number.isNaN(when)) return;
+    dates.push({
+      label,
+      value,
+      withTime,
+      when,
+      state: submitted ? "done" : when < now ? "overdue" : "pending",
+    });
   };
   push("Manager", am.manager_deadline, false, status.manager.status === "submitted");
   push("Panel", am.panel_datetime, true, status.expert.status === "submitted");
-  // overdue first, then soonest
-  dates.sort((a, b) => Number(b.overdue) - Number(a.overdue) || a.when.getTime() - b.when.getTime());
+  // what needs attention first: overdue, then what is coming up, then what is settled
+  const rank = { overdue: 0, pending: 1, done: 2 };
+  dates.sort((a, b) => rank[a.state] - rank[b.state] || a.when - b.when);
 
   // capabilities still unscored across the lenses that have started but not submitted
   const left = (["self", "manager", "expert"] as const)
     .filter((l) => status[l].status === "draft")
     .reduce((n, l) => n + (22 - status[l].rated), 0);
 
-  if (dates.length === 0 && left === 0) {
+  if (dates.length === 0) {
     const allDone = (["self", "manager", "expert"] as const).every((l) => status[l].status === "submitted");
-    return <span style={{ color: "var(--muted)", fontSize: 12.5 }}>{allDone ? "complete" : "no date set"}</span>;
+    return (
+      <div className="sched-cell">
+        <span style={{ color: "var(--muted)", fontSize: 12.5 }}>{allDone ? "complete" : "no date set"}</span>
+        {left > 0 && <span className="sched-left">{left} left to score</span>}
+      </div>
+    );
   }
 
-  const next = dates[0];
+  const badgeClass = { overdue: "badge-red", pending: "badge-sched", done: "badge-gray" };
   return (
     <div className="sched-cell">
-      {next && (
-        <span className={`badge ${next.overdue ? "badge-red" : "badge-sched"}`}>
-          {next.label} · {formatScheduleDate(next.value, next.withTime)}
-          {next.overdue ? " · overdue" : ""}
+      {dates.map((d) => (
+        <span key={d.label} className={`badge ${badgeClass[d.state]}`}>
+          {d.label} · {formatScheduleDate(d.value, d.withTime)}
+          {d.state === "overdue" ? " · overdue" : d.state === "done" ? " · done" : ""}
         </span>
-      )}
+      ))}
       {left > 0 && <span className="sched-left">{left} left to score</span>}
     </div>
   );

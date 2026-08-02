@@ -66,6 +66,11 @@ try {
     : fail("KPI benchmark", "not shown");
   // the roster title counts the roster instead of hardcoding "TOP 25"
   const rosterTitle = await page.locator(".card-title", { hasText: "Roster" }).textContent();
+  // a scheduled date must stay findable on the roster even after its lens is submitted:
+  // hiding it once "done" was exactly why the client could not find the date they had set
+  (await page.locator("table.table thead th", { hasText: "Schedule" }).count()) === 1
+    ? ok("roster carries the assessment schedule")
+    : fail("schedule column", "not found");
   /Roster · \d+ Account Manager/.test(rosterTitle ?? "")
     ? ok(`roster title counts the roster ("${rosterTitle?.trim()}")`)
     : fail("roster title", rosterTitle ?? "(none)");
