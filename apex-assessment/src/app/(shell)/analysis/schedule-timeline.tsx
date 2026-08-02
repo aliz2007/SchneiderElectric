@@ -7,8 +7,14 @@ import { formatScheduleDate } from "@/lib/queries";
  *
  * The roster's Schedule column answers "when is this person's assessment". This answers the
  * other half of the question: what is the next step for the campaign, and what has already
- * slipped. Dates falling on the same day are grouped into one marker so 25 people do not
- * produce 50 overlapping dots.
+ * slipped.
+ *
+ * Laid out as one LANE PER LENS. A flat row of dots got read as "one dot per lens" and the
+ * obvious question was why there were more than three; a dot is a DATE, not a lens, and
+ * several people usually share a day. Lanes make that structure legible: the lane says which
+ * assessment, the dot says when, the number says how many people. Self has no lane because
+ * self-assessments carry no scheduled date, which the caption states rather than leaving as
+ * a silent gap.
  *
  * Server-rendered on purpose. Hover detail rides on `title`, so the card costs no JavaScript.
  */
@@ -23,6 +29,12 @@ export type TimelineEntry = {
 };
 
 const DAY = 86_400_000;
+
+/** One lane per scheduled assessment. Self is absent by design: it has no date. */
+const LANES = [
+  { key: "Manager" as const, label: "Manager deadline" },
+  { key: "Panel" as const, label: "APEX Panel call" },
+];
 
 export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[] }) {
   if (entries.length === 0) {
@@ -49,17 +61,18 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
   const span = Math.max(end - start, DAY);
   const pct = (t: number) => ((t - start) / span) * 100;
 
-  // one marker per calendar day, however many assessments land on it
+  // one marker per lens per calendar day, however many people land on it
   const byDay = new Map<string, TimelineEntry[]>();
   for (const e of entries) {
-    const key = e.value.slice(0, 10);
+    const key = `${e.lens}|${e.value.slice(0, 10)}`;
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key)!.push(e);
   }
   const markers = [...byDay.entries()]
     .map(([key, list]) => ({
       key,
-      at: dayOf(key),
+      lens: list[0].lens,
+      at: dayOf(key.split("|")[1]),
       list,
       // the most urgent state on that day drives the colour
       state: list.some((e) => e.state === "overdue")
@@ -95,33 +108,56 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
     <div className="card card-pad" style={{ marginBottom: 22 }}>
       <h2 className="card-title">Assessment timeline</h2>
       <p className="card-sub">
-        Every manager deadline and APEX Panel call across the roster. Red has passed with the
-        assessment still open, green is still ahead, grey is already submitted.
+        One lane per assessment. Each dot is a scheduled <strong>date</strong>, and the number on
+        it is how many Account Managers share that day. Red has passed with the assessment still
+        open, green is still ahead, grey is already submitted. Self-assessments have no lane
+        because they carry no scheduled date.
       </p>
 
       <div className="tl">
-        <div className="tl-track">
-          {ticks.map((t) => (
-            <div key={t.at} className="tl-tick" style={{ left: `${pct(t.at)}%` }}>
-              <span className="tl-tick-label">{t.label}</span>
+        <div className="tl-axis">
+          <div className="tl-axis-label" />
+          <div className="tl-axis-track">
+            {ticks.map((t) => (
+              <div key={t.at} className="tl-tick" style={{ left: `${pct(t.at)}%` }}>
+                <span className="tl-tick-label">{t.label}</span>
+              </div>
+            ))}
+            <div className="tl-today" style={{ left: `${pct(now)}%` }}>
+              <span className="tl-today-label">today</span>
             </div>
-          ))}
-          <div className="tl-today" style={{ left: `${pct(now)}%` }}>
-            <span className="tl-today-label">today</span>
           </div>
-          {markers.map((m) => (
-            <div
-              key={m.key}
-              className={`tl-dot tl-${m.state}`}
-              style={{ left: `${pct(m.at)}%` }}
-              title={m.list
-                .map((e) => `${e.amName} · ${e.lens} · ${formatScheduleDate(e.value, e.withTime)}`)
-                .join("\n")}
-            >
-              {m.list.length > 1 && <span className="tl-count">{m.list.length}</span>}
-            </div>
-          ))}
         </div>
+
+        {LANES.map((lane) => {
+          const laneMarkers = markers.filter((m) => m.lens === lane.key);
+          return (
+            <div key={lane.key} className="tl-lane">
+              <div className="tl-lane-label">
+                {lane.label}
+                <span className="tl-lane-count">
+                  {laneMarkers.reduce((n, m) => n + m.list.length, 0)} scheduled
+                </span>
+              </div>
+              <div className="tl-lane-track">
+                <div className="tl-today-line" style={{ left: `${pct(now)}%` }} />
+                {laneMarkers.map((m) => (
+                  <div
+                    key={m.key}
+                    className={`tl-dot tl-${m.state}`}
+                    style={{ left: `${pct(m.at)}%` }}
+                    title={m.list
+                      .map((e) => `${e.amName} · ${formatScheduleDate(e.value, e.withTime)}`)
+                      .join("\n")}
+                  >
+                    {m.list.length > 1 && <span className="tl-count">{m.list.length}</span>}
+                  </div>
+                ))}
+                {laneMarkers.length === 0 && <span className="tl-lane-empty">nothing scheduled</span>}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="tl-next">
