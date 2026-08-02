@@ -14,6 +14,7 @@ import { gapClass, fmt } from "@/lib/heat";
 import { SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
 import ZoneMap, { type MapAM, type MapCap } from "./zone-map";
 import FilterBar from "./filter-bar";
+import ScheduleTimeline, { type TimelineEntry } from "./schedule-timeline";
 
 export default async function AnalysisPage({
   searchParams,
@@ -73,6 +74,28 @@ export default async function AnalysisPage({
     const last = clusters[clusters.length - 1];
     if (!last || last.name !== row.cap.cluster) clusters.push({ name: row.cap.cluster, rows: [row] });
     else last.rows.push(row);
+  }
+
+  // every scheduled date across the roster, for the campaign timeline
+  const now = Date.now();
+  const timeline: TimelineEntry[] = [];
+  for (const am of ams) {
+    const st = statuses.get(am.id)!;
+    const add = (lens: "Manager" | "Panel", value: string | null, withTime: boolean, submitted: boolean) => {
+      if (!value) return;
+      const when = new Date(`${value.slice(0, 10)}T23:59:59.999`).getTime();
+      if (Number.isNaN(when)) return;
+      timeline.push({
+        amId: am.id,
+        amName: am.name,
+        lens,
+        value,
+        withTime,
+        state: submitted ? "done" : when < now ? "overdue" : "pending",
+      });
+    };
+    add("Manager", am.manager_deadline, false, st.manager.status === "submitted");
+    add("Panel", am.panel_datetime, true, st.expert.status === "submitted");
   }
 
   return (
@@ -169,6 +192,8 @@ export default async function AnalysisPage({
           <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} capFilter={selectedCapId} />
         </div>
       )}
+
+      <ScheduleTimeline entries={timeline} />
 
       {priorities.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: 22 }}>

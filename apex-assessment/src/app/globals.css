@@ -1296,3 +1296,48 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 /* "what happens next" cell on the roster */
 .sched-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .sched-left { font-size: 11.5px; color: var(--amber); }
+
+/* ---- campaign timeline (dashboard) ----
+   Every manager deadline and panel call on one date axis. Same-day entries collapse into
+   one marker so 25 people cannot produce 50 overlapping dots. */
+.tl { padding: 26px 6px 8px; }
+.tl-track {
+  position: relative; height: 3px; border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.tl-tick { position: absolute; top: -20px; bottom: -8px; width: 1px; background: rgba(255, 255, 255, 0.07); }
+.tl-tick-label {
+  position: absolute; top: -14px; left: 4px; white-space: nowrap;
+  font-size: 10px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase;
+}
+.tl-today { position: absolute; top: -18px; bottom: -10px; width: 2px; background: var(--se-green-bright); }
+.tl-today-label {
+  position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; font-weight: 700; color: var(--se-green-bright); white-space: nowrap;
+}
+.tl-dot {
+  position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%;
+  transform: translate(-50%, -50%); cursor: default;
+  border: 2px solid #0d1424;
+}
+.tl-dot .tl-count {
+  position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+  font-size: 9.5px; font-weight: 800; color: var(--ink);
+}
+.tl-overdue { background: var(--red); box-shadow: 0 0 0 4px rgba(255, 129, 119, 0.18); }
+.tl-pending { background: var(--se-green-bright); box-shadow: 0 0 0 4px rgba(76, 226, 106, 0.16); }
+.tl-done { background: #56637d; }
+
+.tl-next { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 26px; }
+.tl-next-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tl-next-head {
+  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.tl-next-head-red { color: var(--red); }
+.tl-item {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2);
+  transition: color 0.18s var(--ease-out);
+}
+.tl-item:hover { color: var(--ink); }
+.tl-more { font-size: 12.5px; color: var(--muted); }
