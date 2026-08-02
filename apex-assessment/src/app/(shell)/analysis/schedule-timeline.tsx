@@ -92,7 +92,9 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
     if (cursor.getTime() >= start) {
       ticks.push({
         at: cursor.getTime(),
-        label: cursor.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+        // FULL year. A two-digit year rendered "Aug 26", which reads as the 26th of August
+        // on a chart whose whole purpose is dates. Never abbreviate the year here.
+        label: cursor.toLocaleDateString("en-GB", { month: "short", year: "numeric" }),
       });
     }
     cursor.setMonth(cursor.getMonth() + 1);
@@ -124,7 +126,9 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
               </div>
             ))}
             <div className="tl-today" style={{ left: `${pct(now)}%` }}>
-              <span className="tl-today-label">today</span>
+              <span className="tl-today-label">
+                today · {today.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
             </div>
           </div>
         </div>

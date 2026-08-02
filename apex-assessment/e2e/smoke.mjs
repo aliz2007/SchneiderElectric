@@ -71,6 +71,34 @@ try {
   (await page.locator("table.table thead th", { hasText: "Schedule" }).count()) === 1
     ? ok("roster carries the assessment schedule")
     : fail("schedule column", "not found");
+  // Dates on this chart must never be ambiguous. A two-digit year rendered "Aug 26",
+  // which reads as the 26th of August on a scheduling view.
+  // Give the timeline something to draw first: with no dates set it renders its empty
+  // state and the assertions below would pass without testing anything.
+  {
+    const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    await page.goto(`${BASE}/analysis/am/1`);
+    await page.locator('button:has-text("Assessment schedule")').click();
+    await page.waitForSelector('input[type="date"]');
+    await page.fill('input[type="date"]', soon);
+    await page.locator('button:has-text("Save schedule")').click();
+    await page.waitForTimeout(1200);
+    await page.goto(`${BASE}/analysis`);
+    await page.waitForSelector(".tl-lane-track");
+  }
+  const axisLabels = await page.locator(".tl-tick-label").allTextContents();
+  axisLabels.length > 0 && axisLabels.every((t) => /^[A-Za-z]{3,} \d{4}$/.test(t.trim()))
+    ? ok(`timeline axis uses full years (${axisLabels.join(", ")})`)
+    : fail("timeline axis labels", axisLabels.join(" | ") || "no ticks rendered");
+  const todayLabel = (await page.locator(".tl-today-label").textContent()) ?? "";
+  const expectedToday = new Date().toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  todayLabel.includes(expectedToday)
+    ? ok(`timeline marks today correctly (${expectedToday})`)
+    : fail("timeline today marker", `showed "${todayLabel.trim()}", expected "${expectedToday}"`);
   /Roster · \d+ Account Manager/.test(rosterTitle ?? "")
     ? ok(`roster title counts the roster ("${rosterTitle?.trim()}")`)
     : fail("roster title", rosterTitle ?? "(none)");
