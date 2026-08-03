@@ -40,6 +40,12 @@ export default async function AnalysisPage({
   const ams = listAMs().filter((am) => (!track || am.track === track) && (!segment || am.segment === segment));
   const capOptions = listCapabilities().map((c) => ({ id: c.id, name: c.name, cluster: c.cluster }));
 
+  // the deck honours whatever the dashboard is filtered to
+  const reportParams = new URLSearchParams();
+  if (track) reportParams.set("track", track);
+  if (segment) reportParams.set("segment", segment);
+  const reportQuery = reportParams.toString() ? `?${reportParams.toString()}` : "";
+
   const maturityGap =
     stats.avgWeighted == null || stats.avgRequired == null ? null : stats.avgWeighted - stats.avgRequired;
   const submittedTotal = stats.byLens.self + stats.byLens.manager + stats.byLens.expert;
@@ -161,6 +167,21 @@ export default async function AnalysisPage({
           <div className="kpi-note">{stats.avgWeighted == null ? "submitted scores" : WEIGHTS_LABEL}</div>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="report-row">
+          <div>
+            <div className="report-title">APEX Capability Dashboard</div>
+            <div className="report-sub">
+              Zone, segment and track radars with the expected level, plus the biggest gaps to
+              close. Downloads what the filters above are showing.
+            </div>
+          </div>
+          <a className="btn btn-primary btn-sm" href={`/analysis/report/pdf${reportQuery}`}>
+            Download PDF
+          </a>
+        </div>
+      )}
 
       <div className="analytics-filter-row">
         <FilterBar

@@ -65,6 +65,9 @@ try {
     ? ok("maturity KPI shows the expected average")
     : fail("KPI benchmark", "not shown");
   // the roster title counts the roster instead of hardcoding "TOP 25"
+  (await page.locator('a[href^="/analysis/report/pdf"]').count()) === 1
+    ? ok("dashboard offers the capability dashboard PDF")
+    : fail("dashboard download button", "not found");
   const rosterTitle = await page.locator(".card-title", { hasText: "Roster" }).textContent();
   // a scheduled date must stay findable on the roster even after its lens is submitted:
   // hiding it once "done" was exactly why the client could not find the date they had set
@@ -113,6 +116,17 @@ try {
   (await page.locator(".am-account").count()) > 0
     ? ok("individual results shows the account")
     : fail("account column", "not found");
+  {
+    const heads = await page.locator("table.table thead th").allTextContents();
+    const need = ["Zone", "Track", "Segment", "Account", "Self avg", "Mgr avg", "Panel avg", "Weighted", "Avg required", "Gap"];
+    const missing = need.filter((h) => !heads.some((t) => t.includes(h)));
+    missing.length === 0
+      ? ok("population table carries every column the proposal asked for")
+      : fail("population columns", `missing ${missing.join(", ")}`);
+  }
+  (await page.locator('a[href^="/analysis/population/pdf"]').count()) === 1
+    ? ok("population overview offers a PDF download")
+    : fail("population download button", "not found");
   await page.locator('.th-sort a:has-text("Weighted")').click();
   await page.waitForURL(/sort=weighted/);
   const weightedCol = await page.locator("table.table tbody tr td:nth-child(9)").allTextContents();
@@ -201,6 +215,32 @@ try {
     ? ok("Export PDF button on profile page")
     : fail("Export PDF button", "not found");
 
+  // ---- 5b. population-level PDF reports (the client's dashboard proposal) ----
+  for (const [label, path, minPages] of [
+    ["capability dashboard", "/analysis/report/pdf", 8],
+    ["population overview", "/analysis/population/pdf", 1],
+  ]) {
+    const resp = await page.context().request.get(`${BASE}${path}`);
+    const buf = await resp.body();
+    const pages = (buf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
+    const good =
+      resp.status() === 200 &&
+      resp.headers()["content-type"] === "application/pdf" &&
+      buf.subarray(0, 5).toString() === "%PDF-" &&
+      pages >= minPages;
+    good
+      ? ok(`${label} PDF downloads (${pages} pages, ${buf.length} bytes)`)
+      : fail(`${label} PDF`, `status ${resp.status()} pages ${pages}`);
+  }
+  // the deck must honour the filters it was asked for, not silently return everything
+  const filtered = await page.context().request.get(`${BASE}/analysis/report/pdf?track=Acquisition`);
+  filtered.status() === 200 && (await filtered.body()).length > 5000
+    ? ok("capability dashboard PDF accepts a track filter")
+    : fail("filtered dashboard PDF", `status ${filtered.status()}`);
+
+  // both reports are population-level, so they must be superadmin-only; checked from the
+  // assessor session further down
+
   // ---- 6. zone view ----
   await page.goto(`${BASE}/analysis/zone/MEA`);
   await page.waitForSelector("text=Zone benchmark");
@@ -260,6 +300,19 @@ try {
   await page.goto(`${BASE}/analysis/individuals`);
   await page.waitForURL("**/rate");
   ok("assessor blocked from individual results (redirected)");
+
+  // the population reports name every AM with their manager and panel scores
+  for (const [label, path] of [
+    ["capability dashboard", "/analysis/report/pdf"],
+    ["population overview", "/analysis/population/pdf"],
+  ]) {
+    const r = await page.context().request.get(`${BASE}${path}`);
+    const body = await r.body();
+    const leaked = r.headers()["content-type"] === "application/pdf" && body.subarray(0, 5).toString() === "%PDF-";
+    !leaked
+      ? ok(`assessor cannot download the ${label} PDF`)
+      : fail(`${label} leaked to assessor`, `status ${r.status()}`);
+  }
 
   await page.goto(`${BASE}/rate`);
   const cards = await page.locator(".am-card").count();

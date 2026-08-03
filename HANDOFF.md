@@ -20,7 +20,20 @@ Last updated: 2026-07-31.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
-- Most recent additions (2026-07-30, later same day): **fixed a float-formatting bug on the
+- Most recent additions (2026-08-03): **population-level PDF reports**, built from the
+  client's "APEX Dashboard Proposal" document. Two new downloads, both superadmin-only and
+  both honouring the filters on the page they are launched from:
+  `GET /analysis/report/pdf` (APEX Capability Dashboard: IO Global Overview, Zone Overview,
+  Segment View, Track View one page per zone, Gap to Target) and
+  `GET /analysis/population/pdf` (the account-level Population Overview table, landscape).
+  New shared modules: `pdf-kit.tsx` (palette, page chrome, score colours, shared by every
+  report), `pdf-group-radar.tsx` (radar for a POPULATION, sized to fit a grid cell) and
+  `pdf-dashboard.tsx` / `pdf-population.tsx`. New aggregation in `queries.ts`:
+  `groupProfile` / `zoneProfiles` / `segmentProfiles` / `zoneTrackProfiles` (see §2c). The
+  Individual Results table gained **Avg required** and **Gap** columns so it matches the
+  proposal's column list. Four points in the brief could not be built as written; they are
+  recorded in §11 as open questions, not silently reinterpreted.
+- Earlier (2026-07-30): **fixed a float-formatting bug on the
   zone benchmark** — it interpolated the weighted score raw, so `L2.3000000000000003` and
   `L2.3499999999999996` were showing across the grid (see §2b, "Never print a weighted score
   raw"). Also: the mandatory justification block is now
@@ -196,6 +209,33 @@ lens levels (`self` / `manager` / `expert`) are integers and are safe to interpo
 weighted score, gaps, and any average are NOT.
 
 Changing the weights is a one-line edit to `LENS_WEIGHTS`; everything downstream follows.
+
+### 2c. Group profiles (the population radars)
+
+`groupProfile(label, ams)` in `queries.ts` is the aggregate behind every population radar.
+Pass any list of AMs (a zone, a segment, a zone crossed with a track, or the whole roster)
+and it returns one `ClusterProfile` per cluster: the mean of each lens, the weighted score,
+the expected level and `n`. `zoneProfiles` / `segmentProfiles` / `zoneTrackProfiles` wrap it.
+
+Two rules make these numbers trustworthy and both are easy to break:
+
+1. **Average the PEOPLE, not the ratings.** Each AM contributes ONE value per cluster, so a
+   zone holding one heavily-rated person and one barely-rated person is not skewed toward
+   whoever has more submitted capabilities.
+2. **Respect track applicability.** `Acquisition Excellence` has no required level on the
+   Saturation track and vice versa, so a cluster is reported with `required: null` when
+   nobody in the group is measured on it. Null, never zero: zero would drag the expected web
+   into the centre of the radar and read as "target comfortably met".
+
+The overall figures come from the capability rows directly, NOT from averaging the six
+cluster means — clusters hold different numbers of capabilities (2 to 6), so averaging the
+averages would weight a 2-capability cluster the same as a 6-capability one.
+
+`GroupRadar` (`pdf-group-radar.tsx`) drops any axis with no expected level whenever at least
+one axis has one, so a single-track radar becomes a 5-axis pentagon WITH a target web rather
+than a 6-axis hexagon with none. The dropped cluster keeps its score in the table underneath.
+Measured page budget: four radars at the grid size fit one A4 page; eight do not, they spill
+and orphan the last row. That is why Track View is one page per zone.
 
 ### The Question Guide (per capability, per lens)
 
@@ -531,7 +571,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 57/57 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 81/81 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -615,7 +655,32 @@ env var before putting the app on the open internet.
 3. **Production concerns** in §10 (Postgres / SSO / hosting) are unaddressed by design.
 4. `demo.bat` sets `APEX_DEMO=1` but no code reads it (vestigial). Demo data loads from the
    admin button.
-5. **Two security items were raised with the repo owner and never answered.** They are not
+5. **Four points in the client's dashboard proposal could not be built as written.** They
+   are implemented on the most defensible reading and flagged here rather than being quietly
+   reinterpreted. All four need a client decision:
+   - **The gap convention.** The proposal's worked example computes Gap as
+     `Avg Self − Avg Required` (2.40 − 2.80 = −0.40, and 2.10 − 2.70 = −0.60; both rows check
+     out). The app's canonical gap is `weighted − required`. On the current data the two
+     conventions disagree by 0.285 on average, up to 0.611, and **18 of 25 people change
+     sides of the target line** depending which you pick. Built on the weighted rule, with the
+     formula printed on the report. If the client really wants Self − Required, that is a
+     one-line change but it contradicts the 20/35/45 weighting they set.
+   - **"Avg Required 2.80" is not reachable.** Under the seeded rubric the average required
+     level is 2.105 (Acquisition) and 2.111 (Saturation); only 2 of 22 capabilities require L3
+     on either track. The proposal's example rows are illustrative, not real. Either the
+     example is placeholder, or their intended rubric is more demanding than the one in the
+     workbook we seeded from.
+   - **"Account Type" filter.** No such field exists. The nearest is `track`, which the
+     proposal already spends a whole view on, so it is probably a Schneider account-tier
+     concept that was never modelled. Not built; the table filters on Zone / Track / Segment /
+     account search.
+   - **"Perf YTD".** No business-performance data exists anywhere in the app: no revenue,
+     quota, bookings or growth column in any of the 9 tables. The column is omitted and the
+     report says why. Adding it needs a definition (percent of quota? YoY growth? in what
+     currency, as of what date?), a schema column, an import path, and an owner. Also worth
+     saying: with n=25 and weighted scores spanning roughly 1.83 to 2.30, any correlation
+     drawn between maturity and performance would be noise.
+6. **Two security items were raised with the repo owner and never answered.** They are not
    bugs and were not changed unilaterally, but whoever picks this up should raise them again
    before anything real is loaded into the deployment:
    - the hardcoded Kimi key (§12) is readable by anyone who finds the public repo or the

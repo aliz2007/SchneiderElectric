@@ -513,6 +513,150 @@ export function zoneHeatmap(
   return { zones: [...ZONES], rows };
 }
 
+// ---------- group profiles (the population radars) ----------
+//
+// Everything above is per-person. The dashboard reports the client asked for are per
+// POPULATION: one radar per zone, per segment, per zone+track, and one for the whole of
+// International Operations, each showing the 6 cluster capabilities against the 3 lenses
+// plus the level the track expects.
+//
+// Two rules make these numbers trustworthy, and both are easy to get wrong:
+//
+//  1. Average the PEOPLE, not the ratings. Each Account Manager contributes one value per
+//     cluster, so a zone with one heavily-rated person and one barely-rated person is not
+//     skewed toward whoever has more submitted capabilities.
+//  2. Respect track applicability. Acquisition Excellence has no required level on the
+//     Saturation track and vice versa, so a mixed-track population has a required level for
+//     a cluster only from the people it actually applies to. A cluster nobody in the group
+//     is measured on is reported as null, never as zero: zero would drag the expected web
+//     to the centre of the radar and read as "target met".
+
+export type ClusterProfile = {
+  cluster: string;
+  self: number | null;
+  manager: number | null;
+  expert: number | null;
+  weighted: number | null;
+  required: number | null;
+  /** how many Account Managers contributed a weighted score to this cluster */
+  n: number;
+};
+
+export type GroupProfile = {
+  label: string;
+  amCount: number;
+  /** AMs with at least one submitted rating; the radar is drawn from these */
+  scoredCount: number;
+  clusters: ClusterProfile[];
+  overallWeighted: number | null;
+  overallRequired: number | null;
+  overallGap: number | null;
+};
+
+/**
+ * Cluster-by-cluster profile of a population of Account Managers.
+ *
+ * Pass any list of AMs: a zone, a segment, a zone crossed with a track, or the whole
+ * roster. Returns one row per cluster in rubric order, so several groups can be plotted on
+ * radars with identical axes and compared against each other.
+ */
+export function groupProfile(label: string, ams: AM[]): GroupProfile {
+  const caps = listCapabilities();
+  const clusterOrder: string[] = [];
+  for (const c of caps) if (!clusterOrder.includes(c.cluster)) clusterOrder.push(c.cluster);
+
+  // one person's per-capability picture, computed once and reused for every cluster
+  const perAm = ams.map((am) => ({ am, rows: scoredRows(am.id, am.track) }));
+  const scoredCount = perAm.filter((p) => p.rows.some((r) => r.weighted != null)).length;
+
+  const clusters: ClusterProfile[] = clusterOrder.map((cluster) => {
+    // each AM contributes ONE mean per lens for this cluster, so people weigh equally
+    const per: Record<"self" | "manager" | "expert" | "weighted" | "required", number[]> = {
+      self: [], manager: [], expert: [], weighted: [], required: [],
+    };
+    let n = 0;
+    for (const { rows } of perAm) {
+      const inCluster = rows.filter((r) => r.cap.cluster === cluster);
+      const mean = (vals: (number | null | undefined)[]) => {
+        const v = vals.filter((x): x is number => x != null);
+        return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+      };
+      const w = mean(inCluster.map((r) => r.weighted));
+      const req = mean(inCluster.map((r) => r.req));
+      const self = mean(inCluster.map((r) => r.self));
+      const manager = mean(inCluster.map((r) => r.manager));
+      const expert = mean(inCluster.map((r) => r.expert));
+      if (w != null) { per.weighted.push(w); n++; }
+      if (req != null) per.required.push(req);
+      if (self != null) per.self.push(self);
+      if (manager != null) per.manager.push(manager);
+      if (expert != null) per.expert.push(expert);
+    }
+    const avg = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
+    return {
+      cluster,
+      self: avg(per.self),
+      manager: avg(per.manager),
+      expert: avg(per.expert),
+      weighted: avg(per.weighted),
+      required: avg(per.required),
+      n,
+    };
+  });
+
+  // Overall figures come from the capability rows directly, not from the cluster means:
+  // clusters hold different numbers of capabilities, so averaging the six cluster averages
+  // would silently weight a 2-capability cluster the same as a 6-capability one.
+  const applicable = perAm.flatMap((p) => p.rows.filter((r) => r.req != null));
+  const overallWeighted = averageWeighted(applicable);
+  const overallRequired = averageRequired(applicable);
+
+  return {
+    label,
+    amCount: ams.length,
+    scoredCount,
+    clusters,
+    overallWeighted,
+    overallRequired,
+    overallGap:
+      overallWeighted != null && overallRequired != null ? overallWeighted - overallRequired : null,
+  };
+}
+
+/** One profile per zone, in the canonical zone order. Zones with nobody in them are kept
+ *  so the deck has a consistent shape from run to run. */
+export function zoneProfiles(ams: AM[] = listAMs()): GroupProfile[] {
+  return ZONES.map((zone) => groupProfile(zone, ams.filter((am) => am.zone === zone)));
+}
+
+/** One profile per business segment. Segment is nullable on an AM, so anyone without one
+ *  is grouped under "Unassigned" rather than being dropped silently. */
+export function segmentProfiles(ams: AM[] = listAMs()): GroupProfile[] {
+  const labels: string[] = [];
+  for (const am of ams) {
+    const seg = am.segment ?? "Unassigned";
+    if (!labels.includes(seg)) labels.push(seg);
+  }
+  labels.sort((a, b) => (a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b)));
+  return labels.map((seg) =>
+    groupProfile(seg, ams.filter((am) => (am.segment ?? "Unassigned") === seg))
+  );
+}
+
+/** Per zone, one profile for each track: the "where is Acquisition weak, where is
+ *  Saturation weak" view. Empty combinations are returned with amCount 0 so the report can
+ *  say so explicitly instead of leaving a hole in the grid. */
+export function zoneTrackProfiles(
+  ams: AM[] = listAMs()
+): { zone: string; tracks: GroupProfile[] }[] {
+  return ZONES.map((zone) => ({
+    zone,
+    tracks: (["Acquisition", "Saturation"] as const).map((track) =>
+      groupProfile(track, ams.filter((am) => am.zone === zone && am.track === track))
+    ),
+  }));
+}
+
 /** Largest zone-level deficits — the "who to train on what, where" list. */
 export function trainingPriorities(limit = 6, track?: AM["track"], segment?: string) {
   const { zones, rows } = zoneHeatmap(track, segment);
