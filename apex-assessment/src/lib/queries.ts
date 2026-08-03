@@ -9,6 +9,8 @@ export type AM = {
   zone: (typeof ZONES)[number];
   track: "Acquisition" | "Saturation";
   segment: string | null; // business segment (Power & Grid / Energy & Chemicals / CS&P / Multi-segment)
+  account_type: string | null; // Schneider account tier, the proposal's "Account Type"
+  perf_ytd: number | null; // year-to-date performance vs target, see PERF_YTD_LABEL
   profile_complete: number; // 0 = created for a person who still needs to fill in their details
   manager_deadline: string | null; // YYYY-MM-DD — manager can no longer assess past this date
   panel_datetime: string | null; // YYYY-MM-DDTHH:MM — scheduled call; panel can no longer assess past that day
@@ -59,6 +61,53 @@ export function updateAccountManagerProfile(
       "UPDATE account_managers SET name = ?, account = ?, zone = ?, track = ?, segment = ?, profile_complete = 1 WHERE id = ?"
     )
     .run(p.name.trim(), p.account.trim(), p.zone, p.track, p.segment, amId);
+}
+
+/** Superadmin: set (or clear) the commercial details the dashboard proposal asks for. */
+export function setAccountDetails(
+  amId: number,
+  d: { accountType: string | null; perfYtd: number | null }
+) {
+  getDb()
+    .prepare("UPDATE account_managers SET account_type = ?, perf_ytd = ? WHERE id = ?")
+    .run(d.accountType, d.perfYtd, amId);
+}
+
+/**
+ * How the Gap column is computed on the Population Overview.
+ *
+ * The app's canonical gap is `weighted - required`, using the 20/35/45 lens weighting. The
+ * client's dashboard proposal worked its example rows as `self - required` instead. The two
+ * disagree materially (on the demo data they move most people across the target line), so
+ * rather than pick silently this is a setting, shown and labelled on every surface that
+ * prints a gap from it. Default: weighted.
+ *
+ * Scope is deliberately the Population Overview only. The individual reports, the radars and
+ * the strength/development rules stay on the weighted score, because those definitions are
+ * load-bearing elsewhere in the app.
+ */
+export type GapBasis = "weighted" | "self";
+
+export function getGapBasis(): GapBasis {
+  return getSetting("gap_basis") === "self" ? "self" : "weighted";
+}
+
+export function setGapBasis(basis: GapBasis) {
+  setSetting("gap_basis", basis);
+}
+
+export const GAP_BASIS_LABEL: Record<GapBasis, string> = {
+  weighted: "Weighted score minus average required",
+  self: "Self-assessment minus average required",
+};
+
+/** Superadmin: change the level a capability requires on either track. */
+export function setRequiredLevels(capabilityId: number, reqAcq: number | null, reqSat: number | null) {
+  const ok = (v: number | null) => v == null || [1, 2, 3].includes(v);
+  if (!ok(reqAcq) || !ok(reqSat)) throw new Error("Required level must be 1, 2, 3 or blank.");
+  getDb()
+    .prepare("UPDATE capabilities SET req_acq = ?, req_sat = ? WHERE id = ?")
+    .run(reqAcq, reqSat, capabilityId);
 }
 
 /** Superadmin: set (or clear) an AM's assessment schedule. */

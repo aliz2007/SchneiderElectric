@@ -133,6 +133,20 @@ function migrate(db: Database.Database) {
       /* column already exists */
     }
   }
+  // Account tier and business performance, both asked for in the client's dashboard
+  // proposal. account_type is the Schneider account-tier concept ("Account Type" in their
+  // table); perf_ytd is a performance figure whose unit the client defines (see
+  // PERF_YTD_LABEL in seed-data.ts). Both are set per Account Manager by a superadmin.
+  try {
+    db.exec("ALTER TABLE account_managers ADD COLUMN account_type TEXT");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    db.exec("ALTER TABLE account_managers ADD COLUMN perf_ytd REAL");
+  } catch {
+    /* column already exists */
+  }
   // backfill the roster's segment on databases seeded before segments existed, matching by
   // code and never overwriting a segment someone has already chosen
   {
@@ -177,10 +191,20 @@ function migrate(db: Database.Database) {
   const amCount = (db.prepare("SELECT COUNT(*) AS n FROM account_managers").get() as { n: number }).n;
   if (amCount === 0) {
     const insAm = db.prepare(
-      `INSERT INTO account_managers (code, name, account, zone, track, segment)
-       VALUES (@code, @name, @account, @zone, @track, @segment)`
+      `INSERT INTO account_managers (code, name, account, zone, track, segment, account_type)
+       VALUES (@code, @name, @account, @zone, @track, @segment, @accountType)`
     );
-    for (const am of ROSTER) insAm.run(am);
+    for (const am of ROSTER) insAm.run({ ...am, accountType: am.accountType ?? null });
+  }
+
+  // Backfill the demo account tier on databases seeded BEFORE the column existed, matching
+  // by code and never overwriting one somebody has set. This has to run AFTER the roster
+  // insert above: on a fresh database there are no rows to update at migration time.
+  {
+    const setType = db.prepare(
+      "UPDATE account_managers SET account_type = ? WHERE code = ? AND (account_type IS NULL OR account_type = '')"
+    );
+    for (const am of ROSTER) if (am.accountType) setType.run(am.accountType, am.code);
   }
 
   const admin = db.prepare("SELECT id FROM users WHERE role = 'superadmin' LIMIT 1").get();

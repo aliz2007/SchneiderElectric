@@ -27,6 +27,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
       ? [
           { href: "/analysis/individuals", label: "Individuals", ico: "☰" },
           { href: "/admin/users", label: "Users & Access", ico: "⚙" },
+          { href: "/admin/rubric", label: "Rubric & scoring", ico: "◎" },
         ]
       : []),
   ];

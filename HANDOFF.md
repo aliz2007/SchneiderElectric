@@ -30,9 +30,10 @@ Last updated: 2026-07-31.
   report), `pdf-group-radar.tsx` (radar for a POPULATION, sized to fit a grid cell) and
   `pdf-dashboard.tsx` / `pdf-population.tsx`. New aggregation in `queries.ts`:
   `groupProfile` / `zoneProfiles` / `segmentProfiles` / `zoneTrackProfiles` (see §2c). The
-  Individual Results table gained **Avg required** and **Gap** columns so it matches the
-  proposal's column list. Four points in the brief could not be built as written; they are
-  recorded in §11 as open questions, not silently reinterpreted.
+  Individual Results table gained **Avg required**, **Gap**, **Account type** and **Perf YTD**
+  columns so it matches the proposal's column list exactly. The four points the brief needed
+  that did not exist (gap convention, editable required levels, Account Type, Perf YTD) are
+  all built; see §11 item 5. New admin page: **Admin → Rubric & scoring**.
 - Earlier (2026-07-30): **fixed a float-formatting bug on the
   zone benchmark** — it interpolated the weighted score raw, so `L2.3000000000000003` and
   `L2.3499999999999996` were showing across the grid (see §2b, "Never print a weighted score
@@ -571,7 +572,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 81/81 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 85/85 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -655,31 +656,33 @@ env var before putting the app on the open internet.
 3. **Production concerns** in §10 (Postgres / SSO / hosting) are unaddressed by design.
 4. `demo.bat` sets `APEX_DEMO=1` but no code reads it (vestigial). Demo data loads from the
    admin button.
-5. **Four points in the client's dashboard proposal could not be built as written.** They
-   are implemented on the most defensible reading and flagged here rather than being quietly
-   reinterpreted. All four need a client decision:
-   - **The gap convention.** The proposal's worked example computes Gap as
-     `Avg Self − Avg Required` (2.40 − 2.80 = −0.40, and 2.10 − 2.70 = −0.60; both rows check
-     out). The app's canonical gap is `weighted − required`. On the current data the two
-     conventions disagree by 0.285 on average, up to 0.611, and **18 of 25 people change
-     sides of the target line** depending which you pick. Built on the weighted rule, with the
-     formula printed on the report. If the client really wants Self − Required, that is a
-     one-line change but it contradicts the 20/35/45 weighting they set.
-   - **"Avg Required 2.80" is not reachable.** Under the seeded rubric the average required
-     level is 2.105 (Acquisition) and 2.111 (Saturation); only 2 of 22 capabilities require L3
-     on either track. The proposal's example rows are illustrative, not real. Either the
-     example is placeholder, or their intended rubric is more demanding than the one in the
-     workbook we seeded from.
-   - **"Account Type" filter.** No such field exists. The nearest is `track`, which the
-     proposal already spends a whole view on, so it is probably a Schneider account-tier
-     concept that was never modelled. Not built; the table filters on Zone / Track / Segment /
-     account search.
-   - **"Perf YTD".** No business-performance data exists anywhere in the app: no revenue,
-     quota, bookings or growth column in any of the 9 tables. The column is omitted and the
-     report says why. Adding it needs a definition (percent of quota? YoY growth? in what
-     currency, as of what date?), a schema column, an import path, and an owner. Also worth
-     saying: with n=25 and weighted scores spanning roughly 1.83 to 2.30, any correlation
-     drawn between maturity and performance would be noise.
+5. **The four gaps in the client's dashboard proposal are now closed in code.** Each was a
+   missing field or an unmade decision rather than a real blocker, so each got a mechanism
+   and the business decision was handed back to the client instead of being guessed:
+   - **Gap convention** is a setting. Admin, Rubric & scoring offers "weighted minus required"
+     (default, the app's canonical rule) or "self minus required" (the proposal's worked
+     example). Whichever is chosen is printed on the Population Overview and its PDF, so a
+     gap figure is never ambiguous. Scope is deliberately the Population Overview only: the
+     individual reports, the radars and the strength/development rules stay on the weighted
+     score because those definitions are relied on across the app. See `getGapBasis` /
+     `GAP_BASIS_LABEL` in queries.ts.
+   - **Required levels are editable** at Admin, Rubric & scoring, per capability per track,
+     blank meaning "not assessed on this track". The proposal implied an average required of
+     2.80 which the seeded rubric (2.11 / 2.11) cannot reach; rather than argue about whose
+     number is right, the business can now set the levels it actually expects and every score,
+     gap, radar and report follows immediately. Verified: setting everything to L3 moves the
+     average to 3.00 across the app.
+   - **Account Type** is a real column (`account_managers.account_type`), editable per person
+     under "Account details" on their page, filterable on Individual Results and printed in
+     the Population Overview PDF. The taxonomy lives in `ACCOUNT_TYPES` in seed-data.ts
+     (Strategic / Key / Growth / Developing as demo values) — replace that list with the
+     client's own and the filters follow.
+   - **Perf YTD** is a real column (`account_managers.perf_ytd`), entered per person under
+     "Account details". Its meaning is defined once in `PERF_YTD_LABEL` / `PERF_YTD_HELP` /
+     `PERF_YTD_SUFFIX` (currently year-to-date performance against target, as a percentage) so
+     changing the unit is a one-line edit. The column only appears once somebody has recorded
+     a figure, and the report carries a health warning: with a population this size no
+     relationship between capability maturity and performance should be inferred from it.
 6. **Two security items were raised with the repo owner and never answered.** They are not
    bugs and were not changed unilaterally, but whoever picks this up should raise them again
    before anything real is loaded into the deployment:

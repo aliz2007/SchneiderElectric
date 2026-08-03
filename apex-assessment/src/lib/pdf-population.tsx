@@ -9,9 +9,10 @@ Font.registerHyphenationCallback((word) => [word]);
  * One row per Account Manager, so capability results can be read against the accounts they
  * belong to. Repeats the header on every page and never splits a row.
  *
- * Gap is WEIGHTED SCORE minus AVERAGE REQUIRED, the same rule as everywhere else in the
- * app. The proposal's worked example computed it as Self minus Required instead; the two
- * disagree, so the convention is printed on the page rather than left implicit.
+ * Gap follows the basis configured in Admin, Rubric & scoring: either the weighted score or
+ * the self-assessment, minus the average required level. The proposal's worked example used
+ * the self-based rule and the app defaults to weighted, so whichever is in force is printed
+ * on the page rather than left implicit.
  */
 
 export type PopulationRow = {
@@ -21,6 +22,8 @@ export type PopulationRow = {
   amName: string;
   code: string;
   track: string;
+  accountType: string | null;
+  perfYtd: number | null;
   self: number | null;
   manager: number | null;
   expert: number | null;
@@ -35,8 +38,12 @@ export type PopulationProps = {
   scopeNote: string | null;
   totalCount: number;
   weightsLabel: string;
-  /** true once a real performance feed exists; until then the column is shown empty */
+  /** shown once anybody has a performance figure recorded */
   showPerfYtd: boolean;
+  perfLabel: string;
+  perfSuffix: string;
+  /** how Gap was computed, printed so the number is never ambiguous */
+  gapBasisLabel: string;
 };
 
 const s = StyleSheet.create({
@@ -79,16 +86,17 @@ const s = StyleSheet.create({
 
 // column widths, summing to 100
 const COL = {
-  zone: "8%",
-  segment: "15%",
-  account: "13%",
-  name: "15%",
-  self: "8%",
-  manager: "9%",
-  expert: "8%",
+  zone: "7%",
+  segment: "13%",
+  account: "11%",
+  name: "13%",
+  type: "9%",
+  self: "7%",
+  manager: "8%",
+  expert: "7%",
+  weighted: "7%",
   required: "9%",
-  weighted: "8%",
-  gap: "7%",
+  gap: "9%",
 } as const;
 
 const fmt = (v: number | null, d = 2) => (v == null ? "n/a" : v.toFixed(d));
@@ -113,7 +121,7 @@ export function PopulationPdf(p: PopulationProps) {
           {p.rows.length} of {p.totalCount} Account Managers
           {scored.length ? ` · ${scored.length} assessed · ${below} below the level their track requires` : " · no assessments submitted yet"}.
           Weighted score = {p.weightsLabel}, combined over the lenses that have submitted. Gap is
-          the weighted score minus the average level required on that person&apos;s track.
+          {" "}{p.gapBasisLabel.toLowerCase()}.
         </Text>
 
         <View style={s.tab}>
@@ -122,13 +130,16 @@ export function PopulationPdf(p: PopulationProps) {
             <Text style={[s.th, { width: COL.segment }]}>Segment</Text>
             <Text style={[s.th, { width: COL.account }]}>Account</Text>
             <Text style={[s.th, { width: COL.name }]}>Account Name</Text>
+            <Text style={[s.th, { width: COL.type }]}>Account type</Text>
             <Text style={[s.th, { width: COL.self, textAlign: "center" }]}>Avg self</Text>
             <Text style={[s.th, { width: COL.manager, textAlign: "center" }]}>Manager</Text>
             <Text style={[s.th, { width: COL.expert, textAlign: "center" }]}>Expert</Text>
             <Text style={[s.th, { width: COL.weighted, textAlign: "center" }]}>Weighted</Text>
             <Text style={[s.th, { width: COL.required, textAlign: "center" }]}>Avg required</Text>
             <Text style={[s.th, { width: COL.gap, textAlign: "center" }]}>Gap</Text>
-            {p.showPerfYtd && <Text style={[s.th, { width: "8%", textAlign: "center" }]}>Perf YTD</Text>}
+            {p.showPerfYtd && (
+              <Text style={[s.th, { width: "10%", textAlign: "center" }]}>{p.perfLabel}</Text>
+            )}
           </View>
 
           {p.rows.length === 0 ? (
@@ -142,6 +153,7 @@ export function PopulationPdf(p: PopulationProps) {
                 <Text style={[s.td, { width: COL.segment, color: MUTED }]}>{r.segment ?? "n/a"}</Text>
                 <Text style={[s.td, { width: COL.account }]}>{r.account || "n/a"}</Text>
                 <Text style={[s.td, { width: COL.name, fontFamily: "Helvetica-Bold" }]}>{r.amName}</Text>
+                <Text style={[s.td, { width: COL.type, color: MUTED }]}>{r.accountType ?? "n/a"}</Text>
                 <Text style={[s.td, { width: COL.self, textAlign: "center" }]}>{fmt(r.self)}</Text>
                 <Text style={[s.td, { width: COL.manager, textAlign: "center" }]}>{fmt(r.manager)}</Text>
                 <Text style={[s.td, { width: COL.expert, textAlign: "center" }]}>{fmt(r.expert)}</Text>
@@ -163,7 +175,9 @@ export function PopulationPdf(p: PopulationProps) {
                   )}
                 </View>
                 {p.showPerfYtd && (
-                  <Text style={[s.td, { width: "8%", textAlign: "center", color: FAINT }]}>n/a</Text>
+                  <Text style={[s.td, { width: "10%", textAlign: "center" }]}>
+                    {r.perfYtd == null ? "n/a" : `${r.perfYtd.toFixed(1)}${p.perfSuffix}`}
+                  </Text>
                 )}
               </View>
             ))
@@ -171,12 +185,10 @@ export function PopulationPdf(p: PopulationProps) {
         </View>
 
         <Text style={s.note} wrap={false}>
-          Two notes on how to read this table. Gap is the WEIGHTED score minus the average
-          required level, which is the rule used everywhere else in the app; the worked example
-          in the dashboard proposal subtracted the required level from the SELF score instead,
-          which produces a different figure and moves a majority of people across the
-          above/below-target line. Perf YTD is not shown: no business-performance data is held
-          anywhere in this application, so there is nothing to populate it from yet.
+          Gap is {p.gapBasisLabel.toLowerCase()}, configured in Admin, Rubric &amp; scoring.
+          {p.showPerfYtd
+            ? ` ${p.perfLabel} is entered per Account Manager and is shown for information only; with a population this size, no relationship between capability maturity and performance should be inferred from it.`
+            : ` ${p.perfLabel} is hidden because no figure has been recorded for anyone yet; set one on an Account Manager's page under Account details.`}
         </Text>
       </Page>
     </Document>

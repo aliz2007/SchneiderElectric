@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { SEGMENTS, ZONES } from "@/lib/seed-data";
+import { ACCOUNT_TYPES, SEGMENTS, ZONES } from "@/lib/seed-data";
 
 /**
  * Inline search + filters for the Individual Results list: a name/account search box
@@ -12,7 +12,7 @@ import { SEGMENTS, ZONES } from "@/lib/seed-data";
 export default function IndividualsFilters({
   current,
 }: {
-  current: { q: string; zone: string; track: string; segment: string };
+  current: { q: string; zone: string; track: string; segment: string; accountType: string };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -38,7 +38,12 @@ export default function IndividualsFilters({
   };
   useEffect(() => () => { if (debounce.current) clearTimeout(debounce.current); }, []);
 
-  const active = current.q !== "" || current.zone !== "all" || current.track !== "all" || current.segment !== "all";
+  const active =
+    current.q !== "" ||
+    current.zone !== "all" ||
+    current.track !== "all" ||
+    current.segment !== "all" ||
+    current.accountType !== "all";
 
   return (
     <div className="analytics-filter-row" style={{ marginBottom: 14 }}>
@@ -82,6 +87,18 @@ export default function IndividualsFilters({
           <option key={s} value={s}>{s}</option>
         ))}
       </select>
+      <select
+        className="zmap-select"
+        value={current.accountType}
+        onChange={(e) => apply({ accountType: e.target.value })}
+        aria-label="Filter by account type"
+      >
+        <option value="all">All account types</option>
+        {ACCOUNT_TYPES.map((t) => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
+
       {active && (
         <button
           type="button"

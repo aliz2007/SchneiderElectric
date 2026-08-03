@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSuperadmin } from "@/lib/session";
-import { getAssessment, reopenAssessment, setAssessmentSchedule } from "@/lib/queries";
+import { getAssessment, reopenAssessment, setAccountDetails, setAssessmentSchedule } from "@/lib/queries";
 import type { Lens } from "@/lib/seed-data";
 
 /** Superadmin-only: unlock a submitted assessment so the evaluator can revise it. */
@@ -28,4 +28,25 @@ export async function saveSchedule(formData: FormData) {
   });
   revalidatePath(`/analysis/am/${amId}`);
   revalidatePath("/rate");
+}
+
+/**
+ * Superadmin-only: the commercial details from the client's dashboard proposal.
+ * accountType is their "Account Type" column; perfYtd is the optional performance figure
+ * (unit defined by PERF_YTD_LABEL / PERF_YTD_SUFFIX in seed-data.ts).
+ */
+export async function saveAccountDetails(formData: FormData) {
+  await requireSuperadmin();
+  const amId = Number(formData.get("amId"));
+  if (!Number.isInteger(amId) || amId <= 0) throw new Error("Invalid Account Manager.");
+  const accountType = String(formData.get("accountType") ?? "").trim();
+  const perfRaw = String(formData.get("perfYtd") ?? "").trim();
+  let perfYtd: number | null = null;
+  if (perfRaw !== "") {
+    perfYtd = Number(perfRaw);
+    if (!Number.isFinite(perfYtd)) throw new Error("Perf YTD must be a number.");
+  }
+  setAccountDetails(amId, { accountType: accountType || null, perfYtd });
+  revalidatePath(`/analysis/am/${amId}`);
+  revalidatePath("/analysis/individuals");
 }

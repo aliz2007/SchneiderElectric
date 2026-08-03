@@ -129,7 +129,11 @@ try {
     : fail("population download button", "not found");
   await page.locator('.th-sort a:has-text("Weighted")').click();
   await page.waitForURL(/sort=weighted/);
-  const weightedCol = await page.locator("table.table tbody tr td:nth-child(9)").allTextContents();
+  // resolve the column by its heading, not by index: the table gains columns over time and
+  // a hardcoded nth-child silently starts asserting about the wrong one
+  const headTexts = await page.locator("table.table thead th").allTextContents();
+  const weightedIdx = headTexts.findIndex((t) => t.includes("Weighted")) + 1;
+  const weightedCol = await page.locator(`table.table tbody tr td:nth-child(${weightedIdx})`).allTextContents();
   const nums = weightedCol.map((t) => parseFloat(t)).filter((n) => !Number.isNaN(n));
   nums.every((n, i) => i === 0 || nums[i - 1] >= n)
     ? ok(`sorting by weighted orders the table (${nums.length} rows, high to low)`)
@@ -240,6 +244,59 @@ try {
 
   // both reports are population-level, so they must be superadmin-only; checked from the
   // assessor session further down
+
+  // ---- 5c. the four things the dashboard proposal needed that did not exist ----
+  // Account Type: seeded on the roster, filterable
+  await page.goto(`${BASE}/analysis/individuals?accountType=Strategic`);
+  await page.waitForSelector("table.table");
+  const typed = await page.locator("table.table tbody tr").count();
+  typed > 0
+    ? ok(`account type filter works (${typed} Strategic)`)
+    : fail("account type filter", "no rows");
+
+  // Perf YTD: set it on one AM and confirm it surfaces in the table
+  await page.goto(`${BASE}/analysis/am/1`);
+  await page.locator('button:has-text("Account details")').click();
+  await page.waitForSelector('input[name="perfYtd"]');
+  await page.fill('input[name="perfYtd"]', "104.5");
+  await page.locator('button:has-text("Save details")').click();
+  await page.waitForTimeout(1200);
+  await page.goto(`${BASE}/analysis/individuals?q=Adam`);
+  await page.waitForSelector("table.table");
+  (await page.locator("table.table tbody tr").first().innerText()).includes("104.5")
+    ? ok("Perf YTD saves and shows on the population table")
+    : fail("Perf YTD", "not shown after saving");
+
+  // Required levels are editable, so the client's expected averages are reachable
+  await page.goto(`${BASE}/admin/rubric`);
+  await page.waitForSelector('select[name^="acq_"]');
+  const levelSelects = await page.locator('select[name^="acq_"]').count();
+  levelSelects >= 20
+    ? ok(`rubric exposes a required level per capability (${levelSelects})`)
+    : fail("rubric editor", `${levelSelects} selects`);
+
+  // Gap basis: switching it must actually change the printed gap
+  const gapNow = async () => {
+    await page.goto(`${BASE}/analysis/individuals?q=Adam`);
+    await page.waitForSelector("table.table");
+    const heads = await page.locator("table.table thead th").allTextContents();
+    const i = heads.findIndex((t) => t.trim().startsWith("Gap")) + 1;
+    return (await page.locator(`table.table tbody tr:first-child td:nth-child(${i})`).innerText()).trim();
+  };
+  const gapWeighted = await gapNow();
+  await page.goto(`${BASE}/admin/rubric`);
+  await page.locator('input[name="basis"][value="self"]').check();
+  await page.locator('form.rubric-basis button:has-text("Save")').click();
+  await page.waitForTimeout(1200);
+  const gapSelf = await gapNow();
+  gapWeighted !== gapSelf
+    ? ok(`gap basis switch changes the figure (${gapWeighted} weighted, ${gapSelf} self)`)
+    : fail("gap basis", `both read ${gapWeighted}`);
+  // put it back so the rest of the run sees the default
+  await page.goto(`${BASE}/admin/rubric`);
+  await page.locator('input[name="basis"][value="weighted"]').check();
+  await page.locator('form.rubric-basis button:has-text("Save")').click();
+  await page.waitForTimeout(1000);
 
   // ---- 6. zone view ----
   await page.goto(`${BASE}/analysis/zone/MEA`);

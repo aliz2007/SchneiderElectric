@@ -1,8 +1,23 @@
 import { createElement } from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { requireSuperadmin } from "@/lib/session";
-import { averageRequired, averageWeighted, listAMs, scoredRows, submittedLevels } from "@/lib/queries";
-import { SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
+import {
+  GAP_BASIS_LABEL,
+  averageRequired,
+  averageWeighted,
+  getGapBasis,
+  listAMs,
+  scoredRows,
+  submittedLevels,
+} from "@/lib/queries";
+import {
+  ACCOUNT_TYPES,
+  PERF_YTD_LABEL,
+  PERF_YTD_SUFFIX,
+  SEGMENTS,
+  WEIGHTS_LABEL,
+  ZONES,
+} from "@/lib/seed-data";
 import { PopulationPdf, type PopulationRow } from "@/lib/pdf-population";
 
 /**
@@ -24,6 +39,12 @@ export async function GET(req: Request) {
   const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
   const segment =
     segmentRaw && (SEGMENTS as readonly string[]).includes(segmentRaw) ? segmentRaw : undefined;
+  const accountTypeRaw = url.searchParams.get("accountType");
+  const accountType =
+    accountTypeRaw && (ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw)
+      ? accountTypeRaw
+      : undefined;
+  const gapBasis = getGapBasis();
 
   const all = listAMs();
   const matching = all.filter(
@@ -34,7 +55,8 @@ export async function GET(req: Request) {
         am.code.toLowerCase().includes(q)) &&
       (!zone || am.zone === zone) &&
       (!track || am.track === track) &&
-      (!segment || am.segment === segment)
+      (!segment || am.segment === segment) &&
+      (!accountType || am.account_type === accountType)
   );
 
   const rows: PopulationRow[] = matching.map((am) => {
@@ -44,6 +66,8 @@ export async function GET(req: Request) {
     const applicable = scoredRows(am.id, am.track).filter((r) => r.req != null);
     const weighted = averageWeighted(applicable);
     const required = averageRequired(applicable);
+    const selfAvg = mean(levels.self);
+    const gapFrom = gapBasis === "self" ? selfAvg : weighted;
     return {
       zone: am.zone,
       segment: am.segment,
@@ -51,17 +75,21 @@ export async function GET(req: Request) {
       amName: am.name,
       code: am.code,
       track: am.track,
-      self: mean(levels.self),
+      accountType: am.account_type,
+      perfYtd: am.perf_ytd,
+      self: selfAvg,
       manager: mean(levels.manager),
       expert: mean(levels.expert),
       weighted,
       required,
-      gap: weighted != null && required != null ? weighted - required : null,
+      gap: gapFrom != null && required != null ? gapFrom - required : null,
     };
   });
   rows.sort((a, b) => a.zone.localeCompare(b.zone) || a.amName.localeCompare(b.amName));
 
-  const scopeParts = [zone, track, segment, q ? `search "${q}"` : null].filter(Boolean) as string[];
+  const scopeParts = [zone, track, segment, accountType, q ? `search "${q}"` : null].filter(
+    Boolean
+  ) as string[];
 
   const buffer = await renderToBuffer(
     createElement(PopulationPdf, {
@@ -74,8 +102,11 @@ export async function GET(req: Request) {
       scopeNote: scopeParts.length ? scopeParts.join(" · ") : null,
       totalCount: all.length,
       weightsLabel: WEIGHTS_LABEL,
-      // no business-performance data exists anywhere in the app yet
-      showPerfYtd: false,
+      // only show the column once somebody has actually recorded a figure
+      showPerfYtd: rows.some((r) => r.perfYtd != null),
+      perfLabel: PERF_YTD_LABEL,
+      perfSuffix: PERF_YTD_SUFFIX,
+      gapBasisLabel: GAP_BASIS_LABEL[gapBasis],
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );
 

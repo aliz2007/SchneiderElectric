@@ -20,6 +20,7 @@ import { aiNarrativeEnabled } from "@/lib/ai-narrative";
 import { reopen } from "./actions";
 import ExportPdfButton from "./export-pdf-button";
 import ScheduleEditor from "./schedule-editor";
+import AccountEditor from "./account-editor";
 import ThemeRadar, { type RadarTheme } from "./theme-radar";
 
 function Chip({ level }: { level: number | null | undefined }) {
@@ -139,6 +140,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
           <span className="badge badge-zone">{am.zone}</span>
           <span className="badge badge-track">{am.track} track</span>
           {am.segment && <span className="badge badge-segment">{am.segment}</span>}
+          {am.account_type && <span className="badge badge-gray">{am.account_type}</span>}
           <span className="badge badge-gray">{am.account}</span>
           {lensStatus.map(({ lens, a, rater }) => (
             <span key={lens} className={`badge ${a?.status === "submitted" ? "badge-green" : "badge-gray"}`}>
@@ -149,6 +151,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
         </div>
         <div className="am-meta" style={{ marginTop: 10, alignItems: "center" }}>
           <ScheduleEditor amId={am.id} managerDeadline={am.manager_deadline} panelDatetime={am.panel_datetime} />
+          <AccountEditor amId={am.id} accountType={am.account_type} perfYtd={am.perf_ytd} />
           {am.manager_deadline && (
             <span className="badge badge-sched">Manager deadline · {formatScheduleDate(am.manager_deadline)}</span>
           )}

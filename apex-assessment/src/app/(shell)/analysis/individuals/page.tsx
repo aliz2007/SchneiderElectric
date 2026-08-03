@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { requireSuperadmin } from "@/lib/session";
-import { averageRequired, averageWeighted, listAMs, scoredRows, submittedLevels } from "@/lib/queries";
-import { SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
+import {
+  GAP_BASIS_LABEL,
+  averageRequired,
+  averageWeighted,
+  getGapBasis,
+  listAMs,
+  scoredRows,
+  submittedLevels,
+} from "@/lib/queries";
+import { ACCOUNT_TYPES, PERF_YTD_LABEL, PERF_YTD_SUFFIX, SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
 import { fmt, gapClass } from "@/lib/heat";
 import IndividualsFilters from "./filters";
 
@@ -12,12 +20,14 @@ const SORT_KEYS = [
   "track",
   "segment",
   "account",
+  "accountType",
   "self",
   "manager",
   "expert",
   "weighted",
   "required",
   "gap",
+  "perf",
   "below",
 ] as const;
 type SortKey = (typeof SORT_KEYS)[number];
@@ -25,7 +35,15 @@ type SortKey = (typeof SORT_KEYS)[number];
 export default async function IndividualsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; zone?: string; track?: string; segment?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    zone?: string;
+    track?: string;
+    segment?: string;
+    accountType?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   await requireSuperadmin();
 
@@ -35,6 +53,7 @@ export default async function IndividualsPage({
     zone: zoneRaw,
     track: trackRaw,
     segment: segmentRaw,
+    accountType: accountTypeRaw,
     sort: sortRaw,
     dir: dirRaw,
   } = await searchParams;
@@ -42,7 +61,10 @@ export default async function IndividualsPage({
   const zone = zoneRaw && (ZONES as readonly string[]).includes(zoneRaw) ? zoneRaw : undefined;
   const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
   const segment = segmentRaw && (SEGMENTS as readonly string[]).includes(segmentRaw) ? segmentRaw : undefined;
+  const accountType =
+    accountTypeRaw && (ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw) ? accountTypeRaw : undefined;
   const sort = (SORT_KEYS as readonly string[]).includes(sortRaw ?? "") ? (sortRaw as SortKey) : "name";
+  const gapBasis = getGapBasis();
   const dir: "asc" | "desc" = dirRaw === "desc" ? "desc" : "asc";
 
   const allAMs = listAMs();
@@ -54,7 +76,8 @@ export default async function IndividualsPage({
         am.code.toLowerCase().includes(q)) &&
       (!zone || am.zone === zone) &&
       (!track || am.track === track) &&
-      (!segment || am.segment === segment)
+      (!segment || am.segment === segment) &&
+      (!accountType || am.account_type === accountType)
   );
 
   // Build every row first, then sort: the figures are derived (weighted score, gap count),
@@ -67,15 +90,17 @@ export default async function IndividualsPage({
     const applicable = scored.filter((r) => r.req != null);
     const weighted = averageWeighted(applicable);
     const required = averageRequired(applicable);
+    const selfAvg = avg(levels.self);
+    // the Gap column follows the basis set in Admin -> Rubric & scoring
+    const gapFrom = gapBasis === "self" ? selfAvg : weighted;
     return {
       am,
-      self: avg(levels.self),
+      self: selfAvg,
       manager: avg(levels.manager),
       expert: avg(levels.expert),
       weighted,
       required,
-      // the canonical gap: weighted score minus the level this person's track expects
-      gap: weighted != null && required != null ? weighted - required : null,
+      gap: gapFrom != null && required != null ? gapFrom - required : null,
       below: scored.filter((r) => r.gap != null && r.gap < 0).length,
       hasScores: scored.some((r) => r.weighted != null),
     };
@@ -88,6 +113,7 @@ export default async function IndividualsPage({
     track: (r) => r.am.track,
     segment: (r) => r.am.segment ?? "",
     account: (r) => r.am.account,
+    accountType: (r) => r.am.account_type ?? "",
   };
   const asNumber: Partial<Record<SortKey, (r: Row) => number | null>> = {
     self: (r) => r.self,
@@ -96,6 +122,7 @@ export default async function IndividualsPage({
     weighted: (r) => r.weighted,
     required: (r) => r.required,
     gap: (r) => r.gap,
+    perf: (r) => r.am.perf_ytd,
     below: (r) => (r.hasScores ? r.below : null),
   };
 
@@ -120,6 +147,7 @@ export default async function IndividualsPage({
   if (zone) popParams.set("zone", zone);
   if (track) popParams.set("track", track);
   if (segment) popParams.set("segment", segment);
+  if (accountType) popParams.set("accountType", accountType);
   const popQuery = popParams.toString() ? `?${popParams.toString()}` : "";
 
   const isFiltered = rows.length !== allAMs.length;
@@ -129,6 +157,7 @@ export default async function IndividualsPage({
     if (zone) sp.set("zone", zone);
     if (track) sp.set("track", track);
     if (segment) sp.set("segment", segment);
+    if (accountType) sp.set("accountType", accountType);
     for (const [k, v] of Object.entries(over)) sp.set(k, v);
     return `/analysis/individuals?${sp.toString()}`;
   };
@@ -156,7 +185,8 @@ export default async function IndividualsPage({
         <p className="page-sub">
           Per-person comparison of the three assessment lenses and the weighted score
           ({WEIGHTS_LABEL}), plus perception gaps, strengths and development areas.
-          Click any column heading to sort.
+          Click any column heading to sort. Gap = {GAP_BASIS_LABEL[gapBasis].toLowerCase()}, set in
+          Admin, Rubric &amp; scoring.
         </p>
       </div>
 
@@ -173,7 +203,13 @@ export default async function IndividualsPage({
       </div>
 
       <IndividualsFilters
-        current={{ q: qRaw ?? "", zone: zone ?? "all", track: track ?? "all", segment: segment ?? "all" }}
+        current={{
+          q: qRaw ?? "",
+          zone: zone ?? "all",
+          track: track ?? "all",
+          segment: segment ?? "all",
+          accountType: accountType ?? "all",
+        }}
       />
       {isFiltered && (
         <p className="analytics-filter-note" style={{ marginTop: -6, marginBottom: 12 }}>
@@ -191,12 +227,14 @@ export default async function IndividualsPage({
                 <Th label="Track" k="track" />
                 <Th label="Segment" k="segment" />
                 <Th label="Account" k="account" />
+                <Th label="Account type" k="accountType" />
                 <Th label="Self avg" k="self" numeric />
                 <Th label="Mgr avg" k="manager" numeric />
                 <Th label="Panel avg" k="expert" numeric />
                 <Th label="Weighted" k="weighted" numeric />
                 <Th label="Avg required" k="required" numeric />
                 <Th label="Gap" k="gap" numeric />
+                <Th label={PERF_YTD_LABEL} k="perf" numeric />
                 <Th label="Below target" k="below" numeric />
                 <th></th>
               </tr>
@@ -222,6 +260,13 @@ export default async function IndividualsPage({
                     )}
                     <span className="am-code">{r.am.code}</span>
                   </td>
+                  <td>
+                    {r.am.account_type ? (
+                      <span className="badge badge-gray">{r.am.account_type}</span>
+                    ) : (
+                      <span style={{ color: "var(--muted)" }}>n/a</span>
+                    )}
+                  </td>
                   <td>{fmt(r.self, 2)}</td>
                   <td>{fmt(r.manager, 2)}</td>
                   <td>{fmt(r.expert, 2)}</td>
@@ -233,6 +278,16 @@ export default async function IndividualsPage({
                     ) : (
                       <span className={`lvl-chip ${gapClass(r.gap)}`} style={{ minWidth: 52, fontVariantNumeric: "tabular-nums" }}>
                         {r.gap > 0 ? `+${fmt(r.gap, 2)}` : fmt(r.gap, 2)}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {r.am.perf_ytd == null ? (
+                      <span style={{ color: "var(--muted)" }}>n/a</span>
+                    ) : (
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                        {r.am.perf_ytd.toFixed(1)}
+                        {PERF_YTD_SUFFIX}
                       </span>
                     )}
                   </td>
