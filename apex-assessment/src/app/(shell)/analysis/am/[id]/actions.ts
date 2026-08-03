@@ -18,11 +18,14 @@ export async function saveSchedule(formData: FormData) {
   await requireSuperadmin();
   const amId = Number(formData.get("amId"));
   if (!Number.isInteger(amId) || amId <= 0) throw new Error("Invalid Account Manager.");
+  const selfDeadline = String(formData.get("selfDeadline") ?? "").trim();
   const managerDeadline = String(formData.get("managerDeadline") ?? "").trim();
   const panelDatetime = String(formData.get("panelDatetime") ?? "").trim();
+  if (selfDeadline && !/^\d{4}-\d{2}-\d{2}$/.test(selfDeadline)) throw new Error("Invalid self-assessment date.");
   if (managerDeadline && !/^\d{4}-\d{2}-\d{2}$/.test(managerDeadline)) throw new Error("Invalid deadline date.");
   if (panelDatetime && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(panelDatetime)) throw new Error("Invalid panel date/time.");
   setAssessmentSchedule(amId, {
+    selfDeadline: selfDeadline || null,
     managerDeadline: managerDeadline || null,
     panelDatetime: panelDatetime || null,
   });

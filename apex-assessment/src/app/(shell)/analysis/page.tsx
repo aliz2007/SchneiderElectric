@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import {
   assessmentStatuses,
+  assignedAMs,
   listAMs,
   listCapabilities,
   formatScheduleDate,
@@ -39,6 +40,15 @@ export default async function AnalysisPage({
   const statuses = assessmentStatuses();
   const ams = listAMs().filter((am) => (!track || am.track === track) && (!segment || am.segment === segment));
   const capOptions = listCapabilities().map((c) => ({ id: c.id, name: c.name, cluster: c.cluster }));
+
+  // Scope rule for this page. The aggregates above (KPIs, zone heat map, training
+  // priorities) roll 25 people together and name nobody, so every signed-in user
+  // sees the same numbers. The roster and the campaign timeline are the opposite:
+  // they are per-person, listing who has submitted and when each of their deadlines
+  // falls. A Manager or Panel member is only entitled to that for the people they
+  // were assigned, so those two blocks are cut to their assignments.
+  const myAmIds = isAdmin ? null : new Set(assignedAMs(user.id).map((am) => am.id));
+  const rosterAMs = myAmIds ? ams.filter((am) => myAmIds.has(am.id)) : ams;
 
   // the deck honours whatever the dashboard is filtered to
   const reportParams = new URLSearchParams();
@@ -85,9 +95,14 @@ export default async function AnalysisPage({
   // every scheduled date across the roster, for the campaign timeline
   const now = Date.now();
   const timeline: TimelineEntry[] = [];
-  for (const am of ams) {
+  for (const am of rosterAMs) {
     const st = statuses.get(am.id)!;
-    const add = (lens: "Manager" | "Panel", value: string | null, withTime: boolean, submitted: boolean) => {
+    const add = (
+      lens: "Self" | "Manager" | "Panel",
+      value: string | null,
+      withTime: boolean,
+      submitted: boolean
+    ) => {
       if (!value) return;
       const when = new Date(`${value.slice(0, 10)}T23:59:59.999`).getTime();
       if (Number.isNaN(when)) return;
@@ -100,6 +115,7 @@ export default async function AnalysisPage({
         state: submitted ? "done" : when < now ? "overdue" : "pending",
       });
     };
+    add("Self", am.self_deadline, false, st.self.status === "submitted");
     add("Manager", am.manager_deadline, false, st.manager.status === "submitted");
     add("Panel", am.panel_datetime, true, st.expert.status === "submitted");
   }
@@ -206,15 +222,17 @@ export default async function AnalysisPage({
         <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
           <h2 className="card-title">Zone performance map</h2>
           <p className="card-sub">
-            Thermal view of weighted performance vs required levels across Schneider hubs:
-            blue is on target, red is a critical gap. Filter by capability, hover the hubs,
-            click a zone to focus.
+            Weighted performance vs required levels across Schneider hubs. The shading ranks
+            the zones against each other, blue for the strongest gap in view and red for the
+            weakest, because on an absolute scale four zone averages land on the same colour.
+            The gap figures on the hover card and the zone panel are absolute. Filter by
+            capability, hover the hubs, click a zone to focus.
           </p>
           <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} capFilter={selectedCapId} />
         </div>
       )}
 
-      <ScheduleTimeline entries={timeline} />
+      <ScheduleTimeline entries={timeline} canDrill={isAdmin} />
 
       {priorities.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: 22 }}>
@@ -240,8 +258,9 @@ export default async function AnalysisPage({
       <div className="card card-pad" style={{ marginBottom: 22 }}>
         <h2 className="card-title">Training-needs heat map · capability × zone</h2>
         <p className="card-sub">
-          Cell = average weighted score for the zone (gap to required level drives the colour).
-          Click a zone header for its detailed view.
+          Each cell is the weighted score for that zone, with the level required and the gap
+          beneath it. Every cluster carries its own average row. Click a zone header for its
+          detailed view.
         </p>
         <div className="hm-scroll">
           <table className="hm">
@@ -280,19 +299,31 @@ export default async function AnalysisPage({
       <div className="card card-pad">
         {/* the count is read from the roster, not hardcoded: "TOP 25" went stale the moment
             anyone was added or removed */}
-        <h2 className="card-title">Roster · {ams.length} Account Manager{ams.length === 1 ? "" : "s"}</h2>
+        <h2 className="card-title">
+          {isAdmin ? "Roster" : "People you assess"} · {rosterAMs.length} Account Manager
+          {rosterAMs.length === 1 ? "" : "s"}
+        </h2>
         <p className="card-sub">
           Where each assessment stands, per lens. A tick means submitted and locked; an amber
-          count is a draft in progress out of the 22 capabilities. The dates are the manager
-          deadline and the APEX Panel call, set per person on their individual page.
+          count is a draft in progress out of the 22 capabilities. The dates are the self,
+          manager and APEX Panel deadlines, set per person on their individual page.
+          {!isAdmin && " This list is limited to the people you have been assigned."}
         </p>
-        <div className="hm-scroll">
+        {rosterAMs.length === 0 && (
+          <div className="banner banner-info" style={{ marginBottom: 0 }}>
+            {isAdmin
+              ? "No Account Manager matches the current filters."
+              : "You have not been assigned anyone to assess under the current filters. Your administrator makes the assignments."}
+          </div>
+        )}
+        <div className="hm-scroll" hidden={rosterAMs.length === 0}>
           <table className="table">
             <thead>
               <tr>
                 <th>Account Manager</th>
                 <th>Zone</th>
                 <th>Track</th>
+                <th>Segment</th>
                 <th>Self</th>
                 <th>Manager</th>
                 <th>APEX Panel</th>
@@ -301,13 +332,26 @@ export default async function AnalysisPage({
               </tr>
             </thead>
             <tbody>
-              {ams.map((am) => {
+              {rosterAMs.map((am) => {
                 const st = statuses.get(am.id)!;
                 return (
                   <tr key={am.id} className="rowlink">
-                    <td style={{ fontWeight: 600 }}>{am.name}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {isAdmin ? (
+                        <Link className="row-name-link" href={`/analysis/am/${am.id}`}>{am.name}</Link>
+                      ) : (
+                        am.name
+                      )}
+                    </td>
                     <td><span className="badge badge-zone">{am.zone}</span></td>
                     <td><span className="badge badge-track">{am.track}</span></td>
+                    <td>
+                      {am.segment ? (
+                        <span className="badge badge-segment">{am.segment}</span>
+                      ) : (
+                        <span style={{ color: "var(--muted)" }}>n/a</span>
+                      )}
+                    </td>
                     {(["self", "manager", "expert"] as const).map((lens) => {
                       const s = st[lens];
                       return (
@@ -360,7 +404,7 @@ function ScheduleCell({
   am,
   status,
 }: {
-  am: { manager_deadline: string | null; panel_datetime: string | null };
+  am: { self_deadline: string | null; manager_deadline: string | null; panel_datetime: string | null };
   status: Record<"self" | "manager" | "expert", { status: string; rated: number }>;
 }) {
   const now = Date.now();
@@ -378,6 +422,7 @@ function ScheduleCell({
       state: submitted ? "done" : when < now ? "overdue" : "pending",
     });
   };
+  push("Self", am.self_deadline, false, status.self.status === "submitted");
   push("Manager", am.manager_deadline, false, status.manager.status === "submitted");
   push("Panel", am.panel_datetime, true, status.expert.status === "submitted");
   // what needs attention first: overdue, then what is coming up, then what is settled
@@ -420,10 +465,46 @@ function ClusterRows({
   cluster: { name: string; rows: { cap: { id: number; name: string }; cells: { avgScore: number | null; avgReq: number | null; gap: number | null; n: number }[] }[] };
   zoneCount: number;
 }) {
+  // The cluster's own average per zone, so a theme can be judged without adding up its
+  // capability rows by eye. Averaged over the capability cells that carry data.
+  const clusterCells = Array.from({ length: zoneCount }, (_, i) => {
+    const scores: number[] = [];
+    const reqs: number[] = [];
+    for (const row of cluster.rows) {
+      const cell = row.cells[i];
+      if (cell?.avgScore == null || cell.avgReq == null) continue;
+      scores.push(cell.avgScore);
+      reqs.push(cell.avgReq);
+    }
+    if (scores.length === 0) return { avgScore: null, avgReq: null, gap: null };
+    const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+    const avgScore = mean(scores);
+    const avgReq = mean(reqs);
+    return { avgScore, avgReq, gap: avgScore - avgReq };
+  });
+
   return (
     <>
       <tr className="cluster-row">
         <td colSpan={zoneCount + 1}>{cluster.name}</td>
+      </tr>
+      <tr className="cluster-avg-row">
+        <th className="hm-rowhead">Cluster average</th>
+        {clusterCells.map((cell, i) => (
+          <td key={i} className={`cell ${gapClass(cell.gap)}`} title="Weighted score for this cluster, against the level required">
+            {cell.avgScore == null ? (
+              "n/a"
+            ) : (
+              <>
+                {fmt(cell.avgScore, 2)}
+                <small>
+                  req {fmt(cell.avgReq)} · {cell.gap! > 0 ? "+" : ""}
+                  {fmt(cell.gap, 2)}
+                </small>
+              </>
+            )}
+          </td>
+        ))}
       </tr>
       {cluster.rows.map((row) => (
         <tr key={row.cap.id}>
@@ -432,8 +513,11 @@ function ClusterRows({
             <td key={i} className={`cell ${gapClass(cell.gap)}`} title={cell.n ? `${cell.n} AM(s) · required ~${fmt(cell.avgReq)}` : "No submitted panel data"}>
               {cell.avgScore == null ? "n/a" : (
                 <>
-                  {fmt(cell.avgScore)}
-                  <small>req {fmt(cell.avgReq)}</small>
+                  {fmt(cell.avgScore, 2)}
+                  <small>
+                    req {fmt(cell.avgReq)}
+                    {cell.gap != null && ` · ${cell.gap > 0 ? "+" : ""}${fmt(cell.gap, 2)}`}
+                  </small>
                 </>
               )}
             </td>

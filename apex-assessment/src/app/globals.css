@@ -849,6 +849,10 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .zmap-select option, .zmap-select optgroup { background: #0e1729; color: var(--ink); }
 
 .zmap-scale { display: flex; align-items: center; gap: 9px; font-size: 11.5px; color: var(--muted); font-weight: 650; }
+.zmap-scale-cap { color: var(--muted); font-weight: 600; }
+/* the ramp is relative, so both ends are labelled with the zone and gap they stand for */
+.zmap-scale-end { color: var(--ink-2); font-weight: 650; white-space: nowrap; }
+.zmap-scale-end strong { color: var(--ink); font-variant-numeric: tabular-nums; margin-left: 3px; }
 .zmap-scale-bar {
   width: 130px; height: 9px; border-radius: 99px;
   background: linear-gradient(90deg, #1e40af, #0ea5e9, #22c55e, #facc15, #fb923c, #ef4444);
@@ -1305,14 +1309,14 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .tl-axis, .tl-lane { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 14px; }
 .tl-axis { height: 34px; }
 .tl-axis-track { position: relative; height: 100%; }
-.tl-lane { margin-top: 16px; }
+.tl-lane { margin-top: 26px; }
 .tl-lane-label { font-size: 12.5px; font-weight: 650; color: var(--ink-2); line-height: 1.25; }
 .tl-lane-count {
   display: block; font-size: 10.5px; font-weight: 500; color: var(--muted);
   letter-spacing: 0.04em;
 }
 .tl-lane-track {
-  position: relative; height: 26px; border-radius: 99px;
+  position: relative; height: 30px; border-radius: 99px;
   background: rgba(255, 255, 255, 0.045);
 }
 .tl-lane-empty {
@@ -1330,6 +1334,28 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
   position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
   font-size: 10px; font-weight: 700; color: var(--se-green-bright); white-space: nowrap;
 }
+/* A deadline marker: a flag on the lane plus its date underneath. Plain dots read as
+   anonymous points; people asked what each one was, so each now says its own date. */
+.tl-mark {
+  position: absolute; top: 0; bottom: 0; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: default;
+}
+.tl-flag {
+  width: 3px; height: 15px; border-radius: 2px;
+  box-shadow: 0 0 0 3px rgba(13, 20, 36, 0.85);
+}
+.tl-mark-label {
+  position: absolute; top: 100%; margin-top: 3px; white-space: nowrap;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.01em;
+}
+.tl-mark.tl-overdue .tl-flag { background: var(--red); }
+.tl-mark.tl-overdue .tl-mark-label { color: var(--red); }
+.tl-mark.tl-pending .tl-flag { background: var(--se-green-bright); }
+.tl-mark.tl-pending .tl-mark-label { color: var(--se-green-bright); }
+.tl-mark.tl-done .tl-flag { background: #56637d; }
+.tl-mark.tl-done .tl-mark-label { color: var(--muted); }
+
 .tl-dot {
   position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%;
   transform: translate(-50%, -50%); cursor: default;
@@ -1382,3 +1408,31 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .basis-option.active { border-color: var(--se-green); background: rgba(61, 205, 88, 0.07); }
 .basis-option small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .rubric-level { width: 84px; padding: 6px 8px; }
+
+/* employee name as a link through to their individual analysis */
+.row-name-link { color: var(--ink); border-bottom: 1px solid transparent; transition: color 0.18s var(--ease-out), border-color 0.18s var(--ease-out); }
+.row-name-link:hover { color: var(--se-green-bright); border-bottom-color: currentColor; }
+
+/* "there is more to the right" affordance on wide tables */
+.scroll-hint {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--muted); margin-bottom: 8px;
+}
+.scroll-hint-ico {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06); font-size: 12px; color: var(--ink-2);
+}
+/* a soft fade on the right edge, so the cut-off is visibly a cut-off and not the end */
+.scroll-fade { position: relative; }
+.scroll-fade::after {
+  content: ""; position: absolute; top: 0; bottom: 10px; right: 0; width: 46px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(13, 20, 36, 0), rgba(13, 20, 36, 0.92));
+}
+
+/* cluster average row inside the training-needs heat map */
+.cluster-avg-row .hm-rowhead {
+  font-size: 11.5px; font-weight: 750; color: var(--ink-2);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.cluster-avg-row td.cell { font-weight: 800; }

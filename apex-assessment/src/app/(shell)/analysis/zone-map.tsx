@@ -40,8 +40,29 @@ const ZONES: MapZone[] = ["MEA", "SAM", "India", "Pacific"];
 
 const fmt = (n: number | null, d = 2) => (n == null ? "n/a" : n.toFixed(d));
 
-/** gap → severity 0 (comfortably above target) … 1 (critical deficit) */
-const severity = (gap: number) => Math.min(1, Math.max(0, (0.5 - gap) / 2));
+/**
+ * Narrowest window the zone shading is allowed to stretch over.
+ *
+ * A zone average is 22 capabilities across six or seven people, and that much
+ * averaging pulls every zone towards the middle: the four zone gaps land inside a
+ * quarter of a level, which is a sliver of the absolute at-target to critical
+ * range. Painted on that absolute ramp all four zones come out the same green,
+ * so the map cannot do the one job it exists for. The fill therefore stretches
+ * the OBSERVED spread across the whole palette instead: strongest zone in view at
+ * the cool end, weakest at the warm end.
+ *
+ * This floor is what keeps that honest. When the zones really are level the
+ * spread is not blown up into a ranking that is not there: they all settle mid
+ * palette. Below a tenth of a level the difference between two zones is noise,
+ * so the floor sits just above that: a spread of 0.11 still takes three quarters
+ * of the palette and separates cleanly, while a spread of 0.02 takes a tenth of
+ * it and correctly comes out looking level.
+ *
+ * Absolute standing is never lost either, because every tooltip and the zone
+ * panel still print the gap and colour it on the fixed bands below, and the
+ * legend names the two numbers the ramp runs between.
+ */
+const MIN_SPAN = 0.15;
 
 function chipClass(gap: number | null): string {
   if (gap == null) return "zm-na";
@@ -78,6 +99,12 @@ const LUT: [number, number, number][] = Array.from({ length: 256 }, (_, i) => {
     Math.round(a[3] + (b[3] - a[3]) * f),
   ];
 });
+
+/** palette lookup, 0 = strongest end … 1 = weakest end */
+const rampRgb = (t: number): [number, number, number] => LUT[Math.round(Math.min(1, Math.max(0, t)) * 255)];
+/** readable text colour on a palette swatch (yellow and green need dark ink) */
+const inkOn = ([r, g, b]: [number, number, number]) =>
+  0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#10231a" : "#ffffff";
 
 type View = { k: number; x: number; y: number };
 const clampView = (v: View): View => {
@@ -179,6 +206,24 @@ export default function ZoneMap({
     return out;
   }, [ams, caps, amStat, filterCap]);
 
+  /**
+   * The shading window, recomputed for whatever is on screen. Selecting a single
+   * capability in Filters usually widens the real spread, and then the ramp uses
+   * it as is; on the all-capabilities view the spread is tiny and MIN_SPAN takes
+   * over. Either way the strongest zone in view sits at the cool end.
+   */
+  const ramp = useMemo(() => {
+    const scored = ZONES.map((z) => ({ zone: z, gap: zoneStats.get(z)?.gap ?? null })).filter(
+      (e): e is { zone: MapZone; gap: number } => e.gap != null
+    );
+    if (scored.length === 0) return null;
+    const best = scored.reduce((a, b) => (b.gap > a.gap ? b : a));
+    const worst = scored.reduce((a, b) => (b.gap < a.gap ? b : a));
+    const span = Math.max(best.gap - worst.gap, MIN_SPAN);
+    const hi = (best.gap + worst.gap) / 2 + span / 2; // gap value pinned to the cool end
+    return { best, worst, t: (gap: number) => (hi - gap) / span };
+  }, [zoneStats]);
+
   /** AMs distributed over their zone's hubs, round-robin by code */
   const hubAMs = useMemo(() => {
     const map = new Map<Hub, MapAM[]>();
@@ -208,6 +253,7 @@ export default function ZoneMap({
   // The data is per-zone, so each zone is painted as ONE flat colour from its
   // average gap vs required. No gradients or noise inside a region: shading
   // differences within a zone would imply per-country data that does not exist.
+  // The colour comes off the relative ramp above, so the four zones separate.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -222,11 +268,11 @@ export default function ZoneMap({
       const gap = zoneStats.get(zone)?.gap ?? null;
       const path = new Path2D();
       for (const c of countriesByZone.groups.get(zone) ?? []) path.addPath(new Path2D(c.d));
-      if (gap == null) {
+      if (gap == null || !ramp) {
         // no submitted data for this view — a clear neutral fill, never a black hole
         ctx.fillStyle = "rgba(100, 116, 139, 0.42)";
       } else {
-        const [r, g, b] = LUT[Math.round(severity(gap) * 255)];
+        const [r, g, b] = rampRgb(ramp.t(gap));
         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.92)`;
       }
       ctx.fill(path);
@@ -236,7 +282,7 @@ export default function ZoneMap({
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       canvas.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 500, easing: "ease-out" });
     }
-  }, [zoneStats, countriesByZone]);
+  }, [zoneStats, countriesByZone, ramp]);
 
   // ---- camera ----
   const toSvg = (clientX: number, clientY: number): [number, number] => {
@@ -351,11 +397,28 @@ export default function ZoneMap({
         ) : (
           <span className="zmap-active-cap muted">All capabilities</span>
         )}
-        <div className="zmap-scale">
-          <span>On target</span>
-          <span className="zmap-scale-bar" />
-          <span>Critical gap</span>
-        </div>
+        {/* The ramp is relative, so it has to say what it is relative TO. Without the
+            two end labels a red Pacific reads as "critical" when it only means
+            "lowest of the four". */}
+        {ramp ? (
+          <div
+            className="zmap-scale"
+            title="Zones are shaded against each other, strongest to weakest gap vs required. The figures on tooltips and the zone panel are the absolute gaps."
+          >
+            <span className="zmap-scale-cap">Zones compared</span>
+            <span className="zmap-scale-end">
+              {ramp.best.zone} <strong>{ramp.best.gap > 0 ? "+" : ""}{fmt(ramp.best.gap)}</strong>
+            </span>
+            <span className="zmap-scale-bar" />
+            <span className="zmap-scale-end">
+              {ramp.worst.zone} <strong>{ramp.worst.gap > 0 ? "+" : ""}{fmt(ramp.worst.gap)}</strong>
+            </span>
+          </div>
+        ) : (
+          <div className="zmap-scale">
+            <span className="zmap-scale-cap">No panel scores submitted yet</span>
+          </div>
+        )}
       </div>
 
       <div className="zmap-wrap">
@@ -425,18 +488,27 @@ export default function ZoneMap({
           const x = (view.k * lx + view.x) / W;
           const y = (view.k * ly + view.y) / H;
           if (x < 0.02 || x > 0.98 || y < 0.03 || y > 0.97) return null;
+          // the pill sits on top of its own region, so it carries the same relative
+          // colour: on the absolute bands all four came out the same yellow
+          const gap = stat?.gap ?? null;
+          const rgb = gap != null && ramp ? rampRgb(ramp.t(gap)) : null;
           return (
             <button
               key={zone}
               type="button"
-              className={`zmap-label ${chipClass(stat?.gap ?? null)}${anim ? " anim" : ""}${
+              className={`zmap-label ${chipClass(gap)}${anim ? " anim" : ""}${
                 selected != null && selected !== zone ? " dim" : ""
               }`}
               style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
               onClick={() => zoneClick(zone)}
             >
               {zone}
-              <span className="zmap-label-val">{fmt(stat?.avgScore ?? null)}</span>
+              <span
+                className="zmap-label-val"
+                style={rgb ? { background: `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`, color: inkOn(rgb) } : undefined}
+              >
+                {fmt(stat?.avgScore ?? null)}
+              </span>
             </button>
           );
         })}

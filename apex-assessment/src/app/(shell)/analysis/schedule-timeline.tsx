@@ -22,7 +22,7 @@ import { formatScheduleDate } from "@/lib/queries";
 export type TimelineEntry = {
   amId: number;
   amName: string;
-  lens: "Manager" | "Panel";
+  lens: "Self" | "Manager" | "Panel";
   value: string;
   withTime: boolean;
   state: "done" | "overdue" | "pending";
@@ -30,20 +30,54 @@ export type TimelineEntry = {
 
 const DAY = 86_400_000;
 
-/** One lane per scheduled assessment. Self is absent by design: it has no date. */
+/** "14 Aug" — short enough to sit under a marker without colliding with its neighbours. */
+function shortDate(at: number): string {
+  return new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/** One lane per assessment, in the order the campaign runs them. */
 const LANES = [
+  { key: "Self" as const, label: "Self-assessment deadline" },
   { key: "Manager" as const, label: "Manager deadline" },
   { key: "Panel" as const, label: "APEX Panel call" },
 ];
 
-export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[] }) {
+/**
+ * `canDrill` is the caller's role, not a style flag. Only a superadmin can open an
+ * individual page, so for everyone else each entry renders as plain text: a link
+ * that bounces the reader back to /rate is worse than no link.
+ */
+export default function ScheduleTimeline({
+  entries,
+  canDrill = true,
+}: {
+  entries: TimelineEntry[];
+  canDrill?: boolean;
+}) {
+  const Item = ({ e, badge }: { e: TimelineEntry; badge: string }) => {
+    const body = (
+      <>
+        <span className={`badge ${badge}`}>{e.lens}</span>
+        {e.amName} · {formatScheduleDate(e.value, e.withTime)}
+      </>
+    );
+    return canDrill ? (
+      <Link className="tl-item" href={`/analysis/am/${e.amId}`}>
+        {body}
+      </Link>
+    ) : (
+      <span className="tl-item">{body}</span>
+    );
+  };
+
   if (entries.length === 0) {
     return (
       <div className="card card-pad" style={{ marginBottom: 22 }}>
         <h2 className="card-title">Assessment timeline</h2>
         <p className="card-sub" style={{ marginBottom: 0 }}>
-          No assessment dates set yet. Open an Account Manager and use the Assessment schedule
-          panel to set their manager deadline and APEX Panel call.
+          {canDrill
+            ? "No assessment dates set yet. Open an Account Manager and use the Assessment schedule panel to set their self, manager and APEX Panel dates."
+            : "No assessment dates have been set for the people you assess yet. Your administrator sets them."}
         </p>
       </div>
     );
@@ -110,10 +144,9 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
     <div className="card card-pad" style={{ marginBottom: 22 }}>
       <h2 className="card-title">Assessment timeline</h2>
       <p className="card-sub">
-        One lane per assessment. Each dot is a scheduled <strong>date</strong>, and the number on
-        it is how many Account Managers share that day. Red has passed with the assessment still
-        open, green is still ahead, grey is already submitted. Self-assessments have no lane
-        because they carry no scheduled date.
+        One lane per assessment. Each marker is a scheduled <strong>deadline</strong>, labelled
+        with its date; the number in brackets is how many Account Managers share that day.
+        Red has passed with the assessment still open, green is still ahead, grey is done.
       </p>
 
       <div className="tl">
@@ -148,13 +181,17 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
                 {laneMarkers.map((m) => (
                   <div
                     key={m.key}
-                    className={`tl-dot tl-${m.state}`}
+                    className={`tl-mark tl-${m.state}`}
                     style={{ left: `${pct(m.at)}%` }}
                     title={m.list
                       .map((e) => `${e.amName} · ${formatScheduleDate(e.value, e.withTime)}`)
                       .join("\n")}
                   >
-                    {m.list.length > 1 && <span className="tl-count">{m.list.length}</span>}
+                    <span className="tl-flag" />
+                    <span className="tl-mark-label">
+                      {shortDate(m.at)}
+                      {m.list.length > 1 ? ` (${m.list.length})` : ""}
+                    </span>
                   </div>
                 ))}
                 {laneMarkers.length === 0 && <span className="tl-lane-empty">nothing scheduled</span>}
@@ -171,10 +208,7 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
               {overdue.length} overdue
             </span>
             {overdue.slice(0, 3).map((e) => (
-              <Link key={`${e.amId}-${e.lens}`} className="tl-item" href={`/analysis/am/${e.amId}`}>
-                <span className="badge badge-red">{e.lens}</span>
-                {e.amName} · {formatScheduleDate(e.value, e.withTime)}
-              </Link>
+              <Item key={`${e.amId}-${e.lens}`} e={e} badge="badge-red" />
             ))}
             {overdue.length > 3 && <span className="tl-more">+{overdue.length - 3} more</span>}
           </div>
@@ -183,10 +217,7 @@ export default function ScheduleTimeline({ entries }: { entries: TimelineEntry[]
           <div className="tl-next-group">
             <span className="tl-next-head">Next up</span>
             {upcoming.map((e) => (
-              <Link key={`${e.amId}-${e.lens}`} className="tl-item" href={`/analysis/am/${e.amId}`}>
-                <span className="badge badge-sched">{e.lens}</span>
-                {e.amName} · {formatScheduleDate(e.value, e.withTime)}
-              </Link>
+              <Item key={`${e.amId}-${e.lens}`} e={e} badge="badge-sched" />
             ))}
           </div>
         )}

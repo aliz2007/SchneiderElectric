@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-07-31.
+Last updated: 2026-08-03.
 
 ---
 
@@ -20,6 +20,29 @@ Last updated: 2026-07-31.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
+- Most recent additions (2026-08-03, second batch): the eight points from
+  `docs/source-materials/APEX_App_Feedbacks_2026-08-03.md` (Colline & Vladimir, 3 Aug).
+  1. **Self-assessment deadline** — `self_deadline` joins the manager deadline and the panel
+     call as a third per-AM date, set in the same editor, locking the self lens the same way
+     (§ Assessment scheduling).
+  2. **Timeline markers** — the campaign timeline draws one LANE PER LENS with labelled
+     flags carrying the date and, when several people share a day, the count. It used to be
+     a flat row of dots that read as "one dot per lens".
+  3. **Cluster average / weighted score / gap** on the training needs heat map and the zone
+     benchmark. Every cluster gets its own average row; the zone benchmark also opens with a
+     `Weighted score · gap` row per Account Manager, and every cell carries `req X · ±gap`.
+  4. **Access scope verified and fixed** — see § Access scope below.
+  5. **Segment column** on the roster.
+  6. **Horizontal scroll indicator** on Individual Results.
+  7. **Employee names link** to their Individual Analysis, on Individual Results and the
+     roster (superadmins only: an assessor has no individual page to open).
+  8. **Zone map colours** — the shading is now RELATIVE to the zones in view. Zone averages
+     roll up 22 capabilities over six or seven people, which lands all four inside a fraction
+     of a level; on the old absolute on-target-to-critical ramp they came out the same green
+     and the map compared nothing. `MIN_SPAN` (0.15, `zone-map.tsx`) stops a dead-level
+     quarter being stretched into a ranking that is not there, the toolbar legend names the
+     two zones and gaps the ramp runs between, and every gap figure on the hover card and the
+     zone panel stays absolute.
 - Most recent additions (2026-08-03): **population-level PDF reports**, built from the
   client's "APEX Dashboard Proposal" document. Two new downloads, both superadmin-only and
   both honouring the filters on the page they are launched from:
@@ -99,6 +122,8 @@ and training plans, and consolidate results per individual and per geographic zo
 ### Source materials (archived in this repo)
 
 - `docs/source-materials/Brief-projet-Assessment.pdf` — 2-page project brief (French).
+- `docs/source-materials/APEX_App_Feedbacks_2026-08-03.md` — the client's 3 Aug review
+  notes, transcribed from a .docx supplied in chat. Every point is implemented; see §1.
 - `docs/source-materials/APEX_AM_Assesment140726-TEMPLATE-INSTRUCTIONS-ORDRE.xlsx` — the
   original Excel workbook (template version, ratings empty). Its "Capability Guide" tab
   holds the rubric; its "Consolidation" tab holds the roster; there is also a "Cover" tab.
@@ -251,9 +276,12 @@ rubric, so only the questions were added.
 
 ### Assessment scheduling & windows
 
-Two per-AM dates, set by superadmins from the **individual page** ("📅 Assessment schedule"
+Three per-AM dates, set by superadmins from the **individual page** ("📅 Assessment schedule"
 toggle opening native date / datetime pickers — `schedule-editor.tsx` + `saveSchedule`):
 
+- `self_deadline` (date): the assessed person can self-assess up to and including that day;
+  after it, their own assessment locks. Added 2026-08-03 at the client's request, so the
+  campaign has a deadline on all three lenses rather than only the two downstream ones.
 - `manager_deadline` (date): the manager can assess up to and including that day; after it,
   their assessment locks.
 - `panel_datetime` (date + time): when the assessed person and the APEX Panel hold the
@@ -266,6 +294,40 @@ server action (`guard()`), not just the UI — the wizard renders read-only with
 when closed, and shows a 📅 info banner (deadline / call date) while the window is open.
 Clearing a date in the editor removes its limit.
 
+### Access scope (what a Manager or Panel member can reach)
+
+Audited on 2026-08-03 against the client's request to "verify that Managers and Panel Members
+only have access to their assigned scope", by signing in as each lens and requesting every
+route. Findings and the fix, so nobody has to redo the sweep:
+
+Already correct, left alone:
+
+- Every superadmin surface redirects an assessor to `/rate`: `/analysis/individuals`,
+  `/analysis/am/[id]`, `/analysis/zone/[zone]`, `/analysis/zone/[zone]/pdf`,
+  `/analysis/report/pdf`, `/analysis/population/pdf`, `/admin/users`. The guard is
+  `requireSuperadmin()` called at the top of each page and route, never a layout, so it holds
+  for direct requests too.
+- `/rate/[amId]` opens only for an AM the user is assigned (`isAssigned`), and every rate
+  server action re-checks it.
+- `/analysis/am/[id]/pdf` returns 403 to a Manager or Panel member for EVERY AM, including
+  the ones they assess. Only a self-assessor gets 200, only for their own AM, only once all
+  three lenses have submitted.
+- The thermal map payload (raw per-AM panel scores) is built only for superadmins, so an
+  assessor's browser never receives it.
+- The chatbot snapshot is separately scoped (`scopedSnapshot` in `chat-data.ts`): the
+  assessor's own ratings and notes, no required levels, no other lens, no other person.
+
+Broken, and fixed in this batch: the shared `/analysis` dashboard is open to every signed-in
+user, which is correct for its AGGREGATES (KPIs, zone heat map, training priorities: they roll
+25 people together and name nobody), but the **roster** and the **campaign timeline** are
+per-person — one row each with names, submission state and deadlines — and were showing all
+25 to anyone signed in. Both are now cut to the viewer's assignments (`rosterAMs` in
+`analysis/page.tsx`), the roster card is retitled "People you assess", and timeline entries
+render as plain text for assessors instead of links to a page that would bounce them.
+
+The e2e suite locks all of this down in section 7 (roster scoping, timeline scoping, no
+timeline links, no map, four redirect checks, five PDF download checks).
+
 ### Hard product rules (enforced server-side — keep them)
 
 0. The score of record is the WEIGHTED score (Self 20% / APEX Panel 35% / Manager 45%), kept
@@ -273,10 +335,12 @@ Clearing a date in the editor removes its limit.
    situations (§2b).
 1. Evaluators must NEVER see other evaluators' scores (blind assessment).
 2. Required levels are HIDDEN during rating to avoid anchoring bias; shown only in analysis.
-3. Individual results and analysis are superadmin-only. The shared dashboard (zone-level,
-   no individuals) is visible to any signed-in user. EXCEPTION: the **My Feedback** tab lets
-   an assessed self-assessor see their OWN consolidated report, but only after all three
-   lenses have submitted (nothing about anyone else is exposed).
+3. Individual results and analysis are superadmin-only. The shared dashboard is visible to
+   any signed-in user, but only its AGGREGATES: anything that names people (the roster, the
+   campaign timeline) is cut to the viewer's own assignments, and the map's per-AM payload is
+   never sent to an assessor. EXCEPTION: the **My Feedback** tab lets an assessed
+   self-assessor see their OWN consolidated report, but only after all three lenses have
+   submitted (nothing about anyone else is exposed). Full audit in § Access scope.
 4. The app is the system of record. Rubric + roster were seeded once from the Excel; all
    ratings are created in the app. The Excel is retired.
 5. Every theme must be justified before an assessment can be submitted: every lens writes one
@@ -573,7 +637,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 86/86 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 102/102 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -593,8 +657,25 @@ Three checks exist because a specific bug got shipped once, so do not delete the
   of covered capabilities, the highlight on the current one, and the fact that the placeholder
   does NOT repeat the lead's wording (the client rejected an earlier version for saying the
   same thing twice).
-- **zone benchmark number formatting** — every cell must be `n/a` or a level with at most two
-  decimals, which catches raw floats leaking into the UI (see §2b). Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
+- **zone benchmark number formatting** — no cell may contain a number with three or more
+  decimals, which catches raw floats leaking into the UI (see §2b). Asserted on the digits
+  rather than on a whole-cell shape on purpose: an earlier version matched the cell's entire
+  text, so adding a row to the table silently disabled the guard.
+
+Two more that exist because the assertion, not the feature, was once wrong:
+
+- **assessor scope** (section 7) — roster and timeline cut to the viewer's assignments, no
+  timeline links, no map, four redirect checks and five PDF checks. The timeline half asserts
+  on the ENTRIES and their names, not on a marker count: with no dates set the timeline
+  renders its empty state and a count-based check passes without testing anything. The setup
+  therefore schedules two people and fills all three date fields **by name**
+  (`input[name="selfDeadline"]` etc.), because filling `input[type=date]` positionally
+  started hitting the self deadline the moment it was added as the first field.
+- **zone map colours** — the four zone chips must be four DIFFERENT colours and the legend
+  must name both ends of the ramp. This is the whole point of the relative shading; an
+  absolute ramp passes every other check while painting the map one flat green.
+
+Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
 narrative, the chatbot returns its fixed "turned off" reply, no external call). The e2e header
 comments explain the `CHROMIUM` / `BASE` env vars.
 

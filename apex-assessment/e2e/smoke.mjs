@@ -58,6 +58,12 @@ try {
   const goodCells = await page.locator(".cell.hm-good").count();
   const anyCells = await page.locator("td.cell").count();
   anyCells > 80 && goodCells > 0 ? ok(`heat map renders (${anyCells} cells)`) : fail("heat map cells", `${anyCells}`);
+  // client feedback: the training needs heat map needs a cluster average per theme,
+  // one per cluster, so a zone's standing on a theme reads off a single row
+  const hmAvgRows = await page.locator("table.hm tr.cluster-avg-row").count();
+  hmAvgRows === 6
+    ? ok("training needs heat map carries a cluster average row per theme")
+    : fail("heat map cluster averages", `${hmAvgRows} average rows, expected 6`);
   const completion = await page.locator(".kpi-value").first().textContent();
   completion?.trim() === "100%" ? ok("completion KPI = 100% after demo load") : fail("completion KPI", completion ?? "");
   // the maturity KPI has to carry its benchmark, or the number means nothing
@@ -78,14 +84,23 @@ try {
   // which reads as the 26th of August on a scheduling view.
   // Give the timeline something to draw first: with no dates set it renders its empty
   // state and the assertions below would pass without testing anything.
+  // Two people get dates, not one: the assessor scope check further down needs a
+  // timeline that still has entries after it is cut to one person, or it passes on
+  // an empty timeline without testing anything.
   {
-    const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    await page.goto(`${BASE}/analysis/am/1`);
-    await page.locator('button:has-text("Assessment schedule")').click();
-    await page.waitForSelector('input[type="date"]');
-    await page.fill('input[type="date"]', soon);
-    await page.locator('button:has-text("Save schedule")').click();
-    await page.waitForTimeout(1200);
+    // all three lenses get a date, targeted by field name: the editor leads with the
+    // self deadline now, so filling `input[type=date]` positionally set the wrong one
+    for (const [amId, days] of [[1, 30], [2, 45]]) {
+      const day = (d) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+      await page.goto(`${BASE}/analysis/am/${amId}`);
+      await page.locator('button:has-text("Assessment schedule")').click();
+      await page.waitForSelector('input[name="selfDeadline"]');
+      await page.fill('input[name="selfDeadline"]', day(days));
+      await page.fill('input[name="managerDeadline"]', day(days + 10));
+      await page.fill('input[name="panelDatetime"]', `${day(days + 20)}T14:00`);
+      await page.locator('button:has-text("Save schedule")').click();
+      await page.waitForTimeout(1200);
+    }
     await page.goto(`${BASE}/analysis`);
     await page.waitForSelector(".tl-lane-track");
   }
@@ -105,6 +120,26 @@ try {
   /Roster · \d+ Account Manager/.test(rosterTitle ?? "")
     ? ok(`roster title counts the roster ("${rosterTitle?.trim()}")`)
     : fail("roster title", rosterTitle ?? "(none)");
+
+  // ---- 3b. zone map: the four zones must not all come out the same colour ----
+  // Zone averages sit inside a fraction of a level, so on an absolute on-target to
+  // critical ramp all four rendered identical green and the map compared nothing.
+  // The shading is relative to the zones in view, which is what these check.
+  {
+    await page.waitForSelector(".zmap-label-val");
+    const swatches = await page.locator(".zmap-label-val").evaluateAll((els) =>
+      els.map((e) => getComputedStyle(e).backgroundColor)
+    );
+    const distinct = new Set(swatches);
+    swatches.length >= 3 && distinct.size === swatches.length
+      ? ok(`zone map gives each zone its own colour (${distinct.size} of ${swatches.length} distinct)`)
+      : fail("zone map colours", `${distinct.size} distinct colours for ${swatches.length} zones`);
+    // a relative ramp is only honest if it says what it is relative to
+    const legend = (await page.locator(".zmap-scale").innerText()).replace(/\s+/g, " ").trim();
+    /Zones compared .+ [+-]?\d\.\d\d .+ [+-]?\d\.\d\d/.test(legend)
+      ? ok(`zone map legend names both ends (${legend})`)
+      : fail("zone map legend", legend || "(empty)");
+  }
   await page.screenshot({ path: `${SHOTS}/2-dashboard.png`, fullPage: false });
 
   // ---- 3c. Individual Results: account column + sortable headings ----
@@ -286,21 +321,29 @@ try {
     disp.includes("MEA") ? ok("zone PDF is named after its zone") : fail("zone PDF filename", disp);
   }
   // The weighted score is a float, so every cell MUST be formatted. Interpolating it raw
-  // once printed "L2.3000000000000003" across the whole benchmark.
-  // cells read "<score>req <level>" once the required level is stacked underneath
+  // once printed "L2.3000000000000003" across the whole benchmark. Asserted on the digits
+  // rather than on a whole-cell shape, so adding a row to the table cannot silently
+  // disable the guard: three or more decimals anywhere is an unformatted float.
   const zoneCells = await page.locator("table.hm td.cell").allTextContents();
-  const rawFloats = zoneCells.filter(
-    (t) => !/^(n\/a|\d+(\.\d{1,2})?(req \d+(\.\d)?)?)$/.test(t.trim())
-  );
+  const rawFloats = zoneCells.filter((t) => /\d\.\d{3,}/.test(t));
   zoneCells.length > 0 && rawFloats.length === 0
     ? ok(`zone benchmark scores are all formatted (${zoneCells.length} cells)`)
     : fail("zone score formatting", rawFloats.slice(0, 3).join(" | ") || "no cells");
   // every scored cell must carry its benchmark, otherwise a number cannot be read as good or bad
-  const withReq = zoneCells.filter((t) => t.includes("req ")).length;
+  const withReq = zoneCells.filter((t) => /req/.test(t)).length;
   const scored = zoneCells.filter((t) => t.trim() !== "n/a").length;
   scored > 0 && withReq === scored
     ? ok(`every scored zone cell shows its required level (${scored})`)
     : fail("zone benchmark req", `${withReq}/${scored} carry a required level`);
+  // client feedback: a theme has to be readable without adding up its capability rows,
+  // and each AM needs their overall weighted score and gap at the top of their column
+  const zoneAvgRows = await page.locator("table.hm tr.cluster-avg-row").count();
+  zoneAvgRows === 7
+    ? ok("zone benchmark carries an average row per cluster plus the overall score")
+    : fail("zone benchmark cluster averages", `${zoneAvgRows} average rows, expected 7`);
+  (await page.locator("table.hm th", { hasText: "Weighted score · gap" }).count()) === 1
+    ? ok("zone benchmark leads with each AM's weighted score and gap")
+    : fail("zone overall row", "not found");
   // sorting by AM name must be offered, not just by code
   (await page.locator('.zone-sort option[value="name"]').count()) === 1
     ? ok("zone benchmark can sort by AM name")
@@ -337,14 +380,54 @@ try {
   await page.waitForSelector(".kpi-value");
   ok("assessor can view the shared dashboard");
 
-  await page.goto(`${BASE}/analysis/individuals`);
-  await page.waitForURL("**/rate");
-  ok("assessor blocked from individual results (redirected)");
+  // The dashboard is shared because its aggregates name nobody. The roster and the
+  // campaign timeline DO name people, one row per person with their submission state
+  // and deadlines, so they are cut to this assessor's assignments (currently AM02
+  // only). Without this the shared page hands a manager the status of all 25.
+  const rosterNames = await page.locator("table.table tbody tr td:first-child").allInnerTexts();
+  rosterNames.length === 1
+    ? ok("dashboard roster scoped to the assessor's own assignments")
+    : fail("roster scoping", `${rosterNames.length} rows visible to an assessor`);
+  (await page.locator(".card-title", { hasText: "People you assess" }).count()) === 1
+    ? ok("roster card retitled for assessors")
+    : fail("roster title", "no 'People you assess' heading");
+  // the timeline is cut the same way: two people carry dates, this assessor must see
+  // only their own. Asserting on the entries, not just the marker count, so an empty
+  // timeline cannot pass this by accident.
+  const tlItems = await page.locator(".tl-item").allInnerTexts();
+  const mine = rosterNames[0]?.trim() ?? " ";
+  tlItems.length > 0 && tlItems.every((t) => t.includes(mine))
+    ? ok(`campaign timeline scoped to the assessor's own people (${tlItems.length} entries)`)
+    : fail("timeline scoping", tlItems.join(" | ") || "no entries to check");
+  // an assessor has no individual page to open, so the timeline must not link to one
+  const tlLinks = await page.locator("a.tl-item").count();
+  tlLinks === 0
+    ? ok("timeline entries are not links for assessors")
+    : fail("timeline links", `${tlLinks} links shown to an assessor`);
+  // the thermal map ships raw per-AM panel scores to the browser: admin only
+  (await page.locator(".map-card").count()) === 0
+    ? ok("zone map withheld from assessors")
+    : fail("map scoping", "map card rendered for an assessor");
+
+  // every superadmin surface bounces an assessor back to their own work
+  for (const [label, path] of [
+    ["individual results", "/analysis/individuals"],
+    ["an individual analysis", "/analysis/am/1"],
+    ["a zone benchmark", "/analysis/zone/MEA"],
+    ["user administration", "/admin/users"],
+  ]) {
+    await page.goto(`${BASE}${path}`);
+    await page.waitForURL("**/rate**");
+    ok(`assessor blocked from ${label} (redirected)`);
+  }
 
   // the population reports name every AM with their manager and panel scores
   for (const [label, path] of [
     ["capability dashboard", "/analysis/report/pdf"],
     ["population overview", "/analysis/population/pdf"],
+    ["zone", "/analysis/zone/MEA/pdf"],
+    ["assigned individual", "/analysis/am/2/pdf"],
+    ["unassigned individual", "/analysis/am/1/pdf"],
   ]) {
     const r = await page.context().request.get(`${BASE}${path}`);
     const body = await r.body();

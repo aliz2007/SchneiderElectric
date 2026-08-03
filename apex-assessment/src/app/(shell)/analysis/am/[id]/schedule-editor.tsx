@@ -11,17 +11,19 @@ import { saveSchedule } from "./actions";
  */
 export default function ScheduleEditor({
   amId,
+  selfDeadline,
   managerDeadline,
   panelDatetime,
 }: {
   amId: number;
+  selfDeadline: string | null;
   managerDeadline: string | null;
   panelDatetime: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [saving, startSaving] = useTransition();
   const [savedTick, setSavedTick] = useState(false);
-  const hasAny = !!(managerDeadline || panelDatetime);
+  const hasAny = !!(selfDeadline || managerDeadline || panelDatetime);
 
   return (
     <div className="sched">
@@ -32,7 +34,11 @@ export default function ScheduleEditor({
         aria-expanded={open}
       >
         <span className="filter-toggle-ico">📅</span> Assessment schedule
-        {hasAny && <span className="filter-badge">{(managerDeadline ? 1 : 0) + (panelDatetime ? 1 : 0)}</span>}
+        {hasAny && (
+          <span className="filter-badge">
+            {(selfDeadline ? 1 : 0) + (managerDeadline ? 1 : 0) + (panelDatetime ? 1 : 0)}
+          </span>
+        )}
         <span className="filter-caret">{open ? "▲" : "▼"}</span>
       </button>
 
@@ -48,6 +54,11 @@ export default function ScheduleEditor({
             }
           >
             <input type="hidden" name="amId" value={amId} />
+            <div className="filter-group">
+              <span className="filter-label">Self-assessment deadline</span>
+              <input className="input" type="date" name="selfDeadline" defaultValue={selfDeadline ?? ""} />
+              <span className="sched-hint">The assessed person can self-assess up to and including this date.</span>
+            </div>
             <div className="filter-group">
               <span className="filter-label">Manager assessment deadline</span>
               <input className="input" type="date" name="managerDeadline" defaultValue={managerDeadline ?? ""} />

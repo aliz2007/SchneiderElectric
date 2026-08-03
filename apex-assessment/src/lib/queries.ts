@@ -12,6 +12,7 @@ export type AM = {
   account_type: string | null; // Schneider account tier, the proposal's "Account Type"
   perf_ytd: number | null; // year-to-date performance vs target, see PERF_YTD_LABEL
   profile_complete: number; // 0 = created for a person who still needs to fill in their details
+  self_deadline: string | null; // YYYY-MM-DD — the assessed person can no longer self-assess past this date
   manager_deadline: string | null; // YYYY-MM-DD — manager can no longer assess past this date
   panel_datetime: string | null; // YYYY-MM-DDTHH:MM — scheduled call; panel can no longer assess past that day
 };
@@ -76,11 +77,13 @@ export function setAccountDetails(
 /** Superadmin: set (or clear) an AM's assessment schedule. */
 export function setAssessmentSchedule(
   amId: number,
-  s: { managerDeadline: string | null; panelDatetime: string | null }
+  s: { selfDeadline: string | null; managerDeadline: string | null; panelDatetime: string | null }
 ) {
   getDb()
-    .prepare("UPDATE account_managers SET manager_deadline = ?, panel_datetime = ? WHERE id = ?")
-    .run(s.managerDeadline, s.panelDatetime, amId);
+    .prepare(
+      "UPDATE account_managers SET self_deadline = ?, manager_deadline = ?, panel_datetime = ? WHERE id = ?"
+    )
+    .run(s.selfDeadline, s.managerDeadline, s.panelDatetime, amId);
 }
 
 /** Human-readable date ("12 Aug 2026") / datetime ("12 Aug 2026, 14:30") for schedule strings. */
@@ -103,6 +106,9 @@ export function assessmentLock(am: AM, lens: Lens): string | null {
     const end = new Date(`${value.slice(0, 10)}T23:59:59.999`);
     return !Number.isNaN(end.getTime()) && Date.now() > end.getTime();
   };
+  if (lens === "self" && am.self_deadline && pastEndOfDay(am.self_deadline)) {
+    return `The self-assessment window closed on ${formatScheduleDate(am.self_deadline)}.`;
+  }
   if (lens === "manager" && am.manager_deadline && pastEndOfDay(am.manager_deadline)) {
     return `The manager assessment window closed on ${formatScheduleDate(am.manager_deadline)}.`;
   }

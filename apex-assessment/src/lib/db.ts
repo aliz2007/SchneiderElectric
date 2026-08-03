@@ -126,7 +126,8 @@ function migrate(db: Database.Database) {
   //  - manager_deadline (YYYY-MM-DD): the manager can no longer assess once this date has passed
   //  - panel_datetime (YYYY-MM-DDTHH:MM): when the assessed person and the APEX Panel hold
   //    their assessment call; the panel can no longer assess once that day has passed
-  for (const col of ["manager_deadline", "panel_datetime"]) {
+  //  - self_deadline (YYYY-MM-DD): the assessed person can no longer self-assess past this date
+  for (const col of ["manager_deadline", "panel_datetime", "self_deadline"]) {
     try {
       db.exec(`ALTER TABLE account_managers ADD COLUMN ${col} TEXT`);
     } catch {

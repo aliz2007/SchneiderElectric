@@ -207,7 +207,12 @@ export default async function IndividualsPage({
       )}
 
       <div className="card card-pad">
-        <div className="hm-scroll">
+        {/* the table is wider than the card; without a hint people do not know the columns
+            past "Weighted" exist at all */}
+        <div className="scroll-hint">
+          <span className="scroll-hint-ico">↔</span> Scroll sideways for the remaining columns
+        </div>
+        <div className="hm-scroll scroll-fade">
           <table className="table">
             <thead>
               <tr>
@@ -231,7 +236,9 @@ export default async function IndividualsPage({
             <tbody>
               {rows.map((r) => (
                 <tr key={r.am.id} className="rowlink">
-                  <td style={{ fontWeight: 600 }}>{r.am.name}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    <Link className="row-name-link" href={`/analysis/am/${r.am.id}`}>{r.am.name}</Link>
+                  </td>
                   <td><span className="badge badge-zone">{r.am.zone}</span></td>
                   <td><span className="badge badge-track">{r.am.track}</span></td>
                   <td>

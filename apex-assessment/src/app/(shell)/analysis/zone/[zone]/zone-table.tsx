@@ -30,7 +30,7 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
 
   // per-AM overall standing: average (panel - required) over applicable, scored capabilities
   const overall = useMemo(() => {
-    const m = new Map<number, { gap: number | null; score: number | null }>();
+    const m = new Map<number, { gap: number | null; score: number | null; req: number | null }>();
     for (const am of ams) {
       let s = 0, r = 0, n = 0;
       for (const cap of caps) {
@@ -39,7 +39,10 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
         if (rq == null || sc == null) continue;
         s += sc; r += rq; n++;
       }
-      m.set(am.id, n === 0 ? { gap: null, score: null } : { gap: (s - r) / n, score: s / n });
+      m.set(
+        am.id,
+        n === 0 ? { gap: null, score: null, req: null } : { gap: (s - r) / n, score: s / n, req: r / n }
+      );
     }
     return m;
   }, [ams, caps]);
@@ -174,6 +177,46 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
             </tr>
           </thead>
           <tbody>
+            {/* every AM's overall standing, so the columns can be compared at a glance */}
+            <tr className="cluster-avg-row">
+              <th className="hm-rowhead">Weighted score · gap</th>
+              {visibleAMs.map((am) => {
+                const o = overall.get(am.id);
+                return (
+                  <td key={am.id} className={`cell ${gapClass(o?.gap ?? null)}`}>
+                    {o?.score == null ? (
+                      "n/a"
+                    ) : (
+                      <>
+                        {fmt(o.score, 2)}
+                        <small>
+                          {o.gap! > 0 ? "+" : ""}
+                          {fmt(o.gap, 2)} vs req
+                        </small>
+                      </>
+                    )}
+                  </td>
+                );
+              })}
+              {/* the zone's own overall standing, averaged over the same AMs so the
+                  column compares like for like with the cells to its left */}
+              {(() => {
+                const all = visibleAMs.map((am) => overall.get(am.id)).filter((o) => o?.score != null) as {
+                  score: number;
+                  req: number;
+                  gap: number;
+                }[];
+                if (all.length === 0) return <td className="cell hm-na zone-avg-cell">n/a</td>;
+                const mean = (f: (o: { score: number; req: number; gap: number }) => number) =>
+                  all.reduce((a, o) => a + f(o), 0) / all.length;
+                return (
+                  <td className="cell hm-na zone-avg-cell">
+                    {fmt(mean((o) => o.score), 2)}
+                    <small>req {fmt(mean((o) => o.req), 1)}</small>
+                  </td>
+                );
+              })()}
+            </tr>
             {clusters.map((cl) => (
               <Fragment key={cl.name}>
                 {/* the name lives in the sticky first column; the rest of the row is a
@@ -183,6 +226,61 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                   <td className="hm-rowhead">{cl.name}</td>
                   <td colSpan={visibleAMs.length + 1} />
                 </tr>
+                {/* the cluster's own weighted average per AM, so a theme can be read without
+                    adding up its capability rows */}
+                {(() => {
+                  const cells = visibleAMs.map((am) => {
+                    const vals: number[] = [];
+                    const reqs: number[] = [];
+                    for (const cap of cl.caps) {
+                      const rq = req(cap, am.track);
+                      const sc = am.scores[cap.id];
+                      if (rq == null || sc == null) continue;
+                      vals.push(sc);
+                      reqs.push(rq);
+                    }
+                    if (vals.length === 0) return null;
+                    const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+                    const score = mean(vals);
+                    const rq = mean(reqs);
+                    return { score, rq, gap: score - rq };
+                  });
+                  const withData = cells.filter(Boolean) as { score: number; rq: number; gap: number }[];
+                  const mean2 = (f: (c: { score: number; rq: number; gap: number }) => number) =>
+                    withData.length ? withData.reduce((a, c) => a + f(c), 0) / withData.length : null;
+                  const zoneAvg = mean2((c) => c.score);
+                  const zoneReq = mean2((c) => c.rq);
+                  return (
+                    <tr className="cluster-avg-row">
+                      <th className="hm-rowhead">Cluster average</th>
+                      {cells.map((c, i) => (
+                        <td key={i} className={`cell ${gapClass(c?.gap ?? null)}`}>
+                          {c == null ? (
+                            "n/a"
+                          ) : (
+                            <>
+                              {fmt(c.score, 2)}
+                              <small>
+                                req {c.rq.toFixed(1)} · {c.gap > 0 ? "+" : ""}
+                                {fmt(c.gap, 2)}
+                              </small>
+                            </>
+                          )}
+                        </td>
+                      ))}
+                      <td className="cell hm-na zone-avg-cell">
+                        {zoneAvg == null ? (
+                          "n/a"
+                        ) : (
+                          <>
+                            {fmt(zoneAvg, 2)}
+                            <small>req {fmt(zoneReq, 1)}</small>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })()}
                 {cl.caps.map((cap) => {
                   const vals: number[] = [];
                   const reqVals: number[] = [];
@@ -206,7 +304,10 @@ export default function ZoneTable({ zone, caps, ams }: { zone: string; caps: Zon
                         ) : (
                           <>
                             {fmt(score, 2)}
-                            <small>req {rq.toFixed(1)}</small>
+                            <small>
+                              req {rq.toFixed(1)} · {score - rq > 0 ? "+" : ""}
+                              {fmt(score - rq, 2)}
+                            </small>
                           </>
                         )}
                       </td>

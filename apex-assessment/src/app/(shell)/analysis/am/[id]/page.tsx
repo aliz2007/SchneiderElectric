@@ -150,8 +150,16 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
           ))}
         </div>
         <div className="am-meta" style={{ marginTop: 10, alignItems: "center" }}>
-          <ScheduleEditor amId={am.id} managerDeadline={am.manager_deadline} panelDatetime={am.panel_datetime} />
+          <ScheduleEditor
+            amId={am.id}
+            selfDeadline={am.self_deadline}
+            managerDeadline={am.manager_deadline}
+            panelDatetime={am.panel_datetime}
+          />
           <AccountEditor amId={am.id} accountType={am.account_type} perfYtd={am.perf_ytd} />
+          {am.self_deadline && (
+            <span className="badge badge-sched">Self deadline · {formatScheduleDate(am.self_deadline)}</span>
+          )}
           {am.manager_deadline && (
             <span className="badge badge-sched">Manager deadline · {formatScheduleDate(am.manager_deadline)}</span>
           )}
