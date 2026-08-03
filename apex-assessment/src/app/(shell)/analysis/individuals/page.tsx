@@ -1,14 +1,6 @@
 import Link from "next/link";
 import { requireSuperadmin } from "@/lib/session";
-import {
-  GAP_BASIS_LABEL,
-  averageRequired,
-  averageWeighted,
-  getGapBasis,
-  listAMs,
-  scoredRows,
-  submittedLevels,
-} from "@/lib/queries";
+import { averageRequired, averageWeighted, listAMs, scoredRows, submittedLevels } from "@/lib/queries";
 import { ACCOUNT_TYPES, PERF_YTD_LABEL, PERF_YTD_SUFFIX, SEGMENTS, WEIGHTS_LABEL, ZONES } from "@/lib/seed-data";
 import { fmt, gapClass } from "@/lib/heat";
 import IndividualsFilters from "./filters";
@@ -64,7 +56,6 @@ export default async function IndividualsPage({
   const accountType =
     accountTypeRaw && (ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw) ? accountTypeRaw : undefined;
   const sort = (SORT_KEYS as readonly string[]).includes(sortRaw ?? "") ? (sortRaw as SortKey) : "name";
-  const gapBasis = getGapBasis();
   const dir: "asc" | "desc" = dirRaw === "desc" ? "desc" : "asc";
 
   const allAMs = listAMs();
@@ -91,8 +82,6 @@ export default async function IndividualsPage({
     const weighted = averageWeighted(applicable);
     const required = averageRequired(applicable);
     const selfAvg = avg(levels.self);
-    // the Gap column follows the basis set in Admin -> Rubric & scoring
-    const gapFrom = gapBasis === "self" ? selfAvg : weighted;
     return {
       am,
       self: selfAvg,
@@ -100,7 +89,8 @@ export default async function IndividualsPage({
       expert: avg(levels.expert),
       weighted,
       required,
-      gap: gapFrom != null && required != null ? gapFrom - required : null,
+      // the canonical gap: weighted score minus the level this person's track expects
+      gap: weighted != null && required != null ? weighted - required : null,
       below: scored.filter((r) => r.gap != null && r.gap < 0).length,
       hasScores: scored.some((r) => r.weighted != null),
     };
@@ -185,8 +175,7 @@ export default async function IndividualsPage({
         <p className="page-sub">
           Per-person comparison of the three assessment lenses and the weighted score
           ({WEIGHTS_LABEL}), plus perception gaps, strengths and development areas.
-          Click any column heading to sort. Gap = {GAP_BASIS_LABEL[gapBasis].toLowerCase()}, set in
-          Admin, Rubric &amp; scoring.
+          Click any column heading to sort.
         </p>
       </div>
 

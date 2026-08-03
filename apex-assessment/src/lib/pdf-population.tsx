@@ -9,10 +9,9 @@ Font.registerHyphenationCallback((word) => [word]);
  * One row per Account Manager, so capability results can be read against the accounts they
  * belong to. Repeats the header on every page and never splits a row.
  *
- * Gap follows the basis configured in Admin, Rubric & scoring: either the weighted score or
- * the self-assessment, minus the average required level. The proposal's worked example used
- * the self-based rule and the app defaults to weighted, so whichever is in force is printed
- * on the page rather than left implicit.
+ * Gap is the WEIGHTED score minus the average required level, the same rule as everywhere
+ * else in the app. The proposal's worked example subtracted required from the SELF score
+ * instead, which gives a different figure, so the rule is spelled out on the page.
  */
 
 export type PopulationRow = {
@@ -42,8 +41,6 @@ export type PopulationProps = {
   showPerfYtd: boolean;
   perfLabel: string;
   perfSuffix: string;
-  /** how Gap was computed, printed so the number is never ambiguous */
-  gapBasisLabel: string;
 };
 
 const s = StyleSheet.create({
@@ -120,8 +117,8 @@ export function PopulationPdf(p: PopulationProps) {
         <Text style={s.lead}>
           {p.rows.length} of {p.totalCount} Account Managers
           {scored.length ? ` · ${scored.length} assessed · ${below} below the level their track requires` : " · no assessments submitted yet"}.
-          Weighted score = {p.weightsLabel}, combined over the lenses that have submitted. Gap is
-          {" "}{p.gapBasisLabel.toLowerCase()}.
+          Weighted score = {p.weightsLabel}, combined over the lenses that have submitted. Gap is the
+          weighted score minus the average level required on that person&apos;s track.
         </Text>
 
         <View style={s.tab}>
@@ -185,7 +182,9 @@ export function PopulationPdf(p: PopulationProps) {
         </View>
 
         <Text style={s.note} wrap={false}>
-          Gap is {p.gapBasisLabel.toLowerCase()}, configured in Admin, Rubric &amp; scoring.
+          Gap is the weighted score minus the average required level, the rule used throughout
+          the app. Note that the worked example in the dashboard proposal subtracted required
+          from the SELF score instead, which gives a different figure.
           {p.showPerfYtd
             ? ` ${p.perfLabel} is entered per Account Manager and is shown for information only; with a population this size, no relationship between capability maturity and performance should be inferred from it.`
             : ` ${p.perfLabel} is hidden because no figure has been recorded for anyone yet; set one on an Account Manager's page under Account details.`}

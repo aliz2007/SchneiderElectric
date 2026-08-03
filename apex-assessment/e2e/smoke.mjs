@@ -267,41 +267,24 @@ try {
     ? ok("Perf YTD saves and shows on the population table")
     : fail("Perf YTD", "not shown after saving");
 
-  // Required levels are editable, so the client's expected averages are reachable
-  await page.goto(`${BASE}/admin/rubric`);
-  await page.waitForSelector('select[name^="acq_"]');
-  const levelSelects = await page.locator('select[name^="acq_"]').count();
-  levelSelects >= 20
-    ? ok(`rubric exposes a required level per capability (${levelSelects})`)
-    : fail("rubric editor", `${levelSelects} selects`);
-
-  // Gap basis: switching it must actually change the printed gap
-  const gapNow = async () => {
-    await page.goto(`${BASE}/analysis/individuals?q=Adam`);
-    await page.waitForSelector("table.table");
-    const heads = await page.locator("table.table thead th").allTextContents();
-    const i = heads.findIndex((t) => t.trim().startsWith("Gap")) + 1;
-    return (await page.locator(`table.table tbody tr:first-child td:nth-child(${i})`).innerText()).trim();
-  };
-  const gapWeighted = await gapNow();
-  await page.goto(`${BASE}/admin/rubric`);
-  await page.locator('input[name="basis"][value="self"]').check();
-  await page.locator('form.rubric-basis button:has-text("Save")').click();
-  await page.waitForTimeout(1200);
-  const gapSelf = await gapNow();
-  gapWeighted !== gapSelf
-    ? ok(`gap basis switch changes the figure (${gapWeighted} weighted, ${gapSelf} self)`)
-    : fail("gap basis", `both read ${gapWeighted}`);
-  // put it back so the rest of the run sees the default
-  await page.goto(`${BASE}/admin/rubric`);
-  await page.locator('input[name="basis"][value="weighted"]').check();
-  await page.locator('form.rubric-basis button:has-text("Save")').click();
-  await page.waitForTimeout(1000);
-
   // ---- 6. zone view ----
   await page.goto(`${BASE}/analysis/zone/MEA`);
   await page.waitForSelector("text=Zone benchmark");
   ok("zone MEA heat map renders");
+  // a report for THIS zone, downloadable from the zone page
+  (await page.locator('a[href="/analysis/zone/MEA/pdf"]').count()) === 1
+    ? ok("zone page offers its own PDF")
+    : fail("zone PDF button", "not found");
+  {
+    const r = await page.context().request.get(`${BASE}/analysis/zone/MEA/pdf`);
+    const buf = await r.body();
+    const pages = (buf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
+    r.status() === 200 && buf.subarray(0, 5).toString() === "%PDF-" && pages >= 3
+      ? ok(`zone PDF downloads (${pages} pages)`)
+      : fail("zone PDF", `status ${r.status()} pages ${pages}`);
+    const disp = r.headers()["content-disposition"] ?? "";
+    disp.includes("MEA") ? ok("zone PDF is named after its zone") : fail("zone PDF filename", disp);
+  }
   // The weighted score is a float, so every cell MUST be formatted. Interpolating it raw
   // once printed "L2.3000000000000003" across the whole benchmark.
   // cells read "<score>req <level>" once the required level is stacked underneath

@@ -42,6 +42,19 @@ export default async function ZonePage({ params }: { params: Promise<{ zone: str
         </p>
       </div>
 
+      <div className="report-row">
+        <div>
+          <div className="report-title">{zone} Capability Report</div>
+          <div className="report-sub">
+            This zone only: its overview radar, its segments, Acquisition against Saturation,
+            and the biggest gaps to close.
+          </div>
+        </div>
+        <a className="btn btn-primary btn-sm" href={`/analysis/zone/${encodeURIComponent(zone)}/pdf`}>
+          Download PDF
+        </a>
+      </div>
+
       <div className="card card-pad">
         <ZoneTable zone={zone} caps={caps} ams={ams} />
       </div>

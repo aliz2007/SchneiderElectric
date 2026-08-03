@@ -1,15 +1,7 @@
 import { createElement } from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { requireSuperadmin } from "@/lib/session";
-import {
-  GAP_BASIS_LABEL,
-  averageRequired,
-  averageWeighted,
-  getGapBasis,
-  listAMs,
-  scoredRows,
-  submittedLevels,
-} from "@/lib/queries";
+import { averageRequired, averageWeighted, listAMs, scoredRows, submittedLevels } from "@/lib/queries";
 import {
   ACCOUNT_TYPES,
   PERF_YTD_LABEL,
@@ -44,7 +36,6 @@ export async function GET(req: Request) {
     accountTypeRaw && (ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw)
       ? accountTypeRaw
       : undefined;
-  const gapBasis = getGapBasis();
 
   const all = listAMs();
   const matching = all.filter(
@@ -67,7 +58,6 @@ export async function GET(req: Request) {
     const weighted = averageWeighted(applicable);
     const required = averageRequired(applicable);
     const selfAvg = mean(levels.self);
-    const gapFrom = gapBasis === "self" ? selfAvg : weighted;
     return {
       zone: am.zone,
       segment: am.segment,
@@ -82,7 +72,7 @@ export async function GET(req: Request) {
       expert: mean(levels.expert),
       weighted,
       required,
-      gap: gapFrom != null && required != null ? gapFrom - required : null,
+      gap: weighted != null && required != null ? weighted - required : null,
     };
   });
   rows.sort((a, b) => a.zone.localeCompare(b.zone) || a.amName.localeCompare(b.amName));
@@ -106,7 +96,6 @@ export async function GET(req: Request) {
       showPerfYtd: rows.some((r) => r.perfYtd != null),
       perfLabel: PERF_YTD_LABEL,
       perfSuffix: PERF_YTD_SUFFIX,
-      gapBasisLabel: GAP_BASIS_LABEL[gapBasis],
     }) as unknown as Parameters<typeof renderToBuffer>[0]
   );
 

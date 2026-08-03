@@ -46,6 +46,8 @@ export type DashboardProps = {
   amCount: number;
   submittedCount: number;
   weightsLabel: string;
+  /** set when the deck covers ONE zone; retitles the report and drops the zone comparison */
+  zoneLabel?: string;
 };
 
 const s = StyleSheet.create({
@@ -239,9 +241,14 @@ export function DashboardPdf(p: DashboardProps) {
               <Text style={s.coverBrandSub}>APEX TOP 25 · Strategic Account Manager Assessment</Text>
             </View>
           </View>
-          <Text style={s.coverTitle}>APEX Capability Dashboard</Text>
+          <Text style={s.coverTitle}>
+            {p.zoneLabel ? `${p.zoneLabel} Capability Report` : "APEX Capability Dashboard"}
+          </Text>
           <Text style={s.coverSub}>
-            Population view across International Operations{p.scopeNote ? ` · ${p.scopeNote}` : ""}
+            {p.zoneLabel
+              ? `Every Account Manager in ${p.zoneLabel}`
+              : "Population view across International Operations"}
+            {p.scopeNote ? ` · ${p.scopeNote}` : ""}
           </Text>
         </View>
 
@@ -288,13 +295,21 @@ export function DashboardPdf(p: DashboardProps) {
           </View>
 
           <SectionHead title="What is in this report" />
-          {[
-            ["IO Global Overview", "Benchmark the capability maturity of the whole population."],
-            ["Zone Overview", "Identify which zone to prioritise to start the learnings."],
-            ["Segment View", "Differentiate the learning offered per segment."],
-            ["Track View", "See which capabilities are weak in Acquisition and in Saturation."],
-            ["Gap to Target", "Know where to start: the biggest gaps to close first."],
-          ].map(([name, why]) => (
+          {(p.zoneLabel
+            ? [
+                [`${p.zoneLabel} Overview`, "Benchmark this zone's capability maturity."],
+                ["Segment View", "Differentiate the learning offered per segment in this zone."],
+                ["Track View", "See which capabilities are weak in Acquisition and in Saturation."],
+                ["Gap to Target", "Know where to start: the biggest gaps to close first."],
+              ]
+            : [
+                ["IO Global Overview", "Benchmark the capability maturity of the whole population."],
+                ["Zone Overview", "Identify which zone to prioritise to start the learnings."],
+                ["Segment View", "Differentiate the learning offered per segment."],
+                ["Track View", "See which capabilities are weak in Acquisition and in Saturation."],
+                ["Gap to Target", "Know where to start: the biggest gaps to close first."],
+              ]
+          ).map(([name, why]) => (
             <View key={name} style={s.tocItem}>
               <Text style={s.tocName}>{name}</Text>
               <Text style={s.tocWhy}>{why}</Text>
@@ -307,15 +322,20 @@ export function DashboardPdf(p: DashboardProps) {
       <Page size="A4" style={s.page}>
         <Chrome generatedAt={p.generatedAt} note="Schneider Electric · APEX TOP 25 · Capability dashboard" />
         <SectionHead
-          title="IO Global Overview"
-          sub="All International Operations. The 6 cluster capabilities against the 3 lenses, with the level the tracks expect."
+          title={p.zoneLabel ? `${p.zoneLabel} Overview` : "IO Global Overview"}
+          sub={
+            p.zoneLabel
+              ? `Every Account Manager in ${p.zoneLabel}. The cluster capabilities against the 3 lenses, with the level the tracks expect.`
+              : "All International Operations. The 6 cluster capabilities against the 3 lenses, with the level the tracks expect."
+          }
         />
         <ProfileCell profile={p.io} wide />
         <RadarLegend />
         <ClusterTable profile={p.io} />
       </Page>
 
-      {/* ---------- zone overview ---------- */}
+      {/* ---------- zone overview (all-zones deck only) ---------- */}
+      {p.zones.length > 0 && (
       <Page size="A4" style={s.page}>
         <Chrome generatedAt={p.generatedAt} note="Schneider Electric · APEX TOP 25 · Capability dashboard" />
         <SectionHead
@@ -330,6 +350,7 @@ export function DashboardPdf(p: DashboardProps) {
         <RadarLegend />
         <GroupTable groups={p.zones} header="Zone" />
       </Page>
+      )}
 
       {/* ---------- segment view ---------- */}
       <Page size="A4" style={s.page}>
@@ -380,7 +401,11 @@ export function DashboardPdf(p: DashboardProps) {
         <Chrome generatedAt={p.generatedAt} note="Schneider Electric · APEX TOP 25 · Capability dashboard" />
         <SectionHead
           title="Gap to Target"
-          sub="The whole population against the level the tracks require. Where to start: the biggest gaps first."
+          sub={
+            p.zoneLabel
+              ? `${p.zoneLabel} against the level the tracks require. Where to start: the biggest gaps first.`
+              : "The whole population against the level the tracks require. Where to start: the biggest gaps first."
+          }
         />
         <ProfileCell profile={p.io} wide />
         <RadarLegend />
