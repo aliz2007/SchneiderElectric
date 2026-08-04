@@ -1008,6 +1008,54 @@ try {
       ? ok("a surface can be recoloured without touching the accent")
       : fail("per-part colour", `sidebar ${sidebar}, accent ${accent}`);
   }
+  // The background is painted by body::before, which covers body entirely. Setting --bg
+  // alone changed nothing anybody could see except the scrollbar gutter, so this asserts the
+  // layer that actually paints, not the variable.
+  await page.goto(`${BASE}/analysis`);
+  await page.locator(".wrench").click();
+  await page.locator('.dash-act:has-text("Colour")').click();
+  await page.locator('.cp-part:has(.cp-part-name:text-is("Background"))').click();
+  await page.fill(".cp-hex", "#3b0764");
+  await page.waitForTimeout(300);
+  await page.locator('button:has-text("Save colours")').click();
+  await page.waitForTimeout(1000);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const painted = await page.evaluate(() => getComputedStyle(document.body, "::before").backgroundImage);
+    const stops = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return ["--bg", "--bg-hi", "--bg-lo"].map((k) => cs.getPropertyValue(k).trim());
+    });
+    painted.includes("59, 7, 100") && stops.every(Boolean) && new Set(stops).size === 3
+      ? ok("the background colour reaches the layer that actually paints the page")
+      : fail("background", `${stops.join("/")} — ${painted.slice(0, 90)}`);
+  }
+
+  // Cards used to tint only the handful of surfaces that happened to read --card, leaving
+  // the map, the popovers and the toolbars navy — which is what read as random rectangles.
+  await page.locator(".wrench").click();
+  await page.locator('.dash-act:has-text("Colour")').click();
+  await page.locator('.cp-part:has(.cp-part-name:text-is("Cards"))').click();
+  await page.fill(".cp-hex", "#1e3a5f");
+  await page.waitForTimeout(300);
+  await page.locator('button:has-text("Save colours")').click();
+  await page.waitForTimeout(1000);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const surfaces = await page.evaluate(() =>
+      [".card", ".map-card", ".nav-toggle"].map((s) => {
+        const el = document.querySelector(s);
+        return el ? getComputedStyle(el).backgroundColor + getComputedStyle(el).backgroundImage : "";
+      })
+    );
+    // every one of them must have moved onto the chosen hue, not just the first
+    const tinted = surfaces.filter((v) => v.includes("30, 58, 95")).length;
+    tinted === surfaces.length
+      ? ok(`the card colour reaches every panel (${tinted} of ${surfaces.length})`)
+      : fail("card surfaces", surfaces.map((v) => v.slice(0, 40)).join(" | "));
+  }
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/10-recoloured.png` });
 
@@ -1213,18 +1261,23 @@ try {
     k0.title !== k4.title && k0.body !== k4.body
       ? ok(`KPI tiles answer per tile ("${k0.title}" vs "${k4.title}")`)
       : fail("kpi specificity", `${k0.title} / ${k4.title}`);
-
-    // A table cell is explained by its COLUMN. Deliberately the name cell: the Zone cell
-    // holds a badge, and the badge is deeper, so it wins and names the zone instead — which
-    // is the more useful answer and exactly what deepest-match is for.
-    const cell = await answer('.dash-block[data-block="roster"] tbody td', 0);
-    cell.title.toLowerCase() === "account manager" && cell.body.length > 30
-      ? ok("a table cell is explained by the column it sits in")
-      : fail("column answer", `${cell.title}: ${cell.body.slice(0, 80)}`);
-
+    // asserted while the pointer is still resting on something
     (await page.locator(".qm-ring").count()) === 1
       ? ok("the thing being explained is ringed where it sits")
       : fail("ring", `${await page.locator(".qm-ring").count()}`);
+
+    // A plain figure in a table is explained by its COLUMN. It has to be a cell with nothing
+    // deeper inside it — every roster cell holds a badge or a link, and those are more
+    // specific answers that rightly win.
+    await page.goto(`${BASE}/analysis/individuals`);
+    await page.waitForSelector("table.table");
+    const cell = await answer('.table tbody td', 9);
+    cell.title.toLowerCase() === "weighted" && /20%|35%|45%/.test(cell.body)
+      ? ok("a figure in a table is explained by the column it sits in")
+      : fail("column answer", `${cell.title}: ${cell.body.slice(0, 80)}`);
+    await page.goto(`${BASE}/analysis`);
+    await page.waitForSelector(".dash-block");
+
   }
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${SHOTS}/12-question-mode.png` });

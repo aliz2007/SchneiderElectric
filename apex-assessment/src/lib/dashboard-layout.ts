@@ -395,11 +395,21 @@ export function themeVars(colors: ThemeColors): Record<string, string> {
     out["--sidebar-2"] = shade(sidebar, 0.12);
   }
   const bg = normalizeAccent(colors.bg);
-  if (bg) out["--bg"] = bg;
+  if (bg) {
+    // The page background is painted by body::before, not by body — three stops of one
+    // gradient. Setting --bg alone changed nothing anybody could see except the scrollbar
+    // gutter, so all three move together.
+    out["--bg"] = bg;
+    out["--bg-hi"] = shade(bg, 0.06);
+    out["--bg-lo"] = shade(bg, -0.18);
+  }
   const card = normalizeAccent(colors.card);
   if (card) {
     const [r, g, b] = hexToRgb(card);
-    // cards keep their translucency, or the glass turns into flat plastic
+    // Every panel in the app now derives from --card-rgb at its own alpha — cards, popovers,
+    // the map, the sticky table column, the toolbars. Setting only --card tinted the handful
+    // that happened to use it and left the rest navy, which read as random rectangles.
+    out["--card-rgb"] = `${r}, ${g}, ${b}`;
     out["--card"] = `rgba(${r}, ${g}, ${b}, 0.6)`;
   }
   return out;

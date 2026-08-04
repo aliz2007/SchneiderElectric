@@ -395,6 +395,15 @@ toolbar, because "change the app's colour" is usually four different wishes and 
 row cannot express any of them past the first. Every change previews on the live page
 immediately by writing the same custom properties the server writes on a real load.
 
+**Two traps in the colour work, both hit once.** The page background is painted by
+`body::before`, which covers `body` entirely — so setting `--bg` changed nothing anybody
+could see except the scrollbar gutter. The gradient's three stops (`--bg-hi`, `--bg`,
+`--bg-lo`) now all move together. And every panel surface derives from `--card-rgb` at its
+own alpha — cards, the map, popovers, toolbars, the sticky first column of a scrolling
+table. Before that, `--card` tinted the handful of surfaces that happened to read it and
+left the rest navy, which is exactly what "random rectangles" looks like. Both have e2e
+checks that assert the RENDERED surface, not the variable.
+
 **The rule that matters most: chrome follows the colour, results never do.** `globals.css`
 keeps two frozen families:
 
@@ -444,6 +453,14 @@ sessionStorage) until it is turned off, and explains whatever the pointer is res
 lookup runs once per animation frame, tries `element.closest()` for every registered
 selector, and keeps the DEEPEST match — so pointing at a number inside a card explains the
 number, not the card.
+
+Question mode answers per INSTANCE, not per category. An entry may carry a `resolve(el)`
+that reads the answer off the DOM at hover time: a heat cell names its capability, its zone,
+its own figures and what its colour band means; a KPI tile answers from its own label; a
+table cell is explained by its column heading, in every table in the app. A resolver
+returning null means "not this one", so the lookup falls through instead of answering
+vaguely. There is no fallback for "a card" or "a table" — silence beats naming the kind of
+thing somebody is already looking at.
 
 **Both read `src/lib/guide.ts`**, which is the single place the app describes itself. Two
 copies of an explanation drift apart the first time a figure changes meaning. The tour is
@@ -800,7 +817,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 152/152 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 158/158 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
