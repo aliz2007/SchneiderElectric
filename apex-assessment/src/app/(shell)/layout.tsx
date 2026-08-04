@@ -2,11 +2,12 @@ import { cookies } from "next/headers";
 import { requireUser } from "@/lib/session";
 import { NAV_COLLAPSED, NAV_COOKIE } from "@/lib/nav-cookie";
 import { LENS_LABELS } from "@/lib/seed-data";
-import { allLensesSubmitted, assignedAMs } from "@/lib/queries";
+import { allLensesSubmitted, assignedAMs, listAMs } from "@/lib/queries";
 import { BrandMark } from "@/lib/brand";
 import NavLinks, { type NavItem } from "./nav-links";
 import ChatWidget from "./chat-widget";
 import SidebarToggle from "./sidebar-toggle";
+import HelpTools from "./help-tools";
 import { logout } from "./actions";
 
 export default async function ShellLayout({ children }: { children: React.ReactNode }) {
@@ -49,7 +50,21 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
   return (
     <div className={`shell${navCollapsed ? " nav-collapsed" : ""}`}>
-      <SidebarToggle initialCollapsed={navCollapsed} />
+      {/* the two page-level tools, together in the top-left corner: fold the menu, and ask
+          what any of this is. They slide with the menu edge so they keep their relationship
+          to the page rather than to the window. */}
+      <div className="corner-tools">
+        <SidebarToggle initialCollapsed={navCollapsed} />
+        <HelpTools
+          audience={{
+            isAdmin: user.role === "superadmin",
+            hasLens: user.lens != null,
+            // the tour visits a real individual page, so it needs a real Account Manager;
+            // on an empty database it simply skips those steps
+            amId: user.role === "superadmin" ? (listAMs()[0]?.id ?? null) : null,
+          }}
+        />
+      </div>
       <aside className="sidebar">
         <div className="brand">
           <BrandMark />

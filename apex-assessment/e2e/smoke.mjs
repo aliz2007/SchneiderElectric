@@ -1114,6 +1114,117 @@ try {
     ? ok("the menu bar comes back")
     : fail("expand", "still collapsed");
 
+  // ---- 14. help: the guided tour and question mode ----
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  await page.locator(".help-btn").click();
+  {
+    const items = (await page.locator(".help-item-name").allTextContents()).map((t) => t.trim());
+    items.length === 2 && items[0].startsWith("Tutorial") && items[1].startsWith("Question")
+      ? ok("the question mark offers Tutorial mode and Question mode")
+      : fail("help menu", items.join("|"));
+  }
+
+  // the tour opens on a welcome card and steps forward on confirmation
+  await page.locator('.help-item:has-text("Tutorial mode")').click();
+  await page.waitForSelector(".tour-card.centred");
+  ((await page.locator(".tour-title").textContent()) ?? "").includes("Welcome") &&
+  ((await page.locator(".tour-count").textContent()) ?? "").includes("Step 1 of")
+    ? ok("the tour opens with a welcome card")
+    : fail("tour welcome", (await page.locator(".tour-title").textContent()) ?? "");
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/11-tour-welcome.png` });
+
+  await page.locator(".tour-actions .btn-primary").click();
+  await page.waitForTimeout(700);
+  {
+    // the spotlight must sit ON the thing being described, not merely exist — an overlay
+    // whose hole is somewhere else is worse than no overlay
+    const spot = await page.locator(".tour-spot").boundingBox();
+    const nav = await page.locator(".sidebar .nav").boundingBox();
+    const close = spot && nav && Math.abs(spot.x + spot.width / 2 - (nav.x + nav.width / 2)) < 24 &&
+      Math.abs(spot.y + spot.height / 2 - (nav.y + nav.height / 2)) < 24;
+    close ? ok("the spotlight lands on the part being explained") : fail("spotlight", JSON.stringify({ spot, nav }));
+  }
+
+  // it walks the whole app, crossing pages on the way, and finishes cleanly
+  {
+    const visited = new Set([new URL(page.url()).pathname]);
+    let steps = 1;
+    for (let i = 0; i < 30; i++) {
+      const btn = page.locator(".tour-actions .btn-primary");
+      if (!(await btn.count())) break;
+      await btn.click();
+      await page.waitForTimeout(750);
+      if (!(await page.locator(".tour-card").count())) break;
+      visited.add(new URL(page.url()).pathname);
+      steps++;
+    }
+    const gone = (await page.locator(".tour-card").count()) === 0;
+    gone && steps >= 10 && visited.size >= 3
+      ? ok(`the tour walks ${steps} steps across ${visited.size} pages and ends`)
+      : fail("tour walk", `${steps} steps, ${visited.size} pages, card gone=${gone}`);
+  }
+  // and it does not come back on the next page load
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  (await page.locator(".tour-card").count()) === 0
+    ? ok("a finished tour stays finished")
+    : fail("tour restart", "the tour reopened");
+
+  // ---- 14b. question mode ----
+  await page.locator(".help-btn").click();
+  await page.locator('.help-item:has-text("Question mode")').click();
+  await page.waitForSelector(".qm-bar");
+  {
+    // point at three different kinds of thing and check it says three different things —
+    // one shared fallback answering everything would pass a weaker check
+    const seen = [];
+    for (const sel of [".kpi-value", "td.cell", ".badge-zone"]) {
+      await page.locator(sel).first().hover();
+      await page.waitForTimeout(350);
+      seen.push(((await page.locator(".qm-tip-title").textContent()) ?? "").trim());
+    }
+    new Set(seen).size === 3 && seen.every(Boolean)
+      ? ok(`question mode explains each thing on its own terms (${seen.join(" · ")})`)
+      : fail("question answers", seen.join("|"));
+    // the answer has to be about the thing under the pointer, not the card around it
+    await page.locator(".kpi-value").first().hover();
+    await page.waitForTimeout(300);
+    const body = (await page.locator(".qm-tip-body").textContent()) ?? "";
+    body.length > 40 && ((await page.locator(".qm-ring").count()) === 1)
+      ? ok("the explanation is detailed and rings what it is describing")
+      : fail("question detail", `${body.length} chars, ${await page.locator(".qm-ring").count()} rings`);
+  }
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/12-question-mode.png` });
+
+  // it stays on across a navigation, because it is a mode rather than a tooltip
+  await page.goto(`${BASE}/analysis/individuals`);
+  await page.waitForSelector("table.table");
+  (await page.locator(".qm-bar").count()) === 1
+    ? ok("question mode survives moving to another page")
+    : fail("question persistence", "turned itself off");
+  await page.locator(".qm-off").click();
+  await page.waitForTimeout(250);
+  (await page.locator(".qm-bar").count()) === 0 && (await page.locator(".qm-tip").count()) === 0
+    ? ok("question mode turns off")
+    : fail("question off", "still on");
+
+  // The guide is keyed to CSS selectors, which a rename can silently orphan. This is the
+  // check that tells you: every selector below must still match something on a page that
+  // definitely contains it.
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const must = [".kpi-value", ".kpi-bench", "td.cell", ".lvl-chip", ".badge-zone", ".badge-track",
+                  ".filter-toggle", ".nav-link", ".wrench", ".nav-toggle", ".tl", ".card", ".page-head", ".sidebar"];
+    const missing = [];
+    for (const sel of must) if ((await page.locator(sel).count()) === 0) missing.push(sel);
+    missing.length === 0
+      ? ok(`every guide selector still matches (${must.length} checked)`)
+      : fail("orphaned guide selectors", missing.join(" "));
+  }
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});

@@ -1470,10 +1470,6 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .nav-collapsed > .sidebar { margin-left: -256px; }
 
 .nav-toggle {
-  position: fixed;
-  top: 18px;
-  left: 268px;
-  z-index: 60;
   width: 32px;
   height: 32px;
   display: grid;
@@ -1484,14 +1480,26 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   backdrop-filter: blur(14px) saturate(1.3);
   color: var(--ink-2);
-  transition: left 0.38s var(--ease-out), color 0.2s, border-color 0.2s, background 0.2s;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
 }
 .nav-toggle:hover { color: #fff; border-color: rgba(var(--accent-rgb, 61, 205, 88), 0.45); }
-.nav-collapsed > .nav-toggle { left: 14px; }
+
+/* the corner cluster the two page tools live in */
+.corner-tools {
+  position: fixed;
+  top: 18px;
+  left: 268px;
+  z-index: 60;
+  display: flex;
+  gap: 8px;
+  transition: left 0.38s var(--ease-out);
+}
+.nav-collapsed > .corner-tools { left: 14px; }
 
 @media (max-width: 860px) {
   /* the bar is a horizontal strip here, so folding it sideways means nothing */
   .nav-toggle { display: none; }
+  .corner-tools { position: static; margin: 12px 0 0 18px; }
   .nav-collapsed > .sidebar { margin-left: 0; }
 }
 
@@ -1876,4 +1884,200 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
   .cp-editor { flex-direction: column; }
   .cp-preview { width: 100%; min-height: 84px; }
   .cp-slider { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* ============================================================
+   Help: the guided tour and question mode
+   ============================================================ */
+
+.help-anchor { position: relative; }
+
+.help-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(15, 23, 42, 0.55);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  color: var(--ink-2);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.help-btn:hover { color: #fff; border-color: rgba(var(--accent-rgb, 61, 205, 88), 0.45); }
+.help-btn.active { color: #fff; border-color: rgba(var(--accent-rgb, 61, 205, 88), 0.6); }
+/* while question mode is on, the button it was started from says so */
+.help-btn.asking { color: var(--se-green-ink); background: var(--se-green-bright); border-color: transparent; }
+
+.help-scrim { position: fixed; inset: 0; z-index: 78; }
+
+.help-menu {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  z-index: 79;
+  width: 290px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(14, 23, 41, 0.9);
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
+  backdrop-filter: blur(24px) saturate(1.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), var(--shadow-lg);
+  animation: help-pop 0.22s var(--ease-out) backwards;
+}
+@keyframes help-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.help-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  transition: background 0.16s;
+}
+.help-item:hover { background: rgba(255, 255, 255, 0.07); }
+.help-item-name {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.help-item-blurb { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.help-pip {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09); color: var(--muted);
+}
+.help-pip.on { background: var(--se-green-bright); color: var(--se-green-ink); }
+
+/* ---------- the tour ---------- */
+
+.tour { position: fixed; inset: 0; z-index: 90; opacity: 0; transition: opacity 0.42s var(--ease-out); }
+.tour.in { opacity: 1; }
+
+/* One element with one enormous shadow. The hole IS the element being explained, so the
+   spotlight cannot drift out of register with it however the page reflows underneath. */
+.tour-spot {
+  position: fixed;
+  border-radius: 16px;
+  box-shadow: 0 0 0 9999px rgba(4, 8, 16, 0.76), 0 0 0 2px rgba(var(--accent-rgb, 61, 205, 88), 0.85);
+  transition: top 0.4s var(--ease-out), left 0.4s var(--ease-out), width 0.4s var(--ease-out), height 0.4s var(--ease-out);
+  pointer-events: none;
+}
+.tour-veil { position: fixed; inset: 0; background: rgba(4, 8, 16, 0.8); }
+
+.tour-card {
+  position: fixed;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 20px 22px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 23, 41, 0.94);
+  -webkit-backdrop-filter: blur(26px) saturate(1.4);
+  backdrop-filter: blur(26px) saturate(1.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), var(--shadow-lg);
+  animation: tour-rise 0.42s var(--ease-out) backwards;
+}
+.tour-card.centred {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  padding: 30px 32px 26px;
+  text-align: center;
+}
+@keyframes tour-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.tour-card.centred { animation-name: tour-rise-centred; }
+@keyframes tour-rise-centred {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+.tour-count {
+  font-size: 10.5px; font-weight: 640; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--se-green-bright); margin-bottom: 6px;
+}
+.tour-title { margin: 0 0 8px; font-size: 19px; font-weight: 640; letter-spacing: -0.015em; color: #fff; }
+.tour-card.centred .tour-title { font-size: 25px; }
+.tour-body { margin: 0 0 18px; font-size: 13.5px; line-height: 1.62; color: var(--ink-2); }
+.tour-actions { display: flex; align-items: center; gap: 10px; }
+.tour-card.centred .tour-actions { justify-content: center; }
+.tour-skip {
+  margin-right: auto;
+  border: none; background: none;
+  color: var(--muted); font-size: 12.5px; text-decoration: underline;
+}
+.tour-card.centred .tour-skip { margin-right: 0; }
+.tour-skip:hover { color: var(--ink-2); }
+
+/* ---------- question mode ---------- */
+
+.qm-bar {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 88;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px 9px 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-rgb, 61, 205, 88), 0.4);
+  background: rgba(14, 23, 41, 0.9);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--shadow-lg);
+  font-size: 12.5px; color: var(--ink-2);
+  animation: tour-rise 0.3s var(--ease-out) backwards;
+}
+.qm-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--se-green-bright);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb, 61, 205, 88), 0.22);
+}
+.qm-off {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-2);
+  border-radius: 999px; padding: 4px 11px; font-size: 11.5px;
+}
+.qm-off:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+/* what is being explained, outlined where it sits */
+.qm-ring {
+  position: fixed;
+  z-index: 86;
+  border-radius: 10px;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 61, 205, 88), 0.9), 0 0 24px -6px rgba(var(--accent-rgb, 61, 205, 88), 0.6);
+  transition: top 0.12s linear, left 0.12s linear, width 0.12s linear, height 0.12s linear;
+}
+
+.qm-tip {
+  position: fixed;
+  z-index: 89;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 23, 41, 0.95);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+.qm-tip-title { font-size: 12.5px; font-weight: 640; color: #fff; margin-bottom: 4px; }
+.qm-tip-body { font-size: 12px; line-height: 1.55; color: var(--ink-2); }
+
+/* Question mode is a pointer feature; the ring and card would sit there forever on a touch
+   screen with no way to dismiss them. The bar still offers the way out. */
+@media (hover: none) {
+  .qm-ring, .qm-tip { display: none; }
 }

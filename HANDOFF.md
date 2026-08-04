@@ -420,6 +420,41 @@ node in `analysis/page.tsx`. `parseLayout` splices any block a stored layout has
 of back in at its shipped index, so a new card appears for everyone rather than being
 invisible to anyone who has ever arranged theirs.
 
+### Help: the tour and question mode
+
+A question mark sits beside the menu-fold button in the top-left corner cluster
+(`.corner-tools`), on every page. It opens a two-item menu.
+
+**Tutorial mode** walks the app once, in order: it dims everything except the part it is
+explaining, says what that part is for, and waits to be told to continue. It crosses pages
+on its own — later steps live on Individual Results and on an individual's page — so its
+progress is kept in `sessionStorage` under `apex_tour`. That is not a preference, it is a
+necessity: the component is destroyed and rebuilt on every navigation, and a tour held in
+React state would end the moment it reached its second page.
+
+The spotlight is ONE element carrying a 9999px box-shadow, so the hole *is* the thing being
+explained and cannot drift out of register with it as the page reflows. The step polls with
+`requestAnimationFrame` for its target rather than measuring once, because a step routinely
+arrives before its page has finished rendering; after ~90 frames with no match it gives up
+and shows the step as a plain centred card rather than trapping the reader behind an
+invisible spotlight.
+
+**Question mode** is a toggle, not a tooltip: it stays on across navigations (`apex_ask` in
+sessionStorage) until it is turned off, and explains whatever the pointer is resting on. The
+lookup runs once per animation frame, tries `element.closest()` for every registered
+selector, and keeps the DEEPEST match — so pointing at a number inside a card explains the
+number, not the card.
+
+**Both read `src/lib/guide.ts`**, which is the single place the app describes itself. Two
+copies of an explanation drift apart the first time a figure changes meaning. The tour is
+also role-aware: `buildTour()` drops the steps whose page the reader cannot reach, because
+walking a manager through the superadmin's table would spotlight a redirect.
+
+The one real cost of keying explanations to CSS selectors is that a renamed class silently
+loses its explanation, with nothing failing. The e2e suite therefore asserts that a sample
+of the registered selectors still matches something on a page that definitely contains it —
+**if you rename a class, that check is what tells you.**
+
 ### Folding the menu away
 
 The `.nav-toggle` button slides the sidebar out on a negative margin (its width never
@@ -736,6 +771,8 @@ src/lib/dashboard-settings.ts  per-user reads/writes of dashboard.layout + theme
 src/lib/nav-cookie.ts        the sidebar-fold cookie name (NOT in the client component — see §Folding)
 src/app/(shell)/nav-icon.tsx  the drawn icon set (replaced the ▦ ☰ ⚙ ✎ ★ characters)
 src/app/(shell)/sidebar-toggle.tsx  folds the menu bar away
+src/app/(shell)/help-tools.tsx  the question mark: guided tour + question mode
+src/lib/guide.ts             what the app says about itself — tour steps and hover explanations
 src/app/(shell)/analysis/dashboard-grid.tsx  the 12-column grid + the wrench that makes it editable in place
 src/app/(shell)/analysis/colour-panel.tsx    accent / menu bar / background / cards, opened from the edit bar
 src/app/(shell)/analysis/dashboard-actions.ts  save + reset for the layout and the colours
@@ -763,7 +800,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 142/142 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 152/152 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
