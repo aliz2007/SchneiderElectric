@@ -348,85 +348,97 @@ render as plain text for assessors instead of links to a page that would bounce 
 The e2e suite locks all of this down in section 7 (roster scoping, timeline scoping, no
 timeline links, no map, four redirect checks, five PDF download checks).
 
-### Dashboard Manager (superadmin-only)
+### Dashboard Manager (superadmin-only, per account)
 
-`/admin/settings` → **Dashboard Manager**. Three things sit behind one button: reset the
-dashboard, repaint the app, and rearrange the cards.
+`/admin/settings` → the **wrench, top right**. It opens a two-tab workbench: **Arrange** and
+**Colour**. Behind a control on purpose — it is a tool, not content, and a workbench spread
+across the page is noise between you and everything else the rest of the time.
 
-**Where the state lives.** `user_settings (user_id, key, value)`, two keys per person:
-`dashboard.layout` (JSON) and `theme.accent` (a hex). PER USER, on the client's explicit
-instruction — each superadmin arranges and colours their own dashboard, and saving never
-moves a colleague's. Anyone with nothing stored gets the shipped defaults: an assessor
-(the Dashboard Manager is superadmin-only, so they can never store anything), and the
-sign-in screen, which has no session to ask. `ON DELETE CASCADE` takes a user's
-preferences with them.
+**Per account.** `user_settings (user_id, key, value)`, two keys per person:
+`dashboard.layout` (JSON) and `theme.colors` (JSON). Each superadmin arranges and colours
+their own dashboard and saving never moves a colleague's. Anyone with nothing stored gets
+the shipped defaults — an assessor (the manager is superadmin-only, so they can never store
+anything) and the sign-in screen, which has no session to ask. `ON DELETE CASCADE` takes a
+user's preferences with them.
 
-This started out installation-wide in `app_settings` for a few hours before the client
-asked for per-user; `db.ts` deletes those two orphaned keys on migrate, naming them
-explicitly because `app_settings` still holds the AI config. Two e2e checks guard the
-change: one signs in as a second account and asserts its dashboard has not moved, the other
-signs back in and asserts the superadmin's own arrangement survived.
+**Arrange** is a canvas of tiles on the same twelve-column grid as the real page, at the same
+relative widths, each carrying a WIREFRAME of the card it stands for. That is what makes it
+rearrangeable by recognition rather than by reading labels, and it is why the wireframes are
+built from flex/grid elements rather than from a fixed-viewBox SVG: a tile is anything from a
+third of the canvas to all of it, and a scaled SVG either shrinks to a stamp in the middle of
+a wide tile or smears every mark into an ellipse. Drag to reorder, three drawn bars for the
+width, a switch to take a card off. Nothing is written until Save.
 
-**Arranging.** `/analysis?edit=1` (superadmin only, checked server-side — the parameter is
-inert in an assessor's URL bar) turns the dashboard into an editor: the cards wobble, each
-grows a width control and a remove button, and they can be dragged past each other. The
-wobble is on the CARD and never on its toolbar — on a phone the whole icon shakes and you
-aim with a thumb, but here the targets are 26px buttons and a mouse, and a button that will
-not hold still is one you cannot hit. Arrow buttons do everything dragging does, because a
-drag is unreachable by keyboard and unreliable under a test harness. Nothing is written
-until **Done**.
+Arrow buttons do everything dragging does. A drag cannot be done from a keyboard and cannot
+be driven reliably by a test harness, so an editor whose only affordance is a drag is one
+that half its users cannot operate and that nothing can guard.
 
-**How the split works.** `dashboard-grid.tsx` is a client component, but every card is still
-rendered on the SERVER and passed in as a node (`blocks` in `analysis/page.tsx`). The grid
-decides order, width and presence — nothing else. That is not a style choice: the zone map
-carries every Account Manager's weighted score, and it must not cross into a client
-component just so the card can be dragged. A card that does not apply to the reader is
-simply absent from `blocks`, so the grid cannot be used to reveal a block that was never
-built.
+**The dashboard itself carries no editing chrome** — no toolbar, no handles, no wobble. An
+earlier version put an "Arrange dashboard" bar at the top of the dashboard for every
+superadmin on every visit; the client's reaction to that is the reason it is gone.
+`dashboard-grid.tsx` is now a plain server component and ships no JavaScript.
 
-**Widths** are `third` / `half` / `full` on a 12-column grid (4 / 6 / 12). Some cards carry
-a `minSize`: the zone map is a fixed-aspect world canvas and the timeline places its flags
-as percentages of the track, so a third-width version of either is not a smaller chart, it
-is an unreadable one. The editor only offers the widths a card survives, and `parseLayout`
-clamps a hand-edited value to the same set.
+**Widths** are `third` / `half` / `full` (4 / 6 / 12 columns). Some cards carry a `minSize`:
+the zone map is a fixed-aspect world canvas and the timeline places its flags as percentages
+of the track, so a third-width version of either is not a smaller chart, it is an unreadable
+one. The canvas only offers the widths a card survives, and `parseLayout` clamps a
+hand-edited value to the same set. The filter card is `pinned`: movable and resizable, never
+removable, because it scopes every other card and hiding it would strip the only way to clear
+a filter still in the URL.
 
-**The filter card is pinned.** It can be moved and resized but never removed — it scopes
-every other card on the page, so hiding it would strip your only way to clear a filter that
-is still in the URL. Enforced in three places (`BlockDef.pinned`, `parseLayout`,
-`updateBlock`). A removed card is only hidden, never deleted, and the Settings table always
-offers to put it back, so there is an escape hatch even when the card is off the page.
+**Colour** is chosen one PART at a time — accent, menu bar, background, cards — because
+"change the app's colour" is usually four different wishes and one swatch row cannot express
+any of them past the first. Every change previews on the live page immediately by writing the
+same custom properties the server writes on a real load, so you are watching the app you are
+sitting in change colour rather than judging a swatch in a box.
 
-**The accent** is applied as an inline style on `<html>` by the ROOT layout, so it reaches
-every page from one place and arrives server-rendered — no flash of green on the way to a
-violet. Inline beats any stylesheet rule regardless of emission order, so it cannot lose a
-cascade race with `globals.css`. The root layout calls `getCurrentUser()` (not
-`requireUser`) because it also renders the sign-in screen, which paints in the shipped
-green.
+**The rule that matters most: chrome follows the colour, results never do.** `globals.css`
+keeps two frozen families:
 
-**The rule that matters most: chrome follows the accent, results never do.** `globals.css`
-now keeps two frozen families next to the repaintable `--accent-*` set:
-
-- `--ok` / `--ok-2` / `--ok-strong` / `--ok-ink` / `--ok-rgb` — green means "at or above the
-  required level". A heat map whose legend followed the customer's brand colour would report
-  a different answer depending on a setting.
+- `--ok` / `--ok-2` / `--ok-bright` / `--ok-strong` / `--ok-ink` / `--ok-rgb` — green means
+  "at or above the required level".
 - `--lens-self` / `--lens-manager` / `--lens-expert` / `--lens-weighted` / `--lens-req` — a
-  lens colour is a legend entry too. `.ld-expert` used to read `var(--se-green)`, which now
-  aliases the accent; left alone, the APEX Panel dot would have silently followed whatever
-  brand colour a superadmin picked.
+  lens colour is a legend entry too. `.ld-expert` used to read `var(--se-green)`; left alone
+  it would have followed whatever brand colour a superadmin picked.
 
-`--se-green*` survives as an alias of `--accent*` so older rules keep working. Everything
-that held a literal `rgba(61, 205, 88, x)` or a hardcoded companion green was migrated to
-`rgba(var(--accent-rgb), x)` / `var(--accent-deep)` / `var(--accent-soft)`, or frozen. Two
-knock-on fixes went in with it: dark ink sitting ON an accent-filled surface became
-`var(--accent-ink)` (it flips with luminance, or a pale brand turns every primary button
-into white-on-white), and the timeline's "today" ruler was pinned to blue — on the accent, a
-Rose brand would have drawn today in the overdue colour and a green one would have made it
-indistinguishable from a pending deadline.
+**How the default install stays byte-identical.** `globals.css` does not define `--accent*`
+at all. Every rule that held a brand colour carries that exact colour as its own `var()`
+fallback — `rgba(var(--accent-rgb, 61, 205, 88), 0.4)`, `var(--accent-deep, #27b346)` — and
+`themeVars()` returns nothing for a part nobody has chosen. So on a default install no
+property is injected, every fallback is used, and the stylesheet renders exactly what it
+always did. An earlier version defined the tokens in `:root` with *derived* values, which
+silently shifted about twenty greens and every ink on a filled surface across the whole app;
+an e2e check now asserts a default install injects no overrides at all. **If you touch this
+file, keep that property**: resolve the fallbacks by hand and diff against the previous
+revision.
 
-**Adding a card later:** append to `DASHBOARD_BLOCKS` in `dashboard-layout.ts` and add the
-node in `analysis/page.tsx`. `parseLayout` splices any block a stored layout has never heard
-of back in at its shipped index, so a new card appears everywhere rather than being
-invisible on every deployment that had ever touched the Dashboard Manager.
+**Adding a card later:** append to `DASHBOARD_BLOCKS` in `dashboard-layout.ts`, add a
+wireframe case to `block-glyph.tsx`, and add the node in `analysis/page.tsx`. `parseLayout`
+splices any block a stored layout has never heard of back in at its shipped index, so a new
+card appears for everyone rather than being invisible to anyone who has ever touched the
+manager.
+
+### Folding the menu away
+
+The `.nav-toggle` button slides the sidebar out on a negative margin (its width never
+changes, so the nav labels do not reflow on the way out). The choice is a COOKIE read by the
+server layout, not localStorage: read in the browser after hydration, the bar would paint
+open and then be yanked shut on every navigation. The click itself does not wait for the
+server — it toggles the class and writes the cookie, so the bar moves under your hand.
+
+`NAV_COOKIE` lives in `src/lib/nav-cookie.ts` and **must not move into the client component
+that writes it**. A module marked `"use client"` hands the server a client-reference proxy
+for every export including plain constants, so `cookies().get(<proxy>)` reads nothing, with
+no error anywhere — the bar folded and then sprang open on the next page. An e2e check
+asserts the fold survives a navigation.
+
+### Wide pages
+
+`.main` caps at 1260px to keep a readable measure for prose. A 25-column table has no measure
+to protect, so that cap only pushed content into a horizontal scroller while the right of the
+window sat empty. Data pages opt out with `page-wide` on their root element
+(`.main:has(> .page-wide) { max-width: none; }`): the dashboard, Individual Results, the zone
+benchmark and Settings. The rating wizard, login and onboarding keep the cap.
 
 ### Hard product rules (enforced server-side — keep them)
 
@@ -718,9 +730,12 @@ src/app/(shell)/error.tsx    error boundary; auto-reloads once on a stale-tab Ch
 src/app/api/chat/route.ts    chatbot endpoint (role-scoped snapshot + Kimi)
 src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (delete, sandbox, demo)
 src/lib/dashboard-layout.ts  block definitions, sizes, layout parser, accent helpers (NO db import — client-safe)
-src/lib/dashboard-settings.ts  per-user reads/writes of dashboard.layout + theme.accent (server only)
-src/app/(shell)/admin/settings/  Settings page + Dashboard Manager (reset / app colour / arrange) + actions
-src/app/(shell)/analysis/dashboard-grid.tsx  12-col dashboard grid + the iPhone-style edit mode
+src/lib/dashboard-settings.ts  per-user reads/writes of dashboard.layout + theme.colors (server only)
+src/lib/nav-cookie.ts        the sidebar-fold cookie name (NOT in the client component — see §Folding)
+src/app/(shell)/admin/settings/  Settings page, wrench toggle, arranging canvas, wireframes, colour panel
+src/app/(shell)/nav-icon.tsx  the drawn icon set (replaced the ▦ ☰ ⚙ ✎ ★ characters)
+src/app/(shell)/sidebar-toggle.tsx  folds the menu bar away
+src/app/(shell)/analysis/dashboard-grid.tsx  the 12-column dashboard grid (server component, no JS)
 src/app/globals.css          all styling (semantic class names)
 src/app/fx.tsx               client-side scroll/hover effects
 e2e/smoke.mjs                Playwright smoke suite (see §9 for the check count)
@@ -745,7 +760,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 136/136 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 143/143 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,

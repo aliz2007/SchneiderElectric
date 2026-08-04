@@ -228,7 +228,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
           <p className="card-sub">Weighted score below the required level. Feed these into the development plan.</p>
           {development.length === 0 ? (
             <p style={{ color: "var(--muted)", fontSize: 13.5 }}>
-              {hasAnyScores ? "No capability below target. 🎉" : "No submitted assessments yet."}
+              {hasAnyScores ? "No capability below target." : "No submitted assessments yet."}
             </p>
           ) : (
             <ul className="mini-list">

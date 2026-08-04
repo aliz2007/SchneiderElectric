@@ -24,7 +24,7 @@ import ScheduleTimeline, { type TimelineEntry } from "./schedule-timeline";
 export default async function AnalysisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ track?: string; segment?: string; cap?: string; edit?: string }>;
+  searchParams: Promise<{ track?: string; segment?: string; cap?: string }>;
 }) {
   // the aggregated dashboard is open to every signed-in user; drill-down into
   // individual ratings stays superadmin-only
@@ -33,10 +33,7 @@ export default async function AnalysisPage({
 
   // Centralized filters (see FilterBar) — the track, segment and map-capability
   // URL params scope every analytics view at once.
-  const { track: trackRaw, segment: segmentRaw, cap: capRaw, edit: editRaw } = await searchParams;
-  // Arranging the dashboard is a superadmin act, and the check is here rather than in the
-  // grid component: ?edit=1 in an assessor's URL bar has to be inert, not merely unstyled.
-  const editing = isAdmin && editRaw === "1";
+  const { track: trackRaw, segment: segmentRaw, cap: capRaw } = await searchParams;
   // the arrangement belongs to the person looking; an assessor has none and gets the
   // shipped one, which is also what a superadmin sees until they change something
   const layout = readLayout(user.id);
@@ -410,7 +407,7 @@ export default async function AnalysisPage({
   );
 
   return (
-    <div>
+    <div className="page-wide">
       <div className="page-head">
         <div className="page-kicker">Analysis</div>
         <h1 className="page-title">Capability Dashboard</h1>
@@ -420,7 +417,7 @@ export default async function AnalysisPage({
         </p>
       </div>
 
-      <DashboardGrid layout={layout} blocks={blocks} canEdit={isAdmin} editing={editing} />
+      <DashboardGrid layout={layout} blocks={blocks} />
     </div>
   );
 }

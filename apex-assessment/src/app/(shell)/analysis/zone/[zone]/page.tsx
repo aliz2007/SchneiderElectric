@@ -30,7 +30,7 @@ export default async function ZonePage({ params }: { params: Promise<{ zone: str
     }));
 
   return (
-    <div>
+    <div className="page-wide">
       <div className="page-head">
         <div className="page-kicker">
           <Link href="/analysis" style={{ color: "inherit" }}>← Dashboard</Link>

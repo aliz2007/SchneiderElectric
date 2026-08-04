@@ -230,7 +230,7 @@ export default function Wizard({
         </div>
       )}
       {!submitted && !lockedMessage && scheduleNote && (
-        <div className="banner banner-info">📅 {scheduleNote}</div>
+        <div className="banner banner-info"> {scheduleNote}</div>
       )}
 
       {!onReview && cap && (

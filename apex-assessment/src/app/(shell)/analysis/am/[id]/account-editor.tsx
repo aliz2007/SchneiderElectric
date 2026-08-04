@@ -31,7 +31,7 @@ export default function AccountEditor({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        <span className="filter-toggle-ico">🏷️</span> Account details
+        <span className="filter-toggle-ico">️</span> Account details
         {filled > 0 && <span className="filter-badge">{filled}</span>}
         <span className="filter-caret">{open ? "▲" : "▼"}</span>
       </button>

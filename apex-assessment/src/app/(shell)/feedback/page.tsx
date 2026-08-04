@@ -151,7 +151,7 @@ export default async function FeedbackPage() {
           <h2 className="card-title">Development areas</h2>
           <p className="card-sub">Where the APEX Panel places you below the required level.</p>
           {development.length === 0 ? (
-            <p style={{ color: "var(--muted)", fontSize: 13.5 }}>No capability sits below its required level. 🎉</p>
+            <p style={{ color: "var(--muted)", fontSize: 13.5 }}>No capability sits below its required level.</p>
           ) : (
             <ul className="mini-list">
               {development.map((r) => (
@@ -191,9 +191,12 @@ export default async function FeedbackPage() {
 
       <div className="card card-pad">
         <h2 className="card-title">Capability detail · three lenses vs required</h2>
-        {/* No legend strip: every column header below already carries the same dot and the
-            same label, so this only said it twice. Same reasoning as the individual
-            analysis page. */}
+        <div className="legend" style={{ marginTop: 6, marginBottom: 10 }}>
+          <span><span className="lens-dot ld-self" />You</span>
+          <span><span className="lens-dot ld-manager" />Manager</span>
+          <span><span className="lens-dot ld-expert" />APEX Panel</span>
+          <span><span className="lens-dot ld-req" />Required</span>
+        </div>
         <div className="hm-scroll">
           <table className="hm">
             <thead>

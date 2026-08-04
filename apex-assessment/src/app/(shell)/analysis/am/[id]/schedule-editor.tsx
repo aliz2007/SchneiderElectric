@@ -33,7 +33,7 @@ export default function ScheduleEditor({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        <span className="filter-toggle-ico">📅</span> Assessment schedule
+        <span className="filter-toggle-ico"></span> Assessment schedule
         {hasAny && (
           <span className="filter-badge">
             {(selfDeadline ? 1 : 0) + (managerDeadline ? 1 : 0) + (panelDatetime ? 1 : 0)}

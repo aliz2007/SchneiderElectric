@@ -1,34 +1,40 @@
+import { cookies } from "next/headers";
 import { requireUser } from "@/lib/session";
+import { NAV_COLLAPSED, NAV_COOKIE } from "@/lib/nav-cookie";
 import { LENS_LABELS } from "@/lib/seed-data";
 import { allLensesSubmitted, assignedAMs } from "@/lib/queries";
 import { BrandMark } from "@/lib/brand";
 import NavLinks, { type NavItem } from "./nav-links";
 import ChatWidget from "./chat-widget";
+import SidebarToggle from "./sidebar-toggle";
 import { logout } from "./actions";
 
 export default async function ShellLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  // read on the SERVER so a folded menu arrives folded — a preference applied after
+  // hydration would flash the bar open on every navigation
+  const navCollapsed = (await cookies()).get(NAV_COOKIE)?.value === NAV_COLLAPSED;
 
   const rateItems: NavItem[] = user.lens
-    ? [{ href: "/rate", label: user.lens === "self" ? "My Self-Assessment" : "My Assessments", ico: "✎" }]
+    ? [{ href: "/rate", label: user.lens === "self" ? "My Self-Assessment" : "My Assessments", ico: "assess" }]
     : [];
   // The assessed person sees their own feedback once all three lenses are submitted.
   if (user.lens === "self") {
     const mine = assignedAMs(user.id);
     if (mine.length > 0 && mine[0].profile_complete && allLensesSubmitted(mine[0].id)) {
-      rateItems.push({ href: "/feedback", label: "My Feedback", ico: "★" });
+      rateItems.push({ href: "/feedback", label: "My Feedback", ico: "feedback" });
     }
   }
   // the aggregated dashboard is open to everyone; individual results & access
   // management stay superadmin-only
   const adminItems: NavItem[] = [
-    { href: "/analysis", label: "Dashboard", ico: "▦" },
+    { href: "/analysis", label: "Dashboard", ico: "dashboard" },
     ...(user.role === "superadmin"
-      ? [
-          { href: "/analysis/individuals", label: "Individuals", ico: "☰" },
-          { href: "/admin/users", label: "Users & Access", ico: "⚙" },
-          { href: "/admin/settings", label: "Settings", ico: "✥" },
-        ]
+      ? ([
+          { href: "/analysis/individuals", label: "Individuals", ico: "people" },
+          { href: "/admin/users", label: "Users & Access", ico: "access" },
+          { href: "/admin/settings", label: "Settings", ico: "settings" },
+        ] as NavItem[])
       : []),
   ];
 
@@ -43,7 +49,8 @@ export default async function ShellLayout({ children }: { children: React.ReactN
     user.role === "superadmin" ? "Superadmin" : user.lens ? LENS_LABELS[user.lens] : "Assessor";
 
   return (
-    <div className="shell">
+    <div className={`shell${navCollapsed ? " nav-collapsed" : ""}`}>
+      <SidebarToggle initialCollapsed={navCollapsed} />
       <aside className="sidebar">
         <div className="brand">
           <BrandMark />

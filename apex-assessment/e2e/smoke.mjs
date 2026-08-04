@@ -486,22 +486,18 @@ try {
   (await page.locator('a.nav-link[href="/admin/settings"]').count()) === 0
     ? ok("Settings hidden from the assessor sidebar")
     : fail("settings nav", "Settings link shown to an assessor");
-  // ?edit=1 in an assessor's URL bar has to be INERT, not merely unstyled. Both halves of
-  // this matter: asserting only the absences would also pass on a blank page.
-  await page.goto(`${BASE}/analysis?edit=1`);
-  await page.waitForSelector(".kpi-value");
+  // an assessor still gets the dashboard, on the shipped arrangement — they have no stored
+  // layout and no way to acquire one
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
   {
-    const tools =
-      (await page.locator(".dash-edit-bar").count()) +
-      (await page.locator(".dash-grid-editing").count()) +
-      (await page.locator("form.dash-edit").count()) +
-      (await page.locator(".dash-tool").count());
-    const stillRendered =
+    const sizes = await page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.size));
+    const rendered =
       (await page.locator(".kpi-value").count()) > 0 &&
       (await page.locator('.card-title:has-text("People you assess")').count()) === 1;
-    tools === 0 && stillRendered
-      ? ok("?edit=1 does nothing for an assessor, dashboard still renders")
-      : fail("assessor edit mode", `${tools} edit controls, rendered=${stillRendered}`);
+    rendered && sizes.length > 0 && sizes.every((z) => z === "full")
+      ? ok("an assessor gets the dashboard on the shipped arrangement")
+      : fail("assessor dashboard", `${sizes.join(",")} rendered=${rendered}`);
   }
 
   // every superadmin surface bounces an assessor back to their own work
@@ -780,11 +776,10 @@ try {
     : fail("delete user", `${beforeRows}->${afterRows}, gone=${gone}`);
 
   // ---- 13. superadmin Settings: the Dashboard Manager ----
-  // Client feedback (3 Aug, second round): a superadmin-only manager that can reset the
-  // dashboard, repaint the app, and move / resize / remove the cards the way an iPhone
-  // homescreen is arranged. Every check below asserts the RESULT on the dashboard, not the
-  // control that was clicked: a layout editor whose state never reaches the page is the
-  // exact failure this feature invites.
+  // The manager lives behind a wrench on the admin page and arranges the dashboard on a
+  // canvas of tiles. Every check below asserts the RESULT on the dashboard, not the control
+  // that was clicked: a layout editor whose state never reaches the page is the failure this
+  // feature invites.
   const order = () =>
     page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.block));
 
@@ -792,13 +787,10 @@ try {
   await page.waitForSelector(".dash-block");
   const baseline = await order();
   {
-    const want = ["kpis", "report", "filters", "map", "timeline", "heatmap", "roster"];
-    want.every((id) => baseline.includes(id)) &&
+    const shipped = ["kpis", "report", "filters", "map", "timeline", "priorities", "heatmap", "roster"];
+    ["kpis", "report", "filters", "map", "timeline", "heatmap", "roster"].every((id) => baseline.includes(id)) &&
     new Set(baseline).size === baseline.length &&
-    baseline.join(",") ===
-      ["kpis", "report", "filters", "map", "timeline", "priorities", "heatmap", "roster"]
-        .filter((id) => baseline.includes(id))
-        .join(",")
+    baseline.join(",") === shipped.filter((id) => baseline.includes(id)).join(",")
       ? ok(`dashboard renders the shipped card order (${baseline.join(" → ")})`)
       : fail("shipped order", baseline.join(","));
     // without this, every reorder check below could be satisfied by shuffling empty divs
@@ -810,46 +802,48 @@ try {
       ((await page.locator('.dash-block[data-block="roster"] .card-title').textContent()) ?? "").includes("Roster");
     filled ? ok("every card sits inside its own block wrapper") : fail("block contents", "a wrapper is empty");
   }
+  // the dashboard itself carries no editing chrome — the client asked for the manager to be
+  // behind a button on the admin page, not bolted to the top of the dashboard
+  (await page.locator(".dash-edit-bar, .dash-grid-editing, .dash-tool").count()) === 0
+    ? ok("the dashboard carries no editing chrome")
+    : fail("dashboard chrome", "edit controls are on the dashboard");
 
-  // the Settings surface, reached the way a person reaches it
+  // the wrench, top right of the admin page
   await page.locator('a.nav-link[href="/admin/settings"]').click();
   await page.waitForURL("**/admin/settings");
-  ((await page.locator("h1.page-title").textContent()) ?? "").trim() === "Settings" &&
-  (await page.locator('.card-title:has-text("Dashboard Manager")').count()) === 1
-    ? ok("superadmin reaches Settings → Dashboard Manager from the sidebar")
-    : fail("settings page", "title or Dashboard Manager card missing");
-
-  // entering edit mode from the dashboard's own affordance
-  await page.goto(`${BASE}/analysis`);
-  await page.locator('a:has-text("Arrange dashboard")').click();
-  await page.waitForURL(/\/analysis\?edit=1/);
-  await page.waitForSelector(".dash-grid-editing");
-  (await page.locator(".dash-edit-bar-active").count()) === 1 &&
-  (await page.locator(".dash-chrome").count()) === baseline.length
-    ? ok("edit mode turns on without dropping a card")
-    : fail("edit mode", `${await page.locator(".dash-chrome").count()} of ${baseline.length} cards`);
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: `${SHOTS}/9-dashboard-arranging.png` });
-
-  // the filter bar scopes every other card, so it is the one card that cannot be removed
-  (await page.locator('.dash-block[data-block="filters"] .dash-pinned').count()) === 1 &&
-  (await page.locator('[aria-label="Remove Filters"]').count()) === 0
-    ? ok("the filter card is pinned and offers no remove button")
-    : fail("pinned filters", "filters can be removed");
-  // an off-by-one in move() would push a card off the end of the array
+  (await page.locator(".dm").count()) === 0 && (await page.locator("button.wrench").count()) === 1
+    ? ok("Settings opens with the Dashboard Manager closed, behind a wrench")
+    : fail("wrench", `${await page.locator(".dm").count()} panels open`);
+  await page.locator("button.wrench").click();
+  await page.waitForSelector(".dc-canvas");
   {
-    const first = baseline[0];
-    const last = baseline[baseline.length - 1];
-    (await page.locator(`[aria-label="Move Campaign KPIs earlier"]`).isDisabled()) &&
-    (await page.locator(`[aria-label="Move Roster later"]`).isDisabled())
-      ? ok(`the arrows stop at both ends (${first} … ${last})`)
-      : fail("arrow bounds", "an end card can still be moved past the edge");
+    const tiles = await page.locator(".dc-tile").evaluateAll((els) => els.map((e) => e.dataset.block));
+    // every card is on the canvas, including the ones already switched off, and each one
+    // carries a drawn wireframe rather than only a label
+    tiles.length === 8 &&
+    (await page.locator(".dc-tile .wf").count()) === 8 &&
+    (await page.locator(".dc-tile .dc-name").count()) === 8
+      ? ok(`the canvas shows all ${tiles.length} cards with a preview each`)
+      : fail("canvas tiles", `${tiles.length} tiles, ${await page.locator(".dc-tile .wf").count()} previews`);
   }
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/9-dashboard-manager.png` });
+
+  // the filter card scopes every other one, so it is the one that cannot be switched off
+  (await page.locator('.dc-tile[data-block="filters"] .dc-pinned').count()) === 1 &&
+  (await page.locator('[aria-label="Show Filters on the dashboard"]').count()) === 0
+    ? ok("the filter card is pinned and offers no switch")
+    : fail("pinned filters", "filters can be switched off");
+  // an off-by-one in the step would push a card off the end of the list
+  (await page.locator('[aria-label="Move Campaign KPIs earlier"]').isDisabled()) &&
+  (await page.locator('[aria-label="Move Roster later"]').isDisabled())
+    ? ok("the move buttons stop at both ends")
+    : fail("move bounds", "an end card can still be moved past the edge");
 
   // move a card, save, and read the ORDER back off a fresh page load
   await page.locator('[aria-label="Move Roster earlier"]').click();
   await page.locator('[aria-label="Move Roster earlier"]').click();
-  await page.locator('button:has-text("Done")').click();
+  await page.locator('button:has-text("Save arrangement")').click();
   await page.waitForTimeout(900);
   await page.goto(`${BASE}/analysis`);
   await page.waitForSelector(".dash-block");
@@ -860,17 +854,16 @@ try {
     moved.join(",") === expected.join(",")
       ? ok(`roster moved two places earlier (${moved.join(" → ")})`)
       : fail("reorder", `${moved.join(",")} — wanted ${expected.join(",")}`);
-    // a reorder that shuffles wrappers while the server keeps filling them in the old
+    // a reorder that reshuffles wrappers while the server keeps filling them in the old
     // order would pass the sequence check above and be completely broken
-    const rosterTitle =
-      (await page.locator('.dash-block[data-block="roster"] .card-title').textContent()) ?? "";
+    const rosterTitle = (await page.locator('.dash-block[data-block="roster"] .card-title').textContent()) ?? "";
     const rosterRows = await page.locator('.dash-block[data-block="roster"] table.table tbody tr').count();
     rosterTitle.trim().startsWith("Roster ·") && rosterRows > 1
       ? ok(`the roster's own content travelled with it (${rosterRows} rows)`)
       : fail("reorder content", `${rosterTitle.trim()} / ${rosterRows} rows`);
   }
-  // ...and that it was persisted installation-wide, not held in client state
-  await page.goto(`${BASE}/admin/settings`);
+  // ...and that it was persisted, not held in the canvas's local state
+  await page.goto(`${BASE}/admin/users`);
   await page.goto(`${BASE}/analysis`);
   await page.waitForSelector(".dash-block");
   (await order()).indexOf("roster") === baseline.indexOf("roster") - 2
@@ -878,10 +871,11 @@ try {
     : fail("order persistence", (await order()).join(","));
 
   // resize one card and confirm the grid actually gives it fewer columns
-  await page.goto(`${BASE}/analysis?edit=1`);
-  await page.waitForSelector(".dash-grid-editing");
-  await page.locator('.dash-block[data-block="heatmap"] .dash-size[title="Half width"]').click();
-  await page.locator('button:has-text("Done")').click();
+  await page.goto(`${BASE}/admin/settings`);
+  await page.locator("button.wrench").click();
+  await page.waitForSelector(".dc-canvas");
+  await page.locator('.dc-tile[data-block="heatmap"] .dc-size[title="Half width"]').click();
+  await page.locator('button:has-text("Save arrangement")').click();
   await page.waitForTimeout(900);
   await page.goto(`${BASE}/analysis`);
   await page.waitForSelector(".dash-block");
@@ -895,54 +889,61 @@ try {
       ? ok(`heat map narrowed to half width (${span}), its neighbour untouched`)
       : fail("resize", `${size} / ${span} / sibling ${sibling}`);
   }
+  // the zone map cannot be squeezed: it is a fixed-aspect world canvas, so the editor must
+  // refuse the widths that would ruin it rather than let them be chosen
+  await page.goto(`${BASE}/admin/settings`);
+  await page.locator("button.wrench").click();
+  await page.waitForSelector(".dc-canvas");
+  (await page.locator('.dc-tile[data-block="map"] .dc-size[title="Third width"]').count()) === 0 &&
+  (await page.locator('.dc-tile[data-block="map"] .dc-size').first().isDisabled())
+    ? ok("the map refuses widths it cannot survive")
+    : fail("min width", "the map offers a third width");
 
-  // remove a card: it has to leave the DOM, not just be dimmed
-  await page.goto(`${BASE}/analysis?edit=1`);
-  await page.waitForSelector(".dash-grid-editing");
-  await page.locator('[aria-label="Remove Zone performance map"]').click();
-  await page.locator('button:has-text("Done")').click();
+  // switch a card off: it has to leave the dashboard, not just be dimmed
+  await page.locator('[aria-label="Show Zone performance map on the dashboard"]').click();
+  await page.locator('button:has-text("Save arrangement")').click();
   await page.waitForTimeout(900);
   await page.goto(`${BASE}/analysis`);
   await page.waitForSelector(".dash-block");
   {
     const after = await order();
-    // .is-hidden only greys the body in EDIT mode; a hide implemented as opacity would
-    // leave the map — and every AM's weighted scores — sitting in the read-only DOM
     (await page.locator('.dash-block[data-block="map"]').count()) === 0 &&
     (await page.locator(".map-card").count()) === 0 &&
     after.length === baseline.length - 1 &&
     baseline.filter((id) => id !== "map").every((id) => after.includes(id))
-      ? ok(`removed card is gone from the page (${after.length} of ${baseline.length} left)`)
-      : fail("remove card", after.join(","));
+      ? ok(`a card switched off is gone from the page (${after.length} of ${baseline.length} left)`)
+      : fail("switch off", after.join(","));
   }
-  // the settings page and the dashboard have to agree about the same stored state
+  // and it is still on the canvas, switched off, so it can come back
   await page.goto(`${BASE}/admin/settings`);
-  ((await page.locator(".dm-launch-state").textContent()) ?? "").includes("1 card removed")
-    ? ok("Settings reports the removed card")
-    : fail("settings summary", (await page.locator(".dm-launch-state").textContent()) ?? "");
-  // the escape hatch: a card taken off the dashboard can always be put back from here
-  await page.locator('button:has-text("Open Dashboard Manager")').click();
-  await page.locator('tr:has-text("Zone performance map") button:has-text("Removed · put back")').click();
-  await page.waitForTimeout(900);
-  await page.goto(`${BASE}/analysis`);
-  await page.waitForSelector(".dash-block");
-  (await page.locator(".map-card").count()) === 1 && (await order()).includes("map")
-    ? ok("a removed card can be put back from Settings")
-    : fail("restore card", (await order()).join(","));
+  await page.locator("button.wrench").click();
+  await page.waitForSelector(".dc-canvas");
+  {
+    const offTile = page.locator('.dc-tile[data-block="map"]');
+    const isOff = ((await offTile.getAttribute("class")) ?? "").includes("is-off");
+    isOff && ((await page.locator(".dc-count").textContent()) ?? "").includes("1 off")
+      ? ok("the card that was switched off is still on the canvas")
+      : fail("off tile", `${await offTile.getAttribute("class")}`);
+    await page.locator('[aria-label="Show Zone performance map on the dashboard"]').click();
+    await page.locator('button:has-text("Save arrangement")').click();
+    await page.waitForTimeout(900);
+    await page.goto(`${BASE}/analysis`);
+    await page.waitForSelector(".dash-block");
+    (await page.locator(".map-card").count()) === 1 && (await order()).includes("map")
+      ? ok("switching it back on puts the card back")
+      : fail("switch on", (await order()).join(","));
+  }
 
-  // ---- 13b. the app colour ----
+  // ---- 13b. colour, per part ----
   await page.goto(`${BASE}/admin/settings`);
-  await page.locator('button:has-text("Open Dashboard Manager")').click();
-  await page.locator('button:has-text("App colour")').click();
-  // nothing arbitrary may reach a style attribute from this form
-  await page.fill(".dm-hex-text", "nope");
-  const junkBlocked = await page.locator('button:has-text("Save colour")').isDisabled();
-  await page.locator('.dm-swatch-btn:has-text("Violet")').click();
-  const validEnabled = await page.locator('button:has-text("Save colour")').isEnabled();
-  junkBlocked && validEnabled
-    ? ok("the colour form refuses a value that is not a colour")
-    : fail("accent validation", `junk disabled=${junkBlocked}, preset enabled=${validEnabled}`);
-  await page.locator('button:has-text("Save colour")').click();
+  await page.locator("button.wrench").click();
+  await page.locator('.dm-tab:has-text("Colour")').click();
+  await page.waitForSelector(".cp-parts");
+  (await page.locator(".cp-part").count()) === 4
+    ? ok("the colour tab offers the accent and the three surfaces separately")
+    : fail("colour parts", `${await page.locator(".cp-part").count()}`);
+  await page.locator('.cp-swatch[aria-label="Violet"]').click();
+  await page.locator('button:has-text("Save colours")').click();
   await page.waitForTimeout(900);
   await page.goto(`${BASE}/analysis`);
   await page.waitForSelector(".dash-block");
@@ -955,11 +956,9 @@ try {
     declared === "#7c5cff" && resolved === "#7c5cff"
       ? ok("the saved accent reaches every page")
       : fail("accent injection", `${declared} / ${resolved}`);
-    // A check on the variable alone passes even if every rule still hardcodes green, so
-    // this reads a PAINTED node. The nav pill is a gradient of accent-bright and
-    // accent-deep rather than the accent itself, so the assertion is on the HUE that came
-    // out — nothing green-dominant left, something blue-dominant present — instead of on
-    // one exact triple that would break the next time the ramp is tweaked.
+    // a check on the variable alone passes even if every rule still hardcodes green, so this
+    // reads a PAINTED node — and on the HUE, since the nav pill is a gradient of two derived
+    // shades rather than the accent itself
     const painted = await page.locator(".nav-link.active").evaluate((e) => {
       const cs = getComputedStyle(e);
       return `${cs.backgroundImage} ${cs.backgroundColor}`;
@@ -969,7 +968,7 @@ try {
       ? ok("the accent is actually painted, not just declared")
       : fail("accent paint", painted.slice(0, 160));
     // every accent property must resolve — a self-referential var() is invalid at computed
-    // time and silently paints nothing (this caught exactly that bug during the build)
+    // time and silently paints nothing (that bug happened once, during this build)
     const empties = await page.evaluate(() => {
       const cs = getComputedStyle(document.documentElement);
       return ["--accent", "--accent-rgb", "--accent-bright", "--accent-deep", "--accent-soft", "--accent-ink", "--se-green"]
@@ -979,7 +978,7 @@ try {
       ? ok("every accent variable resolves to a value")
       : fail("unresolved accent vars", empties.join(" "));
     // THE rule for this feature: repainting the brand must not repaint the results. Green
-    // means at-or-above-required, and it has to keep meaning that under any brand colour.
+    // means at-or-above-required and it has to keep meaning that under any brand colour.
     const heatGood = await page.locator("td.cell.hm-good").first().evaluate((e) => getComputedStyle(e).backgroundColor);
     const okRgb = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--ok-rgb").trim()
@@ -987,10 +986,7 @@ try {
     heatGood.includes("61, 205, 88") && okRgb.replace(/\s+/g, "") === "61,205,88"
       ? ok("the heat legend keeps its own colours under a repainted brand")
       : fail("heat vs accent", `${heatGood} / --ok-rgb ${okRgb}`);
-    // The lens colours are a legend too: the Panel dot must not follow the brand either.
-    // Waits on the header dot rather than the radar — by this point in the run the sandbox
-    // section has blanked AM01's ratings, so the chart is legitimately absent while the
-    // capability table (and its lens dots) still renders.
+    // the lens colours are a legend too: the Panel dot must not follow the brand either
     await page.goto(`${BASE}/analysis/am/1`);
     await page.waitForSelector(".lens-dot.ld-expert");
     const panelDot = await page.locator(".lens-dot.ld-expert").first().evaluate((e) => getComputedStyle(e).backgroundColor);
@@ -998,12 +994,30 @@ try {
       ? ok("the APEX Panel lens keeps its colour under a repainted brand")
       : fail("lens vs accent", panelDot);
   }
+  // a surface is a separate choice from the brand — that is the whole point of the parts
+  await page.goto(`${BASE}/admin/settings`);
+  await page.locator("button.wrench").click();
+  await page.locator('.dm-tab:has-text("Colour")').click();
+  await page.locator('.cp-part:has-text("Menu bar")').click();
+  await page.locator('.cp-swatch[aria-label="Aubergine"]').click();
+  await page.locator('button:has-text("Save colours")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const sidebar = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--sidebar").trim()
+    );
+    const accent = await page.evaluate(() => document.documentElement.dataset.accent);
+    sidebar === "#120e1a" && accent === "#7c5cff"
+      ? ok("a surface can be recoloured without touching the accent")
+      : fail("per-part colour", `sidebar ${sidebar}, accent ${accent}`);
+  }
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/10-accent-violet.png` });
+  await page.screenshot({ path: `${SHOTS}/10-recoloured.png` });
 
-  // ---- 13bis. the arrangement and the colour belong to ONE account ----
-  // The whole point of storing these per user: vladimir has by now reordered his cards,
-  // narrowed one, removed the map and gone violet. Nobody else's dashboard may have moved.
+  // ---- 13c. it all belongs to ONE account ----
+  // vladimir has by now reordered his cards, narrowed one and gone violet. Nobody else moves.
   await page.click("text=Sign out");
   await page.waitForURL("**/login");
   await page.fill("#username", "tmanager");
@@ -1014,17 +1028,14 @@ try {
   await page.waitForSelector(".dash-block");
   {
     const theirs = await order();
-    // the shipped RELATIVE order, over the blocks an assessor actually receives (no map,
-    // no PDF deck) — vladimir's roster sits two places earlier than this
     const shipped = ["kpis", "report", "filters", "map", "timeline", "priorities", "heatmap", "roster"]
       .filter((id) => theirs.includes(id));
     const sizes = await page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.size));
     const accent = await page.evaluate(() => document.documentElement.dataset.accent);
     theirs.join(",") === shipped.join(",") && sizes.every((z) => z === "full") && accent === "#3dcd58"
-      ? ok("another account is untouched by a superadmin's arrangement and colour")
+      ? ok("another account is untouched by a superadmin's arrangement and colours")
       : fail("per-user isolation", `${theirs.join(",")} / ${[...new Set(sizes)].join("+")} / ${accent}`);
   }
-  // ...and the superadmin's own customisation is still waiting for him
   await page.click("text=Sign out");
   await page.waitForURL("**/login");
   await page.fill("#username", "vladimir");
@@ -1037,15 +1048,21 @@ try {
     const accent = await page.evaluate(() => document.documentElement.dataset.accent);
     const heat = await page.locator('.dash-block[data-block="heatmap"]').getAttribute("data-size");
     mine.indexOf("roster") === baseline.indexOf("roster") - 2 && accent === "#7c5cff" && heat === "half"
-      ? ok("the superadmin's own arrangement and colour survived the other sign-in")
+      ? ok("the superadmin's own arrangement and colours survived the other sign-in")
       : fail("own settings after switch", `${mine.join(",")} / ${accent} / heat ${heat}`);
   }
 
-  // ---- 13c. reset ----
+  // ---- 13d. back to the shipped state ----
   await page.goto(`${BASE}/admin/settings`);
-  await page.locator('button:has-text("Open Dashboard Manager")').click();
-  await page.locator('button[role="tab"]:has-text("Reset")').click();
-  await page.locator('button:has-text("Reset everything")').click();
+  await page.locator("button.wrench").click();
+  await page.waitForSelector(".dc-canvas");
+  await page.locator('button:has-text("Back to the default")').click();
+  await page.locator('button:has-text("Save arrangement")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/admin/settings`);
+  await page.locator("button.wrench").click();
+  await page.locator('.dm-tab:has-text("Colour")').click();
+  await page.locator('button:has-text("Back to the shipped palette")').click();
   await page.waitForTimeout(900);
   await page.goto(`${BASE}/analysis`);
   await page.waitForSelector(".dash-block");
@@ -1053,7 +1070,7 @@ try {
     const back = await order();
     const sizes = await page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.size));
     const accent = await page.evaluate(() => document.documentElement.dataset.accent);
-    // and the pixels went back too, not just the stored hex
+    // and the pixels went back too, not just the stored values
     const repainted = await page.locator(".nav-link.active").evaluate((e) => {
       const cs = getComputedStyle(e);
       return `${cs.backgroundImage} ${cs.backgroundColor}`;
@@ -1061,25 +1078,52 @@ try {
     const greenBack = [...repainted.matchAll(/rgba?\((\d+),\s*(\d+),\s*(\d+)/g)]
       .map((m) => m.slice(1).map(Number))
       .some(([r, g, b]) => g > r && g > b);
-    back.join(",") === baseline.join(",") && sizes.every((s) => s === "full") && accent === "#3dcd58" && greenBack
-      ? ok("reset restores the shipped layout and the shipped colour")
+    back.join(",") === baseline.join(",") && sizes.every((z) => z === "full") && accent === "#3dcd58" && greenBack
+      ? ok("reset restores the shipped layout and the shipped colours")
       : fail("reset", `${back.join(",")} / ${[...new Set(sizes)].join("+")} / ${accent} / green=${greenBack}`);
+    // with nothing customised, --accent must be UNDEFINED rather than set to the shipped
+    // green: the stylesheet's own fallbacks are what make a default install render exactly
+    // as it always did, and an injected value would quietly bypass every one of them
+    const injected = await page.evaluate(() => document.documentElement.getAttribute("style") ?? "");
+    !injected.includes("--accent")
+      ? ok("a default install injects no colour overrides at all")
+      : fail("clean default", injected.slice(0, 120));
   }
-  // the manager has to agree that there is nothing left to reset, or isDefaultLayout() and
-  // the dashboard are reporting different things about the same row
-  await page.goto(`${BASE}/admin/settings`);
+
+  // ---- 13e. folding the menu away ----
+  await page.locator(".nav-toggle").click();
+  await page.waitForTimeout(600);
   {
-    const chips = (await page.locator(".dm-launch-state").textContent()) ?? "";
-    await page.locator('button:has-text("Open Dashboard Manager")').click();
-    await page.locator('button[role="tab"]:has-text("Reset")').click();
-    const allDisabled =
-      (await page.locator('button:has-text("Reset the dashboard layout")').isDisabled()) &&
-      (await page.locator('button:has-text("Reset the app colour")').isDisabled()) &&
-      (await page.locator('button:has-text("Reset everything")').isDisabled());
-    chips.includes("Dashboard layout: default") && chips.includes("Schneider green") && allDisabled
-      ? ok("Settings reports the reset state and greys out the reset buttons")
-      : fail("reset state", `${chips.trim()} / disabled=${allDisabled}`);
+    const shellClass = (await page.locator(".shell").getAttribute("class")) ?? "";
+    const sidebarLeft = await page.locator(".sidebar").evaluate((e) => e.getBoundingClientRect().right);
+    shellClass.includes("nav-collapsed") && sidebarLeft <= 1
+      ? ok("the menu bar folds away")
+      : fail("collapse", `${shellClass} / right edge ${Math.round(sidebarLeft)}`);
   }
+  // the choice is a cookie read by the SERVER, so it has to survive a navigation without
+  // the bar flashing back open
+  await page.goto(`${BASE}/analysis/individuals`);
+  await page.waitForSelector(".dash-block, table.table");
+  {
+    const shellClass = (await page.locator(".shell").getAttribute("class")) ?? "";
+    shellClass.includes("nav-collapsed")
+      ? ok("the folded menu stays folded across a navigation")
+      : fail("collapse persistence", shellClass);
+    // and the wide table now has the whole window instead of scrolling inside empty space
+    const gap = await page.evaluate(() => {
+      const m = document.querySelector(".main");
+      return m ? Math.round(window.innerWidth - m.getBoundingClientRect().right) : -1;
+    });
+    gap >= 0 && gap < 40
+      ? ok(`Individual Results uses the full window (${gap}px to spare)`)
+      : fail("wide page", `${gap}px of empty space on the right`);
+  }
+  await page.locator(".nav-toggle").click();
+  await page.waitForTimeout(600);
+  !((await page.locator(".shell").getAttribute("class")) ?? "").includes("nav-collapsed")
+    ? ok("the menu bar comes back")
+    : fail("expand", "still collapsed");
+
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});

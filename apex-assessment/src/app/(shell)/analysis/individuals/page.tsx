@@ -168,7 +168,7 @@ export default async function IndividualsPage({
   };
 
   return (
-    <div>
+    <div className="page-wide">
       <div className="page-head">
         <div className="page-kicker">Analysis</div>
         <h1 className="page-title">Individual Results</h1>

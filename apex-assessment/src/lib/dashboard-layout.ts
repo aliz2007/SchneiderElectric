@@ -17,7 +17,7 @@
  */
 
 export const LAYOUT_KEY = "dashboard.layout";
-export const ACCENT_KEY = "theme.accent";
+export const COLORS_KEY = "theme.colors";
 
 /** How much of the 12-column dashboard grid a card takes. */
 export type BlockSize = "third" | "half" | "full";
@@ -214,19 +214,38 @@ export function parseLayout(raw: string | null): DashboardLayout {
 export const serializeLayout = (layout: DashboardLayout): string =>
   JSON.stringify(layout.map((b) => ({ id: b.id, size: b.size, hidden: b.hidden })));
 
-// ---------- accent colour ----------
+// ---------- colour ----------
 
 export const DEFAULT_ACCENT = "#3dcd58"; // Schneider green
 
+/**
+ * The parts of the app that can be recoloured independently.
+ *
+ * `accent` is the brand: buttons, links, focus rings, the glow. The other three are
+ * SURFACES, and they are separate because changing the brand and changing the furniture are
+ * different intentions — a customer may want their own green on a navy app, or the same
+ * green on a black one.
+ *
+ * Deliberately absent: anything that carries a result. Green means "at or above the required
+ * level" and magenta means "the APEX Panel said so"; those are a legend, not decoration, and
+ * a dashboard that reported differently depending on a colour setting would be worse than
+ * one that could not be recoloured at all.
+ */
+export type ThemePart = "accent" | "sidebar" | "bg" | "card";
+
+export const THEME_PARTS: { id: ThemePart; label: string; blurb: string; fallback: string }[] = [
+  { id: "accent", label: "Accent", blurb: "Buttons, links, focus and the glow.", fallback: DEFAULT_ACCENT },
+  { id: "sidebar", label: "Menu bar", blurb: "The panel down the left.", fallback: "#060b16" },
+  { id: "bg", label: "Background", blurb: "The canvas behind the cards.", fallback: "#070d19" },
+  { id: "card", label: "Cards", blurb: "The panels the content sits on.", fallback: "#0f172a" },
+];
+
+export type ThemeColors = Partial<Record<ThemePart, string>>;
+
 export type AccentPreset = { hex: string; name: string };
 
-/**
- * The offered accents. Every one of these has been checked to keep white text legible on
- * the primary button and to stay clear of the heat palette (green = at target, amber and
- * orange = below, red = critical), because the accent paints CHROME and the heat colours
- * carry meaning — if the two collide the dashboard starts looking like it is warning you
- * about its own sidebar.
- */
+/** Offered for the accent. Each keeps its filled buttons legible and stays clear of the
+ *  result palette, so a brand colour never reads as a warning about itself. */
 export const ACCENT_PRESETS: AccentPreset[] = [
   { hex: "#3dcd58", name: "Schneider green" },
   { hex: "#2e7cf6", name: "Deep blue" },
@@ -234,6 +253,16 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { hex: "#7c5cff", name: "Violet" },
   { hex: "#e0577f", name: "Rose" },
   { hex: "#c48a2a", name: "Bronze" },
+];
+
+/** Offered for the surfaces: dark neutrals that keep body text above contrast. */
+export const SURFACE_PRESETS: AccentPreset[] = [
+  { hex: "#070d19", name: "Midnight navy" },
+  { hex: "#0b1020", name: "Ink" },
+  { hex: "#0a0f14", name: "Graphite" },
+  { hex: "#10131c", name: "Slate" },
+  { hex: "#120e1a", name: "Aubergine" },
+  { hex: "#000000", name: "Black" },
 ];
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -267,30 +296,70 @@ export function luminance(hex: string): number {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
+/** Keep only the parts that are real colours, so nothing arbitrary reaches a style attribute. */
+export function parseColors(raw: string | null): ThemeColors {
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  const out: ThemeColors = {};
+  for (const { id } of THEME_PARTS) {
+    const hex = normalizeAccent((parsed as Record<string, unknown>)[id] as string | undefined);
+    if (hex) out[id] = hex;
+  }
+  return out;
+}
+
+export const serializeColors = (c: ThemeColors): string | null => {
+  const clean = parseColors(JSON.stringify(c));
+  return Object.keys(clean).length === 0 ? null : JSON.stringify(clean);
+};
+
+export const isDefaultColors = (c: ThemeColors): boolean => Object.keys(parseColors(JSON.stringify(c))).length === 0;
+
 /**
- * The custom properties that repaint the app's chrome.
+ * The custom properties that repaint the app.
  *
- * Only the accent family is written. The result palette (--ok, --amber, --red, the .hm-*
- * cells) is deliberately absent: those colours are a legend, and a heat map whose "at or
- * above required" green followed the customer's brand colour would be reporting a
- * different answer depending on a setting. globals.css keeps the two families apart, and
- * this function is the reason it has to.
+ * Returns NOTHING for a part nobody has chosen, and that is the important part. globals.css
+ * does not define --accent* at all; every rule that used to hold a brand green now carries
+ * that exact green as its own var() fallback. So on a default install nothing is injected,
+ * every fallback is used, and the stylesheet renders byte-for-byte what it always did. The
+ * tokens only come into existence when somebody actually picks a colour.
  *
  * These land as an INLINE STYLE on <html> rather than as a <style> block. An inline style
- * beats any stylesheet rule regardless of which one the framework decided to emit first,
- * so the accent cannot lose a cascade race with globals.css on some future build.
+ * beats any stylesheet rule regardless of which one the framework emits first.
  */
-export function accentVars(hex: string): Record<string, string> {
-  const accent = normalizeAccent(hex) ?? DEFAULT_ACCENT;
-  const [r, g, b] = hexToRgb(accent);
-  return {
-    "--accent": accent,
-    "--accent-rgb": `${r}, ${g}, ${b}`,
-    "--accent-bright": shade(accent, 0.18),
-    "--accent-deep": shade(accent, -0.14),
-    "--accent-soft": shade(accent, 0.55),
+export function themeVars(colors: ThemeColors): Record<string, string> {
+  const out: Record<string, string> = {};
+  const accent = normalizeAccent(colors.accent);
+  if (accent && accent !== DEFAULT_ACCENT) {
+    const [r, g, b] = hexToRgb(accent);
+    out["--accent"] = accent;
+    out["--accent-rgb"] = `${r}, ${g}, ${b}`;
+    out["--accent-bright"] = shade(accent, 0.18);
+    out["--accent-deep"] = shade(accent, -0.14);
+    out["--accent-soft"] = shade(accent, 0.55);
     // ink for text sitting ON a filled accent surface: it has to flip as the accent
     // lightens, or a pale brand turns every primary button into white-on-white
-    "--accent-ink": luminance(accent) > 0.62 ? "#06210e" : "#ffffff",
-  };
+    out["--accent-ink"] = luminance(accent) > 0.62 ? "#06210e" : "#ffffff";
+  }
+  const sidebar = normalizeAccent(colors.sidebar);
+  if (sidebar) {
+    out["--sidebar"] = sidebar;
+    // the bar is a gradient between two stops; one pick drives both so it keeps its depth
+    out["--sidebar-2"] = shade(sidebar, 0.12);
+  }
+  const bg = normalizeAccent(colors.bg);
+  if (bg) out["--bg"] = bg;
+  const card = normalizeAccent(colors.card);
+  if (card) {
+    const [r, g, b] = hexToRgb(card);
+    // cards keep their translucency, or the glass turns into flat plastic
+    out["--card"] = `rgba(${r}, ${g}, ${b}, 0.6)`;
+  }
+  return out;
 }

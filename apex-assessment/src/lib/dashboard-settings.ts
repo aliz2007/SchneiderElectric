@@ -17,13 +17,14 @@
 
 import { getUserSetting, setUserSetting } from "./queries";
 import {
-  ACCENT_KEY,
-  DEFAULT_ACCENT,
+  COLORS_KEY,
   LAYOUT_KEY,
-  normalizeAccent,
+  parseColors,
   parseLayout,
+  serializeColors,
   serializeLayout,
   type DashboardLayout,
+  type ThemeColors,
 } from "./dashboard-layout";
 
 export const readLayout = (userId: number | null | undefined): DashboardLayout =>
@@ -33,8 +34,10 @@ export const readLayout = (userId: number | null | undefined): DashboardLayout =
 export const writeLayout = (userId: number, layout: DashboardLayout | null) =>
   setUserSetting(userId, LAYOUT_KEY, layout == null ? null : serializeLayout(layout));
 
-export const readAccent = (userId: number | null | undefined): string =>
-  (userId == null ? null : normalizeAccent(getUserSetting(userId, ACCENT_KEY))) ?? DEFAULT_ACCENT;
+export const readColors = (userId: number | null | undefined): ThemeColors =>
+  userId == null ? {} : parseColors(getUserSetting(userId, COLORS_KEY));
 
-export const writeAccent = (userId: number, hex: string | null) =>
-  setUserSetting(userId, ACCENT_KEY, hex);
+/** Passing null (or an empty set) clears the row, which is how "back to the shipped
+ *  palette" is stored — an absent row and a row saying "all defaults" must not both exist. */
+export const writeColors = (userId: number, colors: ThemeColors | null) =>
+  setUserSetting(userId, COLORS_KEY, colors == null ? null : serializeColors(colors));
