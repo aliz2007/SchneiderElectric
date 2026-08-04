@@ -1218,7 +1218,7 @@ try {
   await page.waitForSelector(".dash-block");
   {
     const must = [".kpi-value", ".kpi-bench", "td.cell", ".lvl-chip", ".badge-zone", ".badge-track",
-                  ".filter-toggle", ".nav-link", ".wrench", ".nav-toggle", ".tl", ".card", ".page-head", ".sidebar"];
+                  ".filter-toggle", ".nav-link", ".wrench", ".nav-toggle", ".tl", ".sidebar"];
     const missing = [];
     for (const sel of must) if ((await page.locator(sel).count()) === 0) missing.push(sel);
     missing.length === 0

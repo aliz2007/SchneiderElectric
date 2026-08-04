@@ -50,11 +50,12 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
   return (
     <div className={`shell${navCollapsed ? " nav-collapsed" : ""}`}>
-      {/* the two page-level tools, together in the top-left corner: fold the menu, and ask
-          what any of this is. They slide with the menu edge so they keep their relationship
-          to the page rather than to the window. */}
+      {/* The fold button tracks the menu edge, so it stays on the left. Help goes to the
+          opposite corner — on the left it sat on top of the page kicker. */}
       <div className="corner-tools">
         <SidebarToggle initialCollapsed={navCollapsed} />
+      </div>
+      <div className="help-corner">
         <HelpTools
           audience={{
             isAdmin: user.role === "superadmin",

@@ -1496,10 +1496,15 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 }
 .nav-collapsed > .corner-tools { left: 14px; }
 
+/* Help sits in the opposite corner. On the left it covered the page kicker, and it has no
+   relationship to the menu edge anyway — it is about the page, not about the navigation. */
+.help-corner { position: fixed; top: 18px; right: 22px; z-index: 60; }
+
 @media (max-width: 860px) {
   /* the bar is a horizontal strip here, so folding it sideways means nothing */
   .nav-toggle { display: none; }
   .corner-tools { position: static; margin: 12px 0 0 18px; }
+  .help-corner { top: 12px; right: 14px; }
   .nav-collapsed > .sidebar { margin-left: 0; }
 }
 
@@ -1915,7 +1920,8 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .help-menu {
   position: absolute;
   top: 40px;
-  left: 0;
+  /* opens back towards the page, or it would hang off the right edge of the window */
+  right: 0;
   z-index: 79;
   width: 290px;
   padding: 6px;
