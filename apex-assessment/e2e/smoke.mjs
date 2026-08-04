@@ -234,6 +234,79 @@ try {
   (await page.locator(".cluster-avg-label").count()) >= 5
     ? ok("capability detail shows an average per cluster")
     : fail("cluster averages", "not found");
+
+  // ---- 4b. lens colours: the APEX Panel web must not be a second green ----
+  // The client could not tell the APEX Panel web from the Final score web: both were
+  // Schneider green, a shade apart, at a 1.4px stroke. These read the RENDERED colours,
+  // because recolouring only the legend swatch (or only the polygon) would leave the chart
+  // exactly as unreadable while looking fixed in a diff.
+  const webs = await page.locator(".radar-legend > span").evaluateAll((els) =>
+    els
+      .map((el) => {
+        const sw = el.querySelector(".sw:not(.sw-dashed)");
+        return sw ? { label: el.innerText.trim(), colour: getComputedStyle(sw).backgroundColor } : null;
+      })
+      .filter(Boolean)
+  );
+  {
+    const panel = webs.find((w) => w.label === "APEX Panel");
+    const final = webs.find((w) => w.label === "Final score");
+    panel && final && panel.colour !== final.colour
+      ? ok(`APEX Panel and Final score are different colours (${panel?.colour} vs ${final?.colour})`)
+      : fail("panel/final web colour", `${panel?.colour ?? "?"} vs ${final?.colour ?? "?"}`);
+    // separating Panel from Final by colliding it with Manager's blue would not be a fix
+    const colours = webs.map((w) => w.colour);
+    new Set(colours).size === colours.length && colours.length === 4
+      ? ok(`radar gives each of the ${colours.length} webs its own colour`)
+      : fail("radar web colours", colours.join(" | "));
+    // the legend agrees with itself; this is the check that it agrees with the CHART
+    const strokes = await page.locator(".radar-svg polygon[stroke]").evaluateAll((els) =>
+      els.map((e) => getComputedStyle(e).stroke)
+    );
+    strokes.includes(panel?.colour) && strokes.includes(final?.colour)
+      ? ok("the drawn webs match the legend swatches")
+      : fail("radar strokes", `legend ${panel?.colour}/${final?.colour} not among ${strokes.join(" ")}`);
+    // the recolour must not be smuggled in by re-emphasising a different web instead
+    const finalWeb = await page
+      .locator(".radar-svg polygon[fill-opacity]")
+      .evaluateAll((els) => els.map((e) => `${e.getAttribute("stroke-width")}@${e.getAttribute("fill-opacity")}`));
+    finalWeb.some((s) => s.startsWith("3@") && !s.endsWith("@0"))
+      ? ok("the final score is still the emphasised web")
+      : fail("final score emphasis", finalWeb.join(" "));
+  }
+
+  // ---- 4c. the lens legend is not printed twice ----
+  // Client feedback (3 Aug): "no need to show self manager apex required at the top, it's
+  // already over each column". The strip above the capability table is gone — but the
+  // column headers have to keep carrying the dots, or removing the duplicate would have
+  // cost the legend entirely.
+  (await page.locator(".legend:has(.lens-dot)").count()) === 0
+    ? ok("no duplicated lens legend above the capability table")
+    : fail("lens legend", "the duplicate strip is back");
+  {
+    const heads = (
+      await page.locator('.card:has(.card-title:has-text("Capability detail")) thead th').allTextContents()
+    ).map((t) => t.trim());
+    heads.join("|") === "Capability|Required|Self|Manager|Panel|Weighted|Gap vs req"
+      ? ok("capability table headers name every lens")
+      : fail("capability headers", heads.join("|"));
+    // count-only would still pass if a future edit stripped the ld-* classes and left four
+    // invisible spans behind, so this asserts each dot is painted and distinct
+    const dots = await page
+      .locator('.card:has(.card-title:has-text("Capability detail")) thead .lens-dot')
+      .evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+    dots.length === 4 && new Set(dots).size === 4 && !dots.includes("rgba(0, 0, 0, 0)")
+      ? ok("each lens header dot is painted and distinct")
+      : fail("header lens dots", dots.join(" | "));
+    // the radar's docstring promises the dots match the webs; after the Panel recolour that
+    // is exactly the promise most likely to be broken silently
+    const panelDot = await page
+      .locator('.card:has(.card-title:has-text("Capability detail")) thead th:has-text("Panel") .lens-dot')
+      .evaluate((e) => getComputedStyle(e).backgroundColor);
+    panelDot === webs.find((w) => w.label === "APEX Panel")?.colour
+      ? ok("the Panel header dot matches the Panel web")
+      : fail("panel dot vs web", `${panelDot} vs ${webs.find((w) => w.label === "APEX Panel")?.colour}`);
+  }
   await page.waitForTimeout(700); // let entrance animation settle
   await page.screenshot({ path: `${SHOTS}/3-individual.png` });
 
@@ -408,6 +481,28 @@ try {
   (await page.locator(".map-card").count()) === 0
     ? ok("zone map withheld from assessors")
     : fail("map scoping", "map card rendered for an assessor");
+  // arranging the dashboard is a superadmin act. The nav is rendered per role, so the link
+  // must not appear here even though the route itself also redirects.
+  (await page.locator('a.nav-link[href="/admin/settings"]').count()) === 0
+    ? ok("Settings hidden from the assessor sidebar")
+    : fail("settings nav", "Settings link shown to an assessor");
+  // ?edit=1 in an assessor's URL bar has to be INERT, not merely unstyled. Both halves of
+  // this matter: asserting only the absences would also pass on a blank page.
+  await page.goto(`${BASE}/analysis?edit=1`);
+  await page.waitForSelector(".kpi-value");
+  {
+    const tools =
+      (await page.locator(".dash-edit-bar").count()) +
+      (await page.locator(".dash-grid-editing").count()) +
+      (await page.locator("form.dash-edit").count()) +
+      (await page.locator(".dash-tool").count());
+    const stillRendered =
+      (await page.locator(".kpi-value").count()) > 0 &&
+      (await page.locator('.card-title:has-text("People you assess")').count()) === 1;
+    tools === 0 && stillRendered
+      ? ok("?edit=1 does nothing for an assessor, dashboard still renders")
+      : fail("assessor edit mode", `${tools} edit controls, rendered=${stillRendered}`);
+  }
 
   // every superadmin surface bounces an assessor back to their own work
   for (const [label, path] of [
@@ -415,6 +510,7 @@ try {
     ["an individual analysis", "/analysis/am/1"],
     ["a zone benchmark", "/analysis/zone/MEA"],
     ["user administration", "/admin/users"],
+    ["dashboard settings", "/admin/settings"],
   ]) {
     await page.goto(`${BASE}${path}`);
     await page.waitForURL("**/rate**");
@@ -682,6 +778,268 @@ try {
   afterRows === beforeRows - 1 && gone === 0
     ? ok("superadmin deletes a user account")
     : fail("delete user", `${beforeRows}->${afterRows}, gone=${gone}`);
+
+  // ---- 13. superadmin Settings: the Dashboard Manager ----
+  // Client feedback (3 Aug, second round): a superadmin-only manager that can reset the
+  // dashboard, repaint the app, and move / resize / remove the cards the way an iPhone
+  // homescreen is arranged. Every check below asserts the RESULT on the dashboard, not the
+  // control that was clicked: a layout editor whose state never reaches the page is the
+  // exact failure this feature invites.
+  const order = () =>
+    page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.block));
+
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  const baseline = await order();
+  {
+    const want = ["kpis", "report", "filters", "map", "timeline", "heatmap", "roster"];
+    want.every((id) => baseline.includes(id)) &&
+    new Set(baseline).size === baseline.length &&
+    baseline.join(",") ===
+      ["kpis", "report", "filters", "map", "timeline", "priorities", "heatmap", "roster"]
+        .filter((id) => baseline.includes(id))
+        .join(",")
+      ? ok(`dashboard renders the shipped card order (${baseline.join(" → ")})`)
+      : fail("shipped order", baseline.join(","));
+    // without this, every reorder check below could be satisfied by shuffling empty divs
+    const filled =
+      (await page.locator('.dash-block[data-block="heatmap"] table.hm').count()) === 1 &&
+      (await page.locator('.dash-block[data-block="map"] .map-card').count()) === 1 &&
+      (await page.locator('.dash-block[data-block="kpis"] .kpi-value').count()) >= 5 &&
+      (await page.locator('.dash-block[data-block="filters"] .filter-toggle').count()) === 1 &&
+      ((await page.locator('.dash-block[data-block="roster"] .card-title').textContent()) ?? "").includes("Roster");
+    filled ? ok("every card sits inside its own block wrapper") : fail("block contents", "a wrapper is empty");
+  }
+
+  // the Settings surface, reached the way a person reaches it
+  await page.locator('a.nav-link[href="/admin/settings"]').click();
+  await page.waitForURL("**/admin/settings");
+  ((await page.locator("h1.page-title").textContent()) ?? "").trim() === "Settings" &&
+  (await page.locator('.card-title:has-text("Dashboard Manager")').count()) === 1
+    ? ok("superadmin reaches Settings → Dashboard Manager from the sidebar")
+    : fail("settings page", "title or Dashboard Manager card missing");
+
+  // entering edit mode from the dashboard's own affordance
+  await page.goto(`${BASE}/analysis`);
+  await page.locator('a:has-text("Arrange dashboard")').click();
+  await page.waitForURL(/\/analysis\?edit=1/);
+  await page.waitForSelector(".dash-grid-editing");
+  (await page.locator(".dash-edit-bar-active").count()) === 1 &&
+  (await page.locator(".dash-chrome").count()) === baseline.length
+    ? ok("edit mode turns on without dropping a card")
+    : fail("edit mode", `${await page.locator(".dash-chrome").count()} of ${baseline.length} cards`);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/9-dashboard-arranging.png` });
+
+  // the filter bar scopes every other card, so it is the one card that cannot be removed
+  (await page.locator('.dash-block[data-block="filters"] .dash-pinned').count()) === 1 &&
+  (await page.locator('[aria-label="Remove Filters"]').count()) === 0
+    ? ok("the filter card is pinned and offers no remove button")
+    : fail("pinned filters", "filters can be removed");
+  // an off-by-one in move() would push a card off the end of the array
+  {
+    const first = baseline[0];
+    const last = baseline[baseline.length - 1];
+    (await page.locator(`[aria-label="Move Campaign KPIs earlier"]`).isDisabled()) &&
+    (await page.locator(`[aria-label="Move Roster later"]`).isDisabled())
+      ? ok(`the arrows stop at both ends (${first} … ${last})`)
+      : fail("arrow bounds", "an end card can still be moved past the edge");
+  }
+
+  // move a card, save, and read the ORDER back off a fresh page load
+  await page.locator('[aria-label="Move Roster earlier"]').click();
+  await page.locator('[aria-label="Move Roster earlier"]').click();
+  await page.locator('button:has-text("Done")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const moved = await order();
+    const expected = baseline.filter((id) => id !== "roster");
+    expected.splice(baseline.indexOf("roster") - 2, 0, "roster");
+    moved.join(",") === expected.join(",")
+      ? ok(`roster moved two places earlier (${moved.join(" → ")})`)
+      : fail("reorder", `${moved.join(",")} — wanted ${expected.join(",")}`);
+    // a reorder that shuffles wrappers while the server keeps filling them in the old
+    // order would pass the sequence check above and be completely broken
+    const rosterTitle =
+      (await page.locator('.dash-block[data-block="roster"] .card-title').textContent()) ?? "";
+    const rosterRows = await page.locator('.dash-block[data-block="roster"] table.table tbody tr').count();
+    rosterTitle.trim().startsWith("Roster ·") && rosterRows > 1
+      ? ok(`the roster's own content travelled with it (${rosterRows} rows)`)
+      : fail("reorder content", `${rosterTitle.trim()} / ${rosterRows} rows`);
+  }
+  // ...and that it was persisted installation-wide, not held in client state
+  await page.goto(`${BASE}/admin/settings`);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  (await order()).indexOf("roster") === baseline.indexOf("roster") - 2
+    ? ok("the new order survives leaving the page")
+    : fail("order persistence", (await order()).join(","));
+
+  // resize one card and confirm the grid actually gives it fewer columns
+  await page.goto(`${BASE}/analysis?edit=1`);
+  await page.waitForSelector(".dash-grid-editing");
+  await page.locator('.dash-block[data-block="heatmap"] .dash-size[title="Half width"]').click();
+  await page.locator('button:has-text("Done")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const heat = page.locator('.dash-block[data-block="heatmap"]');
+    const size = await heat.getAttribute("data-size");
+    // recorded-but-never-applied is the failure mode, so the computed span is asserted too
+    const span = await heat.evaluate((e) => getComputedStyle(e).gridColumn);
+    const sibling = await page.locator('.dash-block[data-block="kpis"]').getAttribute("data-size");
+    size === "half" && span.includes("span 6") && sibling === "full"
+      ? ok(`heat map narrowed to half width (${span}), its neighbour untouched`)
+      : fail("resize", `${size} / ${span} / sibling ${sibling}`);
+  }
+
+  // remove a card: it has to leave the DOM, not just be dimmed
+  await page.goto(`${BASE}/analysis?edit=1`);
+  await page.waitForSelector(".dash-grid-editing");
+  await page.locator('[aria-label="Remove Zone performance map"]').click();
+  await page.locator('button:has-text("Done")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const after = await order();
+    // .is-hidden only greys the body in EDIT mode; a hide implemented as opacity would
+    // leave the map — and every AM's weighted scores — sitting in the read-only DOM
+    (await page.locator('.dash-block[data-block="map"]').count()) === 0 &&
+    (await page.locator(".map-card").count()) === 0 &&
+    after.length === baseline.length - 1 &&
+    baseline.filter((id) => id !== "map").every((id) => after.includes(id))
+      ? ok(`removed card is gone from the page (${after.length} of ${baseline.length} left)`)
+      : fail("remove card", after.join(","));
+  }
+  // the settings page and the dashboard have to agree about the same stored state
+  await page.goto(`${BASE}/admin/settings`);
+  ((await page.locator(".dm-launch-state").textContent()) ?? "").includes("1 card removed")
+    ? ok("Settings reports the removed card")
+    : fail("settings summary", (await page.locator(".dm-launch-state").textContent()) ?? "");
+  // the escape hatch: a card taken off the dashboard can always be put back from here
+  await page.locator('button:has-text("Open Dashboard Manager")').click();
+  await page.locator('tr:has-text("Zone performance map") button:has-text("Removed · put back")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  (await page.locator(".map-card").count()) === 1 && (await order()).includes("map")
+    ? ok("a removed card can be put back from Settings")
+    : fail("restore card", (await order()).join(","));
+
+  // ---- 13b. the app colour ----
+  await page.goto(`${BASE}/admin/settings`);
+  await page.locator('button:has-text("Open Dashboard Manager")').click();
+  await page.locator('button:has-text("App colour")').click();
+  // nothing arbitrary may reach a style attribute from this form
+  await page.fill(".dm-hex-text", "nope");
+  const junkBlocked = await page.locator('button:has-text("Save colour")').isDisabled();
+  await page.locator('.dm-swatch-btn:has-text("Violet")').click();
+  const validEnabled = await page.locator('button:has-text("Save colour")').isEnabled();
+  junkBlocked && validEnabled
+    ? ok("the colour form refuses a value that is not a colour")
+    : fail("accent validation", `junk disabled=${junkBlocked}, preset enabled=${validEnabled}`);
+  await page.locator('button:has-text("Save colour")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    // asserted on a DIFFERENT page than the form, so this proves the root layout injects it
+    const declared = await page.evaluate(() => document.documentElement.dataset.accent);
+    const resolved = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()
+    );
+    declared === "#7c5cff" && resolved === "#7c5cff"
+      ? ok("the saved accent reaches every page")
+      : fail("accent injection", `${declared} / ${resolved}`);
+    // A check on the variable alone passes even if every rule still hardcodes green, so
+    // this reads a PAINTED node. The nav pill is a gradient of accent-bright and
+    // accent-deep rather than the accent itself, so the assertion is on the HUE that came
+    // out — nothing green-dominant left, something blue-dominant present — instead of on
+    // one exact triple that would break the next time the ramp is tweaked.
+    const painted = await page.locator(".nav-link.active").evaluate((e) => {
+      const cs = getComputedStyle(e);
+      return `${cs.backgroundImage} ${cs.backgroundColor}`;
+    });
+    const triples = [...painted.matchAll(/rgba?\((\d+),\s*(\d+),\s*(\d+)/g)].map((m) => m.slice(1).map(Number));
+    triples.some(([r, g, b]) => b > r && b > g) && !triples.some(([r, g, b]) => g > r && g > b)
+      ? ok("the accent is actually painted, not just declared")
+      : fail("accent paint", painted.slice(0, 160));
+    // every accent property must resolve — a self-referential var() is invalid at computed
+    // time and silently paints nothing (this caught exactly that bug during the build)
+    const empties = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return ["--accent", "--accent-rgb", "--accent-bright", "--accent-deep", "--accent-soft", "--accent-ink", "--se-green"]
+        .filter((k) => !cs.getPropertyValue(k).trim());
+    });
+    empties.length === 0
+      ? ok("every accent variable resolves to a value")
+      : fail("unresolved accent vars", empties.join(" "));
+    // THE rule for this feature: repainting the brand must not repaint the results. Green
+    // means at-or-above-required, and it has to keep meaning that under any brand colour.
+    const heatGood = await page.locator("td.cell.hm-good").first().evaluate((e) => getComputedStyle(e).backgroundColor);
+    const okRgb = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--ok-rgb").trim()
+    );
+    heatGood.includes("61, 205, 88") && okRgb.replace(/\s+/g, "") === "61,205,88"
+      ? ok("the heat legend keeps its own colours under a repainted brand")
+      : fail("heat vs accent", `${heatGood} / --ok-rgb ${okRgb}`);
+    // The lens colours are a legend too: the Panel dot must not follow the brand either.
+    // Waits on the header dot rather than the radar — by this point in the run the sandbox
+    // section has blanked AM01's ratings, so the chart is legitimately absent while the
+    // capability table (and its lens dots) still renders.
+    await page.goto(`${BASE}/analysis/am/1`);
+    await page.waitForSelector(".lens-dot.ld-expert");
+    const panelDot = await page.locator(".lens-dot.ld-expert").first().evaluate((e) => getComputedStyle(e).backgroundColor);
+    panelDot === "rgb(225, 72, 184)"
+      ? ok("the APEX Panel lens keeps its colour under a repainted brand")
+      : fail("lens vs accent", panelDot);
+  }
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/10-accent-violet.png` });
+
+  // ---- 13c. reset ----
+  await page.goto(`${BASE}/admin/settings`);
+  await page.locator('button:has-text("Open Dashboard Manager")').click();
+  await page.locator('button[role="tab"]:has-text("Reset")').click();
+  await page.locator('button:has-text("Reset everything")').click();
+  await page.waitForTimeout(900);
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const back = await order();
+    const sizes = await page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.size));
+    const accent = await page.evaluate(() => document.documentElement.dataset.accent);
+    // and the pixels went back too, not just the stored hex
+    const repainted = await page.locator(".nav-link.active").evaluate((e) => {
+      const cs = getComputedStyle(e);
+      return `${cs.backgroundImage} ${cs.backgroundColor}`;
+    });
+    const greenBack = [...repainted.matchAll(/rgba?\((\d+),\s*(\d+),\s*(\d+)/g)]
+      .map((m) => m.slice(1).map(Number))
+      .some(([r, g, b]) => g > r && g > b);
+    back.join(",") === baseline.join(",") && sizes.every((s) => s === "full") && accent === "#3dcd58" && greenBack
+      ? ok("reset restores the shipped layout and the shipped colour")
+      : fail("reset", `${back.join(",")} / ${[...new Set(sizes)].join("+")} / ${accent} / green=${greenBack}`);
+  }
+  // the manager has to agree that there is nothing left to reset, or isDefaultLayout() and
+  // the dashboard are reporting different things about the same row
+  await page.goto(`${BASE}/admin/settings`);
+  {
+    const chips = (await page.locator(".dm-launch-state").textContent()) ?? "";
+    await page.locator('button:has-text("Open Dashboard Manager")').click();
+    await page.locator('button[role="tab"]:has-text("Reset")').click();
+    const allDisabled =
+      (await page.locator('button:has-text("Reset the dashboard layout")').isDisabled()) &&
+      (await page.locator('button:has-text("Reset the app colour")').isDisabled()) &&
+      (await page.locator('button:has-text("Reset everything")').isDisabled());
+    chips.includes("Dashboard layout: default") && chips.includes("Schneider green") && allDisabled
+      ? ok("Settings reports the reset state and greys out the reset buttons")
+      : fail("reset state", `${chips.trim()} / disabled=${allDisabled}`);
+  }
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});

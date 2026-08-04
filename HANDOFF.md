@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-08-03.
+Last updated: 2026-08-04.
 
 ---
 
@@ -20,6 +20,26 @@ Last updated: 2026-08-03.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
+- Most recent additions (2026-08-04, third batch): three points raised in chat.
+  1. **APEX Panel is no longer a second green.** The perception radar drew the APEX Panel
+     web in Schneider green (`#3dcd58`) next to the Final score web in bright green
+     (`#4ce26a`) — a shade apart, at a 1.4px stroke — so the one comparison the chart exists
+     to make was the one a reader could not make. The Panel lens is now magenta `#e148b8`,
+     the only wide arc of the colour wheel neither the lens set (violet Self, blue Manager,
+     green Final score) nor the heat scale (amber / orange / red / green) had already spent.
+     The change lands in four places at once so a lens means one thing everywhere:
+     `theme-radar.tsx`, the frozen `--lens-*` tokens in `globals.css`, and the PDF palette in
+     `pdf-kit.tsx` — which also **fixes an older inconsistency**: blue used to mean Manager on
+     screen and APEX Panel in every printed report. `pdf-report.tsx` now imports the palette
+     from `pdf-kit` instead of keeping its own copy of it.
+  2. **The duplicated lens legend is gone.** The capability detail card printed
+     Self / Manager / APEX Panel / Required as a strip directly above a table whose column
+     headers carry the same dots and the same words. The strip is removed on both the
+     individual analysis page and My Feedback; the `Required` header gained the dot it was
+     missing, so nothing was lost with it. An e2e check asserts the strip stays gone AND that
+     the four header dots are still painted and distinct — removing both would have been the
+     easy way to make the first half of that check pass.
+  3. **Dashboard Manager** (superadmin-only) — see § Dashboard Manager below.
 - Most recent additions (2026-08-03, second batch): the eight points from
   `docs/source-materials/APEX_App_Feedbacks_2026-08-03.md` (Colline & Vladimir, 3 Aug).
   1. **Self-assessment deadline** — `self_deadline` joins the manager deadline and the panel
@@ -328,6 +348,77 @@ render as plain text for assessors instead of links to a page that would bounce 
 The e2e suite locks all of this down in section 7 (roster scoping, timeline scoping, no
 timeline links, no map, four redirect checks, five PDF download checks).
 
+### Dashboard Manager (superadmin-only)
+
+`/admin/settings` → **Dashboard Manager**. Three things sit behind one button: reset the
+dashboard, repaint the app, and rearrange the cards.
+
+**Where the state lives.** Both values are rows in `app_settings`, so they are properties of
+the INSTALLATION, not of the person looking: `dashboard.layout` (JSON) and `theme.accent`
+(a hex). That is deliberate. A superadmin arranging the dashboard is deciding what this
+deployment's dashboard looks like for everyone, the same way they decide who can see what;
+a per-user layout would mean the client arranges their dashboard, screen-shares it, and
+nobody else sees what they are describing.
+
+**Arranging.** `/analysis?edit=1` (superadmin only, checked server-side — the parameter is
+inert in an assessor's URL bar) turns the dashboard into an editor: the cards wobble, each
+grows a width control and a remove button, and they can be dragged past each other. The
+wobble is on the CARD and never on its toolbar — on a phone the whole icon shakes and you
+aim with a thumb, but here the targets are 26px buttons and a mouse, and a button that will
+not hold still is one you cannot hit. Arrow buttons do everything dragging does, because a
+drag is unreachable by keyboard and unreliable under a test harness. Nothing is written
+until **Done**.
+
+**How the split works.** `dashboard-grid.tsx` is a client component, but every card is still
+rendered on the SERVER and passed in as a node (`blocks` in `analysis/page.tsx`). The grid
+decides order, width and presence — nothing else. That is not a style choice: the zone map
+carries every Account Manager's weighted score, and it must not cross into a client
+component just so the card can be dragged. A card that does not apply to the reader is
+simply absent from `blocks`, so the grid cannot be used to reveal a block that was never
+built.
+
+**Widths** are `third` / `half` / `full` on a 12-column grid (4 / 6 / 12). Some cards carry
+a `minSize`: the zone map is a fixed-aspect world canvas and the timeline places its flags
+as percentages of the track, so a third-width version of either is not a smaller chart, it
+is an unreadable one. The editor only offers the widths a card survives, and `parseLayout`
+clamps a hand-edited value to the same set.
+
+**The filter card is pinned.** It can be moved and resized but never removed — it scopes
+every other card on the page, so hiding it would strip the only way to clear a filter that
+is still in the URL. Enforced in three places (`BlockDef.pinned`, `parseLayout`,
+`updateBlock`). A removed card is only hidden, never deleted, and the Settings table always
+offers to put it back, so there is an escape hatch even when the card is off the page.
+
+**The accent** is applied as an inline style on `<html>` by the ROOT layout, so the sign-in
+screen is branded too and there is no flash of green on the way to a Deep blue deployment.
+Inline beats any stylesheet rule regardless of emission order, so it cannot lose a cascade
+race with `globals.css`.
+
+**The rule that matters most: chrome follows the accent, results never do.** `globals.css`
+now keeps two frozen families next to the repaintable `--accent-*` set:
+
+- `--ok` / `--ok-2` / `--ok-strong` / `--ok-ink` / `--ok-rgb` — green means "at or above the
+  required level". A heat map whose legend followed the customer's brand colour would report
+  a different answer depending on a setting.
+- `--lens-self` / `--lens-manager` / `--lens-expert` / `--lens-weighted` / `--lens-req` — a
+  lens colour is a legend entry too. `.ld-expert` used to read `var(--se-green)`, which now
+  aliases the accent; left alone, the APEX Panel dot would have silently followed whatever
+  brand colour a superadmin picked.
+
+`--se-green*` survives as an alias of `--accent*` so older rules keep working. Everything
+that held a literal `rgba(61, 205, 88, x)` or a hardcoded companion green was migrated to
+`rgba(var(--accent-rgb), x)` / `var(--accent-deep)` / `var(--accent-soft)`, or frozen. Two
+knock-on fixes went in with it: dark ink sitting ON an accent-filled surface became
+`var(--accent-ink)` (it flips with luminance, or a pale brand turns every primary button
+into white-on-white), and the timeline's "today" ruler was pinned to blue — on the accent, a
+Rose brand would have drawn today in the overdue colour and a green one would have made it
+indistinguishable from a pending deadline.
+
+**Adding a card later:** append to `DASHBOARD_BLOCKS` in `dashboard-layout.ts` and add the
+node in `analysis/page.tsx`. `parseLayout` splices any block a stored layout has never heard
+of back in at its shipped index, so a new card appears everywhere rather than being
+invisible on every deployment that had ever touched the Dashboard Manager.
+
 ### Hard product rules (enforced server-side — keep them)
 
 0. The score of record is the WEIGHTED score (Self 20% / APEX Panel 35% / Manager 45%), kept
@@ -613,6 +704,10 @@ src/app/(shell)/chat-widget.tsx  floating APEX Assistant bubble + panel
 src/app/(shell)/error.tsx    error boundary; auto-reloads once on a stale-tab ChunkLoadError
 src/app/api/chat/route.ts    chatbot endpoint (role-scoped snapshot + Kimi)
 src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (delete, sandbox, demo)
+src/lib/dashboard-layout.ts  block definitions, sizes, layout parser, accent helpers (NO db import — client-safe)
+src/lib/dashboard-settings.ts  reads/writes dashboard.layout + theme.accent in app_settings (server only)
+src/app/(shell)/admin/settings/  Settings page + Dashboard Manager (reset / app colour / arrange) + actions
+src/app/(shell)/analysis/dashboard-grid.tsx  12-col dashboard grid + the iPhone-style edit mode
 src/app/globals.css          all styling (semantic class names)
 src/app/fx.tsx               client-side scroll/hover effects
 e2e/smoke.mjs                Playwright smoke suite (see §9 for the check count)
@@ -637,7 +732,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 102/102 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 134/134 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -674,6 +769,29 @@ Two more that exist because the assertion, not the feature, was once wrong:
 - **zone map colours** — the four zone chips must be four DIFFERENT colours and the legend
   must name both ends of the ramp. This is the whole point of the relative shading; an
   absolute ramp passes every other check while painting the map one flat green.
+
+Four more from the Dashboard Manager (section 13), all written to assert the RESULT rather
+than the control that was clicked, because a layout editor whose state never reaches the page
+is the failure this feature invites:
+
+- **radar web colours** are read off the RENDERED elements — the legend swatches, then the
+  polygon strokes — and the two are compared to each other. Recolouring only the legend, or
+  only the chart, would leave the radar exactly as unreadable while looking fixed in a diff.
+  A fourth check pins the Final score web as the emphasised one, so the fix cannot be
+  smuggled in by re-emphasising a different web instead of changing a hue.
+- **removing a card** asserts the map and `.map-card` are absent from the read-only DOM, not
+  merely dimmed. `is-hidden` only greys the body in EDIT mode, so a hide implemented as CSS
+  opacity would leave the card — and every AM's weighted scores — sitting in the page.
+- **the accent** is checked three ways: the variable resolves, a PAINTED node changed hue
+  (a variable check alone passes even if every rule still hardcodes green), and every
+  `--accent-*` property resolves to a non-empty value. That last one caught a real bug during
+  the build: a search-and-replace had rewritten `--accent-soft`'s own definition into
+  `var(--accent-soft)`, a cycle that is invalid at computed-value time and silently paints
+  nothing.
+- **chrome vs results** — with a violet brand saved, `.cell.hm-good` must still compute to
+  `rgba(61, 205, 88, 0.22)` and the APEX Panel dot must still be magenta. Without this, the
+  natural implementation of "repaint the app" also repaints the legend, and the heat map
+  starts reporting a different answer per setting.
 
 Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
 narrative, the chatbot returns its fixed "turned off" reply, no external call). The e2e header

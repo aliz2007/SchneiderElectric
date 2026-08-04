@@ -25,10 +25,19 @@ export const GREEN = "#0f9d4f";
 export const GREEN_DEEP = "#007a3d";
 export const GREEN_BG = "#e5f8ec";
 
-/** Lens colours, shared by every radar so a colour means the same thing in all reports. */
-export const RADAR_SELF = "#e0912f";
-export const RADAR_MANAGER = "#7c5cd6";
-export const RADAR_PANEL = "#2f8fd0";
+/**
+ * Lens colours, shared by every radar so a colour means the same thing in all reports —
+ * and, since this pass, the same thing it means on screen. Blue used to be Manager in the
+ * app and APEX Panel in print, which handed anyone holding both a report and a laptop two
+ * contradictory keys.
+ *
+ * These are the darker, less chromatic cousins of the screen --lens-* tokens: the app
+ * draws on near-black navy and a report prints on white, so the same hue needs more weight
+ * here to hold a 0.9pt stroke.
+ */
+export const RADAR_SELF = "#7c5cd6"; // violet
+export const RADAR_MANAGER = "#2f6fd0"; // blue
+export const RADAR_PANEL = "#c02a97"; // magenta
 export const RADAR_AVG = GREEN_DEEP;
 
 /** Background/foreground for a score, by how far it sits from the level required. */

@@ -275,18 +275,15 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
             </>
           )}
         </p>
-        <div className="legend" style={{ marginTop: 0, marginBottom: 12 }}>
-          <span><span className="lens-dot ld-self" />Self</span>
-          <span><span className="lens-dot ld-manager" />Manager</span>
-          <span><span className="lens-dot ld-expert" />APEX Panel</span>
-          <span><span className="lens-dot ld-req" />Required</span>
-        </div>
+        {/* No legend strip above this table. The column headers below already carry the
+            same dot and the same label, so a legend here says everything twice and pushes
+            the first row of data further down the page. The dots ARE the legend. */}
         <div className="hm-scroll">
           <table className="table">
             <thead>
               <tr>
                 <th>Capability</th>
-                <th>Required</th>
+                <th><span className="lens-dot ld-req" />Required</th>
                 <th><span className="lens-dot ld-self" />Self</th>
                 <th><span className="lens-dot ld-manager" />Manager</th>
                 <th><span className="lens-dot ld-expert" />Panel</th>

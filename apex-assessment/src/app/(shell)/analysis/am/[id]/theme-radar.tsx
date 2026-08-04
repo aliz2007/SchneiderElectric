@@ -21,10 +21,19 @@ export type RadarTheme = {
   required: number | null;
 };
 
+// These mirror the frozen --lens-* tokens in globals.css, which paint the same lenses as
+// dots in the tables on this page. They are literals rather than var() reads because the
+// values are also handed to SVG stroke/fill attributes.
+//
+// APEX Panel is magenta, not green. It used to be Schneider green next to a bright-green
+// Final score web, and at a 1.4px stroke nobody could tell the two apart — which is a bad
+// failure for this chart in particular, because the whole question it answers is where the
+// panel's view and the final number diverge. Magenta is the only wide arc of the wheel the
+// app had not already spent on a lens or on the heat scale.
 const WEBS = [
   { key: "self" as const, label: "Self", color: "#a78bfa", width: 1.4, fill: 0 },
   { key: "manager" as const, label: "Manager", color: "#7db1ff", width: 1.4, fill: 0 },
-  { key: "expert" as const, label: "APEX Panel", color: "#3dcd58", width: 1.4, fill: 0 },
+  { key: "expert" as const, label: "APEX Panel", color: "#e148b8", width: 1.6, fill: 0 },
   { key: "weighted" as const, label: "Final score", color: "#4ce26a", width: 3, fill: 0.16 },
 ];
 

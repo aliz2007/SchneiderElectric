@@ -1,6 +1,11 @@
 import { Document, Font, G, Image, Line, Page, Polygon, Rect, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 import type { Narrative } from "./report-narrative";
+import {
+  RADAR_MANAGER as KIT_RADAR_MANAGER,
+  RADAR_PANEL as KIT_RADAR_PANEL,
+  RADAR_SELF as KIT_RADAR_SELF,
+} from "./pdf-kit";
 
 // Never break a word across lines with a hyphen. The renderer hyphenates by
 // default, which turned "AVERAGE SCORE EXPECTED" into "EX-PECTED" in the
@@ -513,10 +518,12 @@ function gradeColor(diff: number): string {
   return `rgb(${STOPS[STOPS.length - 1][1].join(", ")})`;
 }
 
-// lens colours for the perception radar (self / manager / APEX Panel webs)
-const RADAR_SELF = "#e0912f"; // amber
-const RADAR_MANAGER = "#7c5cd6"; // violet
-const RADAR_PANEL = "#2f8fd0"; // blue
+// lens colours for the perception radar (self / manager / APEX Panel webs).
+// Defined once in pdf-kit so print and screen cannot drift apart again — this file used to
+// keep its own copy, and the two disagreed about what blue meant.
+const RADAR_SELF = KIT_RADAR_SELF;
+const RADAR_MANAGER = KIT_RADAR_MANAGER;
+const RADAR_PANEL = KIT_RADAR_PANEL;
 const RADAR_AVG = GREEN_DEEP; // the weighted average - the emphasised web
 
 // @react-pdf's SVG <Text> type omits fontSize/fontFamily, though its renderer honours

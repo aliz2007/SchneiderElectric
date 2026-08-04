@@ -1,5 +1,9 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { requireUser } from "@/lib/session";
+import { type BlockId } from "@/lib/dashboard-layout";
+import { readLayout } from "@/lib/dashboard-settings";
+import DashboardGrid from "./dashboard-grid";
 import {
   assessmentStatuses,
   assignedAMs,
@@ -20,7 +24,7 @@ import ScheduleTimeline, { type TimelineEntry } from "./schedule-timeline";
 export default async function AnalysisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ track?: string; segment?: string; cap?: string }>;
+  searchParams: Promise<{ track?: string; segment?: string; cap?: string; edit?: string }>;
 }) {
   // the aggregated dashboard is open to every signed-in user; drill-down into
   // individual ratings stays superadmin-only
@@ -29,7 +33,11 @@ export default async function AnalysisPage({
 
   // Centralized filters (see FilterBar) — the track, segment and map-capability
   // URL params scope every analytics view at once.
-  const { track: trackRaw, segment: segmentRaw, cap: capRaw } = await searchParams;
+  const { track: trackRaw, segment: segmentRaw, cap: capRaw, edit: editRaw } = await searchParams;
+  // Arranging the dashboard is a superadmin act, and the check is here rather than in the
+  // grid component: ?edit=1 in an assessor's URL bar has to be inert, not merely unstyled.
+  const editing = isAdmin && editRaw === "1";
+  const layout = readLayout();
   const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
   const segment = segmentRaw && (SEGMENTS as readonly string[]).includes(segmentRaw) ? segmentRaw : undefined;
   const selectedCapId = capRaw && /^\d+$/.test(capRaw) ? Number(capRaw) : null;
@@ -120,6 +128,285 @@ export default async function AnalysisPage({
     add("Panel", am.panel_datetime, true, st.expert.status === "submitted");
   }
 
+  // Each dashboard card is built here as a finished, SERVER-rendered node and handed to
+  // DashboardGrid, which owns nothing but the order, the width, and whether a card is on
+  // the page at all. Keeping the cards on the server is the whole point of the split: the
+  // zone map alone carries every Account Manager's weighted score, and none of that should
+  // cross into a client component just so the card can be dragged around.
+  //
+  // A card that does not apply to this reader is simply absent from the map. The grid skips
+  // any id it was not given, so an assessor's dashboard closes up where the map would have
+  // been instead of leaving a hole, and the Dashboard Manager cannot be used to reveal a
+  // block that was never built.
+  const blocks: Partial<Record<BlockId, ReactNode>> = {};
+
+  blocks.kpis = (
+    <div className="grid grid-kpi">
+      <div className="card kpi">
+        <div className="kpi-label">Campaign completion</div>
+        <div className="kpi-value">{completionPct}%</div>
+        <div className="kpi-note">
+          {submittedTotal} / {stats.amCount * 3} assessments submitted
+        </div>
+      </div>
+      <div className="card kpi">
+        <div className="kpi-label">Self submitted</div>
+        <div className="kpi-value">
+          {stats.byLens.self}
+          <span style={{ fontSize: 16, color: "var(--muted)" }}> / {stats.amCount}</span>
+        </div>
+      </div>
+      <div className="card kpi">
+        <div className="kpi-label">Manager submitted</div>
+        <div className="kpi-value">
+          {stats.byLens.manager}
+          <span style={{ fontSize: 16, color: "var(--muted)" }}> / {stats.amCount}</span>
+        </div>
+      </div>
+      <div className="card kpi">
+        <div className="kpi-label">APEX Panel submitted</div>
+        <div className="kpi-value">
+          {stats.byLens.expert}
+          <span style={{ fontSize: 16, color: "var(--muted)" }}> / {stats.amCount}</span>
+        </div>
+      </div>
+      <div className="card kpi">
+        <div className="kpi-label">Avg weighted maturity</div>
+        <div className="kpi-value">
+          {stats.avgWeighted == null ? "n/a" : fmt(stats.avgWeighted, 2)}
+          {stats.avgWeighted != null && <span style={{ fontSize: 16, color: "var(--muted)" }}> / 3</span>}
+        </div>
+        {/* the score on its own says nothing; the expected average and the gap are what
+            make it readable as good or bad */}
+        {stats.avgRequired != null && (
+          <div className="kpi-bench">
+            vs <strong>{fmt(stats.avgRequired, 2)}</strong> expected
+            {maturityGap != null && (
+              <span className={`lvl-chip ${gapClass(maturityGap)} kpi-bench-chip`}>
+                {maturityGap > 0 ? `+${fmt(maturityGap, 2)}` : fmt(maturityGap, 2)}
+              </span>
+            )}
+          </div>
+        )}
+        <div className="kpi-note">{stats.avgWeighted == null ? "submitted scores" : WEIGHTS_LABEL}</div>
+      </div>
+    </div>
+  );
+
+  if (isAdmin) {
+    blocks.report = (
+      <div className="report-row">
+        <div>
+          <div className="report-title">APEX Capability Dashboard</div>
+          <div className="report-sub">
+            {/* not "the filters above" — the cards can be reordered, so copy that names a
+                neighbour by position goes wrong without anything failing */}
+            Zone, segment and track radars with the expected level, plus the biggest gaps to
+            close. Downloads whatever the filters are currently showing.
+          </div>
+        </div>
+        <a className="btn btn-primary btn-sm" href={`/analysis/report/pdf${reportQuery}`}>
+          Download PDF
+        </a>
+      </div>
+    );
+  }
+
+  blocks.filters = (
+    <div className="analytics-filter-row">
+      <FilterBar
+        current={{
+          track: track ?? "all",
+          segment: segment ?? "all",
+          cap: selectedCapId ? String(selectedCapId) : "all",
+        }}
+        caps={capOptions}
+        showCapability={isAdmin}
+      />
+      {(track || segment) && (
+        <span className="analytics-filter-note">
+          Showing {ams.length} Account Manager{ams.length === 1 ? "" : "s"}
+          {track ? ` · ${track}` : ""}
+          {segment ? ` · ${segment}` : ""}
+        </span>
+      )}
+    </div>
+  );
+
+  if (isAdmin) {
+    blocks.map = (
+      <div className="card card-pad map-card">
+        <h2 className="card-title">Zone performance map</h2>
+        <p className="card-sub">
+          Weighted performance vs required levels across Schneider hubs. The shading ranks
+          the zones against each other, blue for the strongest gap in view and red for the
+          weakest, because on an absolute scale four zone averages land on the same colour.
+          The gap figures on the hover card and the zone panel are absolute. Filter by
+          capability, hover the hubs, click a zone to focus.
+        </p>
+        <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} capFilter={selectedCapId} />
+      </div>
+    );
+  }
+
+  blocks.timeline = <ScheduleTimeline entries={timeline} canDrill={isAdmin} />;
+
+  if (priorities.length > 0) {
+    blocks.priorities = (
+      <div className="card card-pad">
+        <h2 className="card-title">Recommended training focus</h2>
+        <p className="card-sub">Largest zone-level deficits (weighted score vs required level).</p>
+        <ul className="mini-list">
+          {priorities.map((p, i) => (
+            <li key={i}>
+              <span className={`lvl-chip ${gapClass(p.cell.gap)}`} style={{ minWidth: 52 }}>
+                {fmt(p.cell.gap, 2)}
+              </span>
+              <strong>{p.cap.name}</strong>
+              <span className="badge badge-zone">{p.zone}</span>
+              <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
+                avg {fmt(p.cell.avgScore)} vs required {fmt(p.cell.avgReq)} · {p.cell.n} AM{p.cell.n > 1 ? "s" : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  blocks.heatmap = (
+    <div className="card card-pad">
+      <h2 className="card-title">Training-needs heat map · capability × zone</h2>
+      <p className="card-sub">
+        Each cell is the weighted score for that zone, with the level required and the gap
+        beneath it. Every cluster carries its own average row. Click a zone header for its
+        detailed view.
+      </p>
+      <div className="hm-scroll">
+        <table className="hm">
+          <thead>
+            <tr>
+              <th className="hm-rowhead">Capability</th>
+              {zones.map((z) => (
+                <th key={z}>
+                  {isAdmin ? (
+                    <Link href={`/analysis/zone/${z}`} style={{ color: "var(--blue)" }}>
+                      {z}
+                    </Link>
+                  ) : (
+                    z
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {clusters.map((cl) => (
+              <ClusterRows key={cl.name} cluster={cl} zoneCount={zones.length} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="legend">
+        <span><span className="sw" style={{ background: "#3dcd58" }} />At / above required</span>
+        <span><span className="sw" style={{ background: "#facc15" }} />Slightly below (&lt; 0.5)</span>
+        <span><span className="sw" style={{ background: "#fb923c" }} />Below (0.5 to 1)</span>
+        <span><span className="sw" style={{ background: "#f4564a" }} />Critical gap (&gt; 1)</span>
+        <span><span className="sw" style={{ background: "#3a465e" }} />No data / not applicable</span>
+      </div>
+    </div>
+  );
+
+  blocks.roster = (
+    <div className="card card-pad">
+      {/* the count is read from the roster, not hardcoded: "TOP 25" went stale the moment
+          anyone was added or removed */}
+      <h2 className="card-title">
+        {isAdmin ? "Roster" : "People you assess"} · {rosterAMs.length} Account Manager
+        {rosterAMs.length === 1 ? "" : "s"}
+      </h2>
+      <p className="card-sub">
+        Where each assessment stands, per lens. A tick means submitted and locked; an amber
+        count is a draft in progress out of the 22 capabilities. The dates are the self,
+        manager and APEX Panel deadlines, set per person on their individual page.
+        {!isAdmin && " This list is limited to the people you have been assigned."}
+      </p>
+      {rosterAMs.length === 0 && (
+        <div className="banner banner-info" style={{ marginBottom: 0 }}>
+          {isAdmin
+            ? "No Account Manager matches the current filters."
+            : "You have not been assigned anyone to assess under the current filters. Your administrator makes the assignments."}
+        </div>
+      )}
+      <div className="hm-scroll" hidden={rosterAMs.length === 0}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Account Manager</th>
+              <th>Zone</th>
+              <th>Track</th>
+              <th>Segment</th>
+              <th>Self</th>
+              <th>Manager</th>
+              <th>APEX Panel</th>
+              <th>Schedule</th>
+              {isAdmin && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rosterAMs.map((am) => {
+              const st = statuses.get(am.id)!;
+              return (
+                <tr key={am.id} className="rowlink">
+                  <td style={{ fontWeight: 600 }}>
+                    {isAdmin ? (
+                      <Link className="row-name-link" href={`/analysis/am/${am.id}`}>{am.name}</Link>
+                    ) : (
+                      am.name
+                    )}
+                  </td>
+                  <td><span className="badge badge-zone">{am.zone}</span></td>
+                  <td><span className="badge badge-track">{am.track}</span></td>
+                  <td>
+                    {am.segment ? (
+                      <span className="badge badge-segment">{am.segment}</span>
+                    ) : (
+                      <span style={{ color: "var(--muted)" }}>n/a</span>
+                    )}
+                  </td>
+                  {(["self", "manager", "expert"] as const).map((lens) => {
+                    const s = st[lens];
+                    return (
+                      <td key={lens}>
+                        {s.status === "submitted" ? (
+                          <span className="badge badge-green">✓ Done</span>
+                        ) : s.status === "draft" ? (
+                          <span className="badge badge-amber">{s.rated}/22</span>
+                        ) : (
+                          <span className="badge badge-gray">n/a</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td>
+                    <ScheduleCell am={am} status={st} />
+                  </td>
+                  {isAdmin && (
+                    <td>
+                      <Link className="btn btn-sm btn-outline" href={`/analysis/am/${am.id}`}>
+                        Analysis →
+                      </Link>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <div className="page-head">
@@ -131,258 +418,7 @@ export default async function AnalysisPage({
         </p>
       </div>
 
-      <div className="grid grid-kpi" style={{ marginBottom: 22 }}>
-        <div className="card kpi">
-          <div className="kpi-label">Campaign completion</div>
-          <div className="kpi-value">{completionPct}%</div>
-          <div className="kpi-note">
-            {submittedTotal} / {stats.amCount * 3} assessments submitted
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="kpi-label">Self submitted</div>
-          <div className="kpi-value">
-            {stats.byLens.self}
-            <span style={{ fontSize: 16, color: "var(--muted)" }}> / {stats.amCount}</span>
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="kpi-label">Manager submitted</div>
-          <div className="kpi-value">
-            {stats.byLens.manager}
-            <span style={{ fontSize: 16, color: "var(--muted)" }}> / {stats.amCount}</span>
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="kpi-label">APEX Panel submitted</div>
-          <div className="kpi-value">
-            {stats.byLens.expert}
-            <span style={{ fontSize: 16, color: "var(--muted)" }}> / {stats.amCount}</span>
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="kpi-label">Avg weighted maturity</div>
-          <div className="kpi-value">
-            {stats.avgWeighted == null ? "n/a" : fmt(stats.avgWeighted, 2)}
-            {stats.avgWeighted != null && (
-              <span style={{ fontSize: 16, color: "var(--muted)" }}> / 3</span>
-            )}
-          </div>
-          {/* the score on its own says nothing; the expected average and the gap are what
-              make it readable as good or bad */}
-          {stats.avgRequired != null && (
-            <div className="kpi-bench">
-              vs <strong>{fmt(stats.avgRequired, 2)}</strong> expected
-              {maturityGap != null && (
-                <span className={`lvl-chip ${gapClass(maturityGap)} kpi-bench-chip`}>
-                  {maturityGap > 0 ? `+${fmt(maturityGap, 2)}` : fmt(maturityGap, 2)}
-                </span>
-              )}
-            </div>
-          )}
-          <div className="kpi-note">{stats.avgWeighted == null ? "submitted scores" : WEIGHTS_LABEL}</div>
-        </div>
-      </div>
-
-      {isAdmin && (
-        <div className="report-row">
-          <div>
-            <div className="report-title">APEX Capability Dashboard</div>
-            <div className="report-sub">
-              Zone, segment and track radars with the expected level, plus the biggest gaps to
-              close. Downloads what the filters above are showing.
-            </div>
-          </div>
-          <a className="btn btn-primary btn-sm" href={`/analysis/report/pdf${reportQuery}`}>
-            Download PDF
-          </a>
-        </div>
-      )}
-
-      <div className="analytics-filter-row">
-        <FilterBar
-          current={{
-            track: track ?? "all",
-            segment: segment ?? "all",
-            cap: selectedCapId ? String(selectedCapId) : "all",
-          }}
-          caps={capOptions}
-          showCapability={isAdmin}
-        />
-        {(track || segment) && (
-          <span className="analytics-filter-note">
-            Showing {ams.length} Account Manager{ams.length === 1 ? "" : "s"}
-            {track ? ` · ${track}` : ""}
-            {segment ? ` · ${segment}` : ""}
-          </span>
-        )}
-      </div>
-
-      {isAdmin && (
-        <div className="card card-pad map-card" style={{ marginBottom: 22 }}>
-          <h2 className="card-title">Zone performance map</h2>
-          <p className="card-sub">
-            Weighted performance vs required levels across Schneider hubs. The shading ranks
-            the zones against each other, blue for the strongest gap in view and red for the
-            weakest, because on an absolute scale four zone averages land on the same colour.
-            The gap figures on the hover card and the zone panel are absolute. Filter by
-            capability, hover the hubs, click a zone to focus.
-          </p>
-          <ZoneMap ams={mapAMs} caps={mapCaps} canDrill={isAdmin} capFilter={selectedCapId} />
-        </div>
-      )}
-
-      <ScheduleTimeline entries={timeline} canDrill={isAdmin} />
-
-      {priorities.length > 0 && (
-        <div className="card card-pad" style={{ marginBottom: 22 }}>
-          <h2 className="card-title">Recommended training focus</h2>
-          <p className="card-sub">Largest zone-level deficits (weighted score vs required level).</p>
-          <ul className="mini-list">
-            {priorities.map((p, i) => (
-              <li key={i}>
-                <span className={`lvl-chip ${gapClass(p.cell.gap)}`} style={{ minWidth: 52 }}>
-                  {fmt(p.cell.gap, 2)}
-                </span>
-                <strong>{p.cap.name}</strong>
-                <span className="badge badge-zone">{p.zone}</span>
-                <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                  avg {fmt(p.cell.avgScore)} vs required {fmt(p.cell.avgReq)} · {p.cell.n} AM{p.cell.n > 1 ? "s" : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="card card-pad" style={{ marginBottom: 22 }}>
-        <h2 className="card-title">Training-needs heat map · capability × zone</h2>
-        <p className="card-sub">
-          Each cell is the weighted score for that zone, with the level required and the gap
-          beneath it. Every cluster carries its own average row. Click a zone header for its
-          detailed view.
-        </p>
-        <div className="hm-scroll">
-          <table className="hm">
-            <thead>
-              <tr>
-                <th className="hm-rowhead">Capability</th>
-                {zones.map((z) => (
-                  <th key={z}>
-                    {isAdmin ? (
-                      <Link href={`/analysis/zone/${z}`} style={{ color: "var(--blue)" }}>
-                        {z}
-                      </Link>
-                    ) : (
-                      z
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {clusters.map((cl) => (
-                <ClusterRows key={cl.name} cluster={cl} zoneCount={zones.length} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="legend">
-          <span><span className="sw" style={{ background: "#3dcd58" }} />At / above required</span>
-          <span><span className="sw" style={{ background: "#facc15" }} />Slightly below (&lt; 0.5)</span>
-          <span><span className="sw" style={{ background: "#fb923c" }} />Below (0.5 to 1)</span>
-          <span><span className="sw" style={{ background: "#f4564a" }} />Critical gap (&gt; 1)</span>
-          <span><span className="sw" style={{ background: "#3a465e" }} />No data / not applicable</span>
-        </div>
-      </div>
-
-      <div className="card card-pad">
-        {/* the count is read from the roster, not hardcoded: "TOP 25" went stale the moment
-            anyone was added or removed */}
-        <h2 className="card-title">
-          {isAdmin ? "Roster" : "People you assess"} · {rosterAMs.length} Account Manager
-          {rosterAMs.length === 1 ? "" : "s"}
-        </h2>
-        <p className="card-sub">
-          Where each assessment stands, per lens. A tick means submitted and locked; an amber
-          count is a draft in progress out of the 22 capabilities. The dates are the self,
-          manager and APEX Panel deadlines, set per person on their individual page.
-          {!isAdmin && " This list is limited to the people you have been assigned."}
-        </p>
-        {rosterAMs.length === 0 && (
-          <div className="banner banner-info" style={{ marginBottom: 0 }}>
-            {isAdmin
-              ? "No Account Manager matches the current filters."
-              : "You have not been assigned anyone to assess under the current filters. Your administrator makes the assignments."}
-          </div>
-        )}
-        <div className="hm-scroll" hidden={rosterAMs.length === 0}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Account Manager</th>
-                <th>Zone</th>
-                <th>Track</th>
-                <th>Segment</th>
-                <th>Self</th>
-                <th>Manager</th>
-                <th>APEX Panel</th>
-                <th>Schedule</th>
-                {isAdmin && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rosterAMs.map((am) => {
-                const st = statuses.get(am.id)!;
-                return (
-                  <tr key={am.id} className="rowlink">
-                    <td style={{ fontWeight: 600 }}>
-                      {isAdmin ? (
-                        <Link className="row-name-link" href={`/analysis/am/${am.id}`}>{am.name}</Link>
-                      ) : (
-                        am.name
-                      )}
-                    </td>
-                    <td><span className="badge badge-zone">{am.zone}</span></td>
-                    <td><span className="badge badge-track">{am.track}</span></td>
-                    <td>
-                      {am.segment ? (
-                        <span className="badge badge-segment">{am.segment}</span>
-                      ) : (
-                        <span style={{ color: "var(--muted)" }}>n/a</span>
-                      )}
-                    </td>
-                    {(["self", "manager", "expert"] as const).map((lens) => {
-                      const s = st[lens];
-                      return (
-                        <td key={lens}>
-                          {s.status === "submitted" ? (
-                            <span className="badge badge-green">✓ Done</span>
-                          ) : s.status === "draft" ? (
-                            <span className="badge badge-amber">{s.rated}/22</span>
-                          ) : (
-                            <span className="badge badge-gray">n/a</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td>
-                      <ScheduleCell am={am} status={st} />
-                    </td>
-                    {isAdmin && (
-                      <td>
-                        <Link className="btn btn-sm btn-outline" href={`/analysis/am/${am.id}`}>
-                          Analysis →
-                        </Link>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DashboardGrid layout={layout} blocks={blocks} canEdit={isAdmin} editing={editing} />
     </div>
   );
 }

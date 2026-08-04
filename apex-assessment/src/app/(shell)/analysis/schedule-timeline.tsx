@@ -72,7 +72,7 @@ export default function ScheduleTimeline({
 
   if (entries.length === 0) {
     return (
-      <div className="card card-pad" style={{ marginBottom: 22 }}>
+      <div className="card card-pad">
         <h2 className="card-title">Assessment timeline</h2>
         <p className="card-sub" style={{ marginBottom: 0 }}>
           {canDrill
@@ -141,7 +141,7 @@ export default function ScheduleTimeline({
     .slice(0, 4);
 
   return (
-    <div className="card card-pad" style={{ marginBottom: 22 }}>
+    <div className="card card-pad">
       <h2 className="card-title">Assessment timeline</h2>
       <p className="card-sub">
         One lane per assessment. Each marker is a scheduled <strong>deadline</strong>, labelled

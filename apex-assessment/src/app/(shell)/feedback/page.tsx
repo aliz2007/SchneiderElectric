@@ -191,12 +191,9 @@ export default async function FeedbackPage() {
 
       <div className="card card-pad">
         <h2 className="card-title">Capability detail · three lenses vs required</h2>
-        <div className="legend" style={{ marginTop: 6, marginBottom: 10 }}>
-          <span><span className="lens-dot ld-self" />You</span>
-          <span><span className="lens-dot ld-manager" />Manager</span>
-          <span><span className="lens-dot ld-expert" />APEX Panel</span>
-          <span><span className="lens-dot ld-req" />Required</span>
-        </div>
+        {/* No legend strip: every column header below already carries the same dot and the
+            same label, so this only said it twice. Same reasoning as the individual
+            analysis page. */}
         <div className="hm-scroll">
           <table className="hm">
             <thead>
