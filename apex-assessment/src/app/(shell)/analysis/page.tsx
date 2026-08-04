@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireUser } from "@/lib/session";
 import { type BlockId } from "@/lib/dashboard-layout";
-import { readLayout } from "@/lib/dashboard-settings";
+import { readColors, readLayout } from "@/lib/dashboard-settings";
 import DashboardGrid from "./dashboard-grid";
 import {
   assessmentStatuses,
@@ -417,7 +417,7 @@ export default async function AnalysisPage({
         </p>
       </div>
 
-      <DashboardGrid layout={layout} blocks={blocks} />
+      <DashboardGrid layout={layout} blocks={blocks} canEdit={isAdmin} colors={readColors(user.id)} />
     </div>
   );
 }

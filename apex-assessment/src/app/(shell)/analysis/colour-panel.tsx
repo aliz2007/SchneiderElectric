@@ -11,7 +11,7 @@ import {
   type ThemeColors,
   type ThemePart,
 } from "@/lib/dashboard-layout";
-import { resetColors, saveColors } from "./actions";
+import { resetColors, saveColors } from "./dashboard-actions";
 
 /**
  * Colour, one part at a time.

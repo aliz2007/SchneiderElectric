@@ -33,7 +33,6 @@ export default async function ShellLayout({ children }: { children: React.ReactN
       ? ([
           { href: "/analysis/individuals", label: "Individuals", ico: "people" },
           { href: "/admin/users", label: "Users & Access", ico: "access" },
-          { href: "/admin/settings", label: "Settings", ico: "settings" },
         ] as NavItem[])
       : []),
   ];

@@ -39,7 +39,7 @@ Last updated: 2026-08-04.
      missing, so nothing was lost with it. An e2e check asserts the strip stays gone AND that
      the four header dots are still painted and distinct — removing both would have been the
      easy way to make the first half of that check pass.
-  3. **Dashboard Manager** (superadmin-only, per-account) — see § Dashboard Manager below.
+  3. **Arranging the dashboard** (superadmin-only, per-account) — see § Arranging the dashboard below.
 - Most recent additions (2026-08-03, second batch): the eight points from
   `docs/source-materials/APEX_App_Feedbacks_2026-08-03.md` (Colline & Vladimir, 3 Aug).
   1. **Self-assessment deadline** — `self_deadline` joins the manager deadline and the panel
@@ -348,49 +348,52 @@ render as plain text for assessors instead of links to a page that would bounce 
 The e2e suite locks all of this down in section 7 (roster scoping, timeline scoping, no
 timeline links, no map, four redirect checks, five PDF download checks).
 
-### Dashboard Manager (superadmin-only, per account)
+### Arranging the dashboard (superadmin-only, per account)
 
-`/admin/settings` → the **wrench, top right**. It opens a two-tab workbench: **Arrange** and
-**Colour**. Behind a control on purpose — it is a tool, not content, and a workbench spread
-across the page is noise between you and everything else the rest of the time.
+One small square **wrench, top left of the dashboard**. It turns THIS page editable and back.
+There is no Settings page and no separate editor: the thing being arranged is the real
+dashboard with its real cards and real numbers in them. A miniature would be a second thing
+to keep in sync with the first, and you would still have to look away from it to see what you
+had done.
+
+**Read mode** carries the wrench and nothing else — no toolbar, no handles, no tags — and the
+cards are fully interactive. **Edit mode** puts a sticky bar at the top with **Colour · Reset
+· Cancel · Save**, gives every card a dashed outline, a name tag, a × and a grip on its right
+edge, and makes the card CONTENTS inert (`pointer-events: none`), because a drag that starts
+on a link is a navigation rather than a drag. Nothing is written until Save; Cancel restores
+and leaves.
+
+- **Move**: drag a card onto another. The name tag is also a button — arrow keys step the
+  card past its neighbours, because a drag is unreachable from a keyboard and cannot be
+  driven deterministically by a test harness.
+- **Resize**: pull the right edge. The pointer position is turned into a column count against
+  the grid's real width and snapped to the sizes that card is allowed. Arrow keys on the grip
+  do the same.
+- **Take off**: the ×. The card stays visible in edit mode, greyed, so it can be put back.
+
+One trap worth knowing: pressing the resize grip used to start a native HTML5 drag of the
+draggable card underneath, which swallowed the pointermove stream so the edge never followed
+the mouse. `preventDefault()` on the pointerdown is NOT enough — `draggable` has to come off
+the card for the duration.
 
 **Per account.** `user_settings (user_id, key, value)`, two keys per person:
-`dashboard.layout` (JSON) and `theme.colors` (JSON). Each superadmin arranges and colours
-their own dashboard and saving never moves a colleague's. Anyone with nothing stored gets
-the shipped defaults — an assessor (the manager is superadmin-only, so they can never store
-anything) and the sign-in screen, which has no session to ask. `ON DELETE CASCADE` takes a
-user's preferences with them.
-
-**Arrange** is a canvas of tiles on the same twelve-column grid as the real page, at the same
-relative widths, each carrying a WIREFRAME of the card it stands for. That is what makes it
-rearrangeable by recognition rather than by reading labels, and it is why the wireframes are
-built from flex/grid elements rather than from a fixed-viewBox SVG: a tile is anything from a
-third of the canvas to all of it, and a scaled SVG either shrinks to a stamp in the middle of
-a wide tile or smears every mark into an ellipse. Drag to reorder, three drawn bars for the
-width, a switch to take a card off. Nothing is written until Save.
-
-Arrow buttons do everything dragging does. A drag cannot be done from a keyboard and cannot
-be driven reliably by a test harness, so an editor whose only affordance is a drag is one
-that half its users cannot operate and that nothing can guard.
-
-**The dashboard itself carries no editing chrome** — no toolbar, no handles, no wobble. An
-earlier version put an "Arrange dashboard" bar at the top of the dashboard for every
-superadmin on every visit; the client's reaction to that is the reason it is gone.
-`dashboard-grid.tsx` is now a plain server component and ships no JavaScript.
+`dashboard.layout` and `theme.colors`. Each superadmin arranges and colours their own
+dashboard; saving never moves a colleague's. Anyone with nothing stored gets the shipped
+defaults — an assessor (no wrench, nothing to store) and the sign-in screen, which has no
+session to ask. `ON DELETE CASCADE` takes a user's preferences with them.
 
 **Widths** are `third` / `half` / `full` (4 / 6 / 12 columns). Some cards carry a `minSize`:
-the zone map is a fixed-aspect world canvas and the timeline places its flags as percentages
-of the track, so a third-width version of either is not a smaller chart, it is an unreadable
-one. The canvas only offers the widths a card survives, and `parseLayout` clamps a
-hand-edited value to the same set. The filter card is `pinned`: movable and resizable, never
-removable, because it scopes every other card and hiding it would strip the only way to clear
-a filter still in the URL.
+the zone map is a fixed-aspect world canvas and the timeline places its markers as
+percentages of its track, so a third-width version of either is not a smaller chart, it is an
+unreadable one. The grip only comes to rest on a width the card survives, and `parseLayout`
+clamps a hand-edited value to the same set. The filter card is `pinned` — movable and
+resizable, never removable, because it scopes every other card and hiding it would strip the
+only way to clear a filter still in the URL.
 
-**Colour** is chosen one PART at a time — accent, menu bar, background, cards — because
-"change the app's colour" is usually four different wishes and one swatch row cannot express
-any of them past the first. Every change previews on the live page immediately by writing the
-same custom properties the server writes on a real load, so you are watching the app you are
-sitting in change colour rather than judging a swatch in a box.
+**Colour** is chosen one PART at a time — accent, menu bar, background, cards — from the same
+toolbar, because "change the app's colour" is usually four different wishes and one swatch
+row cannot express any of them past the first. Every change previews on the live page
+immediately by writing the same custom properties the server writes on a real load.
 
 **The rule that matters most: chrome follows the colour, results never do.** `globals.css`
 keeps two frozen families:
@@ -407,16 +410,15 @@ fallback — `rgba(var(--accent-rgb, 61, 205, 88), 0.4)`, `var(--accent-deep, #2
 `themeVars()` returns nothing for a part nobody has chosen. So on a default install no
 property is injected, every fallback is used, and the stylesheet renders exactly what it
 always did. An earlier version defined the tokens in `:root` with *derived* values, which
-silently shifted about twenty greens and every ink on a filled surface across the whole app;
-an e2e check now asserts a default install injects no overrides at all. **If you touch this
+silently shifted about twenty greens and every ink on a filled surface across the whole app.
+An e2e check now asserts a default install injects no overrides at all. **If you touch this
 file, keep that property**: resolve the fallbacks by hand and diff against the previous
 revision.
 
-**Adding a card later:** append to `DASHBOARD_BLOCKS` in `dashboard-layout.ts`, add a
-wireframe case to `block-glyph.tsx`, and add the node in `analysis/page.tsx`. `parseLayout`
-splices any block a stored layout has never heard of back in at its shipped index, so a new
-card appears for everyone rather than being invisible to anyone who has ever touched the
-manager.
+**Adding a card later:** append to `DASHBOARD_BLOCKS` in `dashboard-layout.ts` and add the
+node in `analysis/page.tsx`. `parseLayout` splices any block a stored layout has never heard
+of back in at its shipped index, so a new card appears for everyone rather than being
+invisible to anyone who has ever arranged theirs.
 
 ### Folding the menu away
 
@@ -732,10 +734,11 @@ src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (d
 src/lib/dashboard-layout.ts  block definitions, sizes, layout parser, accent helpers (NO db import — client-safe)
 src/lib/dashboard-settings.ts  per-user reads/writes of dashboard.layout + theme.colors (server only)
 src/lib/nav-cookie.ts        the sidebar-fold cookie name (NOT in the client component — see §Folding)
-src/app/(shell)/admin/settings/  Settings page, wrench toggle, arranging canvas, wireframes, colour panel
 src/app/(shell)/nav-icon.tsx  the drawn icon set (replaced the ▦ ☰ ⚙ ✎ ★ characters)
 src/app/(shell)/sidebar-toggle.tsx  folds the menu bar away
-src/app/(shell)/analysis/dashboard-grid.tsx  the 12-column dashboard grid (server component, no JS)
+src/app/(shell)/analysis/dashboard-grid.tsx  the 12-column grid + the wrench that makes it editable in place
+src/app/(shell)/analysis/colour-panel.tsx    accent / menu bar / background / cards, opened from the edit bar
+src/app/(shell)/analysis/dashboard-actions.ts  save + reset for the layout and the colours
 src/app/globals.css          all styling (semantic class names)
 src/app/fx.tsx               client-side scroll/hover effects
 e2e/smoke.mjs                Playwright smoke suite (see §9 for the check count)
@@ -760,7 +763,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 143/143 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 142/142 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
