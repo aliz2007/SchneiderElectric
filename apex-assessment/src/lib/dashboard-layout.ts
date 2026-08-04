@@ -248,10 +248,14 @@ export type AccentPreset = { hex: string; name: string };
  *  result palette, so a brand colour never reads as a warning about itself. */
 export const ACCENT_PRESETS: AccentPreset[] = [
   { hex: "#3dcd58", name: "Schneider green" },
-  { hex: "#2e7cf6", name: "Deep blue" },
+  { hex: "#16a34a", name: "Forest" },
   { hex: "#0ea5b7", name: "Teal" },
+  { hex: "#2e7cf6", name: "Deep blue" },
+  { hex: "#6366f1", name: "Indigo" },
   { hex: "#7c5cff", name: "Violet" },
+  { hex: "#c026d3", name: "Magenta" },
   { hex: "#e0577f", name: "Rose" },
+  { hex: "#ef6c3f", name: "Ember" },
   { hex: "#c48a2a", name: "Bronze" },
 ];
 
@@ -261,7 +265,9 @@ export const SURFACE_PRESETS: AccentPreset[] = [
   { hex: "#0b1020", name: "Ink" },
   { hex: "#0a0f14", name: "Graphite" },
   { hex: "#10131c", name: "Slate" },
+  { hex: "#0c1614", name: "Pine" },
   { hex: "#120e1a", name: "Aubergine" },
+  { hex: "#171013", name: "Oxblood" },
   { hex: "#000000", name: "Black" },
 ];
 
@@ -288,6 +294,41 @@ export function shade(hex: string, amount: number): string {
   const t = Math.abs(amount);
   const mix = (c: number) => Math.round(c + (target - c) * t);
   return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * hex ↔ HSL, so the picker can offer hue / saturation / lightness sliders.
+ *
+ * A native colour input is a 30px square that opens the operating system's picker, which is
+ * a different dialog on every machine and unusable on a laptop trackpad. Three wide sliders
+ * reach the same colours with targets you can actually hit, and they stay inside the app.
+ */
+export function hexToHsl(hex: string): [number, number, number] {
+  const [r0, g0, b0] = hexToRgb(hex).map((c) => c / 255);
+  const max = Math.max(r0, g0, b0);
+  const min = Math.min(r0, g0, b0);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, Math.round(l * 100)];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r0) h = ((g0 - b0) / d + (g0 < b0 ? 6 : 0)) / 6;
+  else if (max === g0) h = ((b0 - r0) / d + 2) / 6;
+  else h = ((r0 - g0) / d + 4) / 6;
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
+export function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const light = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sat * Math.min(light, 1 - light);
+  const f = (n: number) => light - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const to = (v: number) =>
+    Math.round(v * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${to(f(0))}${to(f(8))}${to(f(4))}`;
 }
 
 /** Perceived luminance, 0 (black) to 1 (white). */

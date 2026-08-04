@@ -1758,3 +1758,122 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
   /* the columns are gone at this width, so there is nothing to pull towards */
   .dash-resize { display: none; }
 }
+
+/* ---------- the colour panel ----------
+   Every rule here was lost once when a neighbouring block was deleted, and the panel
+   rendered as a row of unstyled white buttons. If you remove a section above, check what
+   else was inside it. */
+
+.cp { display: flex; flex-direction: column; gap: 20px; }
+
+/* what you are colouring */
+.cp-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.cp-part {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.2s, background 0.2s, transform 0.2s var(--ease-out);
+}
+.cp-part:hover { border-color: rgba(var(--accent-rgb, 61, 205, 88), 0.45); transform: translateY(-1px); }
+.cp-part.active {
+  border-color: rgba(var(--accent-rgb, 61, 205, 88), 0.7);
+  background: rgba(var(--accent-rgb, 61, 205, 88), 0.1);
+}
+.cp-chip {
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24), 0 4px 10px -4px rgba(0, 0, 0, 0.7);
+}
+.cp-part-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.cp-part-name { font-size: 13px; font-weight: 620; color: var(--ink); }
+.cp-part-blurb { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the colour itself */
+.cp-editor { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; }
+.cp-preview {
+  width: 132px; min-height: 132px; flex-shrink: 0;
+  border-radius: 16px;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
+  padding: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -14px rgba(0, 0, 0, 0.8);
+}
+/* the label rides on a plate rather than straight on the colour, so it stays readable on a
+   near-black surface and on a bright accent alike */
+.cp-preview-name, .cp-preview-hex {
+  align-self: flex-start;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+}
+.cp-preview-name { font-size: 11.5px; font-weight: 620; }
+.cp-preview-hex { font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.85; }
+
+.cp-sliders { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+.cp-slider { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 12px; }
+.cp-slider-label { font-size: 11.5px; color: var(--muted); }
+
+/* A wide track you can actually aim at, showing the colours it runs through. The thumb is
+   deliberately large — this is the control the whole panel exists for. */
+.cp-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.cp-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  cursor: grab;
+}
+.cp-slider input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  cursor: grab;
+}
+.cp-slider input[type="range"]:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.06); }
+
+.cp-hexrow { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+.cp-hex {
+  width: 116px; padding: 8px 11px; border-radius: 10px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05);
+  color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.cp-hex:focus { outline: none; border-color: var(--se-green); box-shadow: 0 0 0 4px rgba(var(--accent-rgb, 61, 205, 88), 0.2); }
+.cp-clear { border: none; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; }
+.cp-clear:hover { color: var(--ink-2); }
+
+/* the shortcuts, big enough to hit */
+.cp-swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.cp-swatch {
+  width: 46px; height: 46px; border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.8);
+  transition: transform 0.18s var(--ease-spring), box-shadow 0.2s;
+}
+.cp-swatch:hover { transform: translateY(-3px) scale(1.04); }
+.cp-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--se-green-bright), 0 6px 14px -8px rgba(0, 0, 0, 0.8);
+}
+
+.cp-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 640px) {
+  .cp-editor { flex-direction: column; }
+  .cp-preview { width: 100%; min-height: 84px; }
+  .cp-slider { grid-template-columns: 1fr; gap: 4px; }
+}
