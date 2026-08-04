@@ -39,7 +39,7 @@ Last updated: 2026-08-04.
      missing, so nothing was lost with it. An e2e check asserts the strip stays gone AND that
      the four header dots are still painted and distinct — removing both would have been the
      easy way to make the first half of that check pass.
-  3. **Dashboard Manager** (superadmin-only) — see § Dashboard Manager below.
+  3. **Dashboard Manager** (superadmin-only, per-account) — see § Dashboard Manager below.
 - Most recent additions (2026-08-03, second batch): the eight points from
   `docs/source-materials/APEX_App_Feedbacks_2026-08-03.md` (Colline & Vladimir, 3 Aug).
   1. **Self-assessment deadline** — `self_deadline` joins the manager deadline and the panel
@@ -353,12 +353,19 @@ timeline links, no map, four redirect checks, five PDF download checks).
 `/admin/settings` → **Dashboard Manager**. Three things sit behind one button: reset the
 dashboard, repaint the app, and rearrange the cards.
 
-**Where the state lives.** Both values are rows in `app_settings`, so they are properties of
-the INSTALLATION, not of the person looking: `dashboard.layout` (JSON) and `theme.accent`
-(a hex). That is deliberate. A superadmin arranging the dashboard is deciding what this
-deployment's dashboard looks like for everyone, the same way they decide who can see what;
-a per-user layout would mean the client arranges their dashboard, screen-shares it, and
-nobody else sees what they are describing.
+**Where the state lives.** `user_settings (user_id, key, value)`, two keys per person:
+`dashboard.layout` (JSON) and `theme.accent` (a hex). PER USER, on the client's explicit
+instruction — each superadmin arranges and colours their own dashboard, and saving never
+moves a colleague's. Anyone with nothing stored gets the shipped defaults: an assessor
+(the Dashboard Manager is superadmin-only, so they can never store anything), and the
+sign-in screen, which has no session to ask. `ON DELETE CASCADE` takes a user's
+preferences with them.
+
+This started out installation-wide in `app_settings` for a few hours before the client
+asked for per-user; `db.ts` deletes those two orphaned keys on migrate, naming them
+explicitly because `app_settings` still holds the AI config. Two e2e checks guard the
+change: one signs in as a second account and asserts its dashboard has not moved, the other
+signs back in and asserts the superadmin's own arrangement survived.
 
 **Arranging.** `/analysis?edit=1` (superadmin only, checked server-side — the parameter is
 inert in an assessor's URL bar) turns the dashboard into an editor: the cards wobble, each
@@ -384,15 +391,17 @@ is an unreadable one. The editor only offers the widths a card survives, and `pa
 clamps a hand-edited value to the same set.
 
 **The filter card is pinned.** It can be moved and resized but never removed — it scopes
-every other card on the page, so hiding it would strip the only way to clear a filter that
+every other card on the page, so hiding it would strip your only way to clear a filter that
 is still in the URL. Enforced in three places (`BlockDef.pinned`, `parseLayout`,
 `updateBlock`). A removed card is only hidden, never deleted, and the Settings table always
 offers to put it back, so there is an escape hatch even when the card is off the page.
 
-**The accent** is applied as an inline style on `<html>` by the ROOT layout, so the sign-in
-screen is branded too and there is no flash of green on the way to a Deep blue deployment.
-Inline beats any stylesheet rule regardless of emission order, so it cannot lose a cascade
-race with `globals.css`.
+**The accent** is applied as an inline style on `<html>` by the ROOT layout, so it reaches
+every page from one place and arrives server-rendered — no flash of green on the way to a
+violet. Inline beats any stylesheet rule regardless of emission order, so it cannot lose a
+cascade race with `globals.css`. The root layout calls `getCurrentUser()` (not
+`requireUser`) because it also renders the sign-in screen, which paints in the shipped
+green.
 
 **The rule that matters most: chrome follows the accent, results never do.** `globals.css`
 now keeps two frozen families next to the repaintable `--accent-*` set:
@@ -484,10 +493,14 @@ invisible on every deployment that had ever touched the Dashboard Manager.
   Columns are added by idempotent `ALTER TABLE … ADD COLUMN` migrations in `db.ts`. A row that
   becomes entirely empty is deleted (`saveThemeField`). Read helpers: `getThemeNotesFull`,
   `themeJustificationText`, `unjustifiedThemes`.
-- `app_settings` (key PK, value) — runtime key/value store. Now holds only `moonshot_model`
-  (the auto-selected working model) and `moonshot_last_result` (last PDF-AI outcome). The
-  Kimi API key is HARDCODED in `ai-narrative.ts` (`EMBEDDED_KEY`), not stored here; there is
-  no in-app AI settings card anymore.
+- `app_settings` (key PK, value) — INSTALLATION-wide key/value store. Now holds only
+  `moonshot_model` (the auto-selected working model) and `moonshot_last_result` (last PDF-AI
+  outcome). The Kimi API key is HARDCODED in `ai-narrative.ts` (`EMBEDDED_KEY`), not stored
+  here; there is no in-app AI settings card anymore.
+- `user_settings` (user_id + key PK, value, cascade on user delete) — the same idea scoped to
+  one person. Holds the Dashboard Manager's two keys, `dashboard.layout` and `theme.accent`,
+  because each superadmin arranges and colours their own dashboard (see § Dashboard Manager).
+  Read/written only through `getUserSetting` / `setUserSetting` in `queries.ts`.
 
 A self-assessor is always linked to exactly ONE Account Manager (themselves).
 `setAssignments` enforces this (it caps a self user's assignments to one), and both the
@@ -705,7 +718,7 @@ src/app/(shell)/error.tsx    error boundary; auto-reloads once on a stale-tab Ch
 src/app/api/chat/route.ts    chatbot endpoint (role-scoped snapshot + Kimi)
 src/app/(shell)/admin/users/ users page, lens-aware create-user-form, actions (delete, sandbox, demo)
 src/lib/dashboard-layout.ts  block definitions, sizes, layout parser, accent helpers (NO db import — client-safe)
-src/lib/dashboard-settings.ts  reads/writes dashboard.layout + theme.accent in app_settings (server only)
+src/lib/dashboard-settings.ts  per-user reads/writes of dashboard.layout + theme.accent (server only)
 src/app/(shell)/admin/settings/  Settings page + Dashboard Manager (reset / app colour / arrange) + actions
 src/app/(shell)/analysis/dashboard-grid.tsx  12-col dashboard grid + the iPhone-style edit mode
 src/app/globals.css          all styling (semantic class names)
@@ -732,7 +745,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 134/134 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 136/136 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,

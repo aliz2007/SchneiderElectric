@@ -17,8 +17,8 @@ import { resetAccent, resetAll, resetLayout, saveAccent, updateBlock } from "./a
  * The Dashboard Manager.
  *
  * One button opens it, and behind that button are the three things a superadmin can do to
- * this deployment's dashboard: put it back the way it shipped, repaint the app, or go and
- * rearrange the cards.
+ * THEIR OWN dashboard: put it back the way it shipped, repaint the app, or go and rearrange
+ * the cards. Nothing here touches anybody else's view.
  *
  * The colour picker previews by writing the accent variables straight onto <html>, so the
  * whole app — sidebar, buttons, the aurora behind the page — repaints as you drag the
@@ -172,9 +172,10 @@ export default function DashboardManager({
         <div className="dm-body">
           <p className="dm-lede">
             The accent paints the app&apos;s chrome — the sidebar, the buttons, the focus ring
-            and the glow behind the page. The result colours stay as they are: green still
-            means at or above the required level, red still means a critical gap, and those
-            have to keep meaning that whatever the brand colour is.
+            and the glow behind the page — for you, wherever you are signed in. The result
+            colours stay as they are: green still means at or above the required level, red
+            still means a critical gap, and those have to keep meaning that whatever colour
+            you pick.
           </p>
           <div className="dm-swatches">
             {ACCENT_PRESETS.map((p) => (
@@ -231,9 +232,9 @@ export default function DashboardManager({
       {tab === "reset" && (
         <div className="dm-body">
           <p className="dm-lede">
-            Reset puts things back the way the app ships. It changes what everyone sees, not
-            just your own view, and it cannot be undone — but nothing is lost either, since a
-            layout is only an arrangement of cards that are all still there.
+            Reset puts your dashboard back the way the app ships. It only affects your own
+            view, and it cannot be undone — but nothing is lost either, since a layout is only
+            an arrangement of cards that are all still there.
           </p>
           <div className="dm-actions">
             <form action={resetLayout}>

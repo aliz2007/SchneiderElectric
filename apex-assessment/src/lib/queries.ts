@@ -325,6 +325,30 @@ export function setSetting(key: string, value: string | null) {
   }
 }
 
+/**
+ * Per-user settings. Same shape as the app-wide store above, but keyed by person: the
+ * Dashboard Manager lets each superadmin arrange and colour their OWN dashboard, so its
+ * state cannot sit in a single installation-wide row.
+ */
+export function getUserSetting(userId: number, key: string): string | null {
+  const row = getDb()
+    .prepare("SELECT value FROM user_settings WHERE user_id = ? AND key = ?")
+    .get(userId, key) as { value: string | null } | undefined;
+  return row?.value ?? null;
+}
+
+export function setUserSetting(userId: number, key: string, value: string | null) {
+  const db = getDb();
+  if (value == null) {
+    db.prepare("DELETE FROM user_settings WHERE user_id = ? AND key = ?").run(userId, key);
+  } else {
+    db.prepare(
+      `INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)
+       ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value`
+    ).run(userId, key, value);
+  }
+}
+
 // ---------- users ----------
 
 export type UserRow = {

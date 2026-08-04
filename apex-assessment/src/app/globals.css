@@ -1659,9 +1659,3 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
    under the scroll position, so a card dragged upwards could sit there still invisible.
    Inside the editing grid the reveal is simply off. */
 .dash-grid-editing .rv { opacity: 1 !important; transform: none !important; }
-
-.dash-warn {
-  margin: 0 4px 8px;
-  font-size: 11.5px;
-  color: var(--amber);
-}

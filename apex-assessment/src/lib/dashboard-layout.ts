@@ -1,12 +1,10 @@
 /**
  * Dashboard layout & app accent — the state behind the superadmin Dashboard Manager.
  *
- * Both live in the `app_settings` key/value table, so they are properties of the
- * INSTALLATION, not of the person looking. That is deliberate: a superadmin arranging
- * the dashboard is deciding what this deployment's dashboard looks like for everyone,
- * the same way they decide who can see what. A per-user layout would mean the client
- * arranges their dashboard, screen-shares it, and nobody else sees what they are
- * describing.
+ * Both live in the `user_settings` table, keyed by person: each superadmin arranges and
+ * colours their OWN dashboard. Nothing here is installation-wide, so saving an arrangement
+ * never changes what a colleague sees, and anyone without a stored preference — an
+ * assessor, or the sign-in screen, which has no session yet — gets the shipped defaults.
  *
  * Everything here is defensive on read. The stored value is JSON a human can edit by
  * hand, and a layout that throws would take the whole dashboard down, so a malformed
@@ -52,7 +50,7 @@ export type BlockDef = {
   /**
    * Cards that carry the page's controls. They can be moved and resized like anything
    * else, but they cannot be hidden: the filter bar scopes every other card on the page,
-   * so hiding it would strip the only way to clear a filter that is still in the URL.
+   * so hiding it would strip your only way to clear a filter that is still in the URL.
    */
   pinned?: boolean;
   /**
@@ -65,18 +63,12 @@ export type BlockDef = {
    * that work — which is also why this lives next to the block and not in the CSS.
    */
   minSize?: BlockSize;
-  /**
-   * Shown next to the remove button. There is one layout for the whole deployment, so a
-   * card taken off the dashboard goes for everyone — and for a couple of cards, the
-   * people who lose the most are the ones with no other way to reach that information.
-   */
-  warn?: string;
 };
 
 /**
- * The shipped dashboard, in shipped order. "Reset" in the Dashboard Manager restores
- * exactly this, which is why the defaults live in one place rather than being spread
- * across the page.
+ * The shipped dashboard, in shipped order. Everybody starts here, and "Reset" in the
+ * Dashboard Manager restores exactly this — which is why the defaults live in one place
+ * rather than being spread across the page.
  *
  * Adding a block here is enough to make it appear for everyone: a stored layout that
  * predates it simply does not mention it, and the merge below drops it back at its
@@ -121,7 +113,6 @@ export const DASHBOARD_BLOCKS: BlockDef[] = [
     size: "full",
     adminOnly: false,
     minSize: "half",
-    warn: "Managers and panel members read their overdue list here.",
   },
   {
     id: "priorities",
@@ -145,7 +136,6 @@ export const DASHBOARD_BLOCKS: BlockDef[] = [
     size: "full",
     adminOnly: false,
     minSize: "half",
-    warn: "This is the only place an assessor can see who they were assigned.",
   },
 ];
 

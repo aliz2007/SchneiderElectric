@@ -108,7 +108,24 @@ function migrate(db: Database.Database) {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    -- The same idea, scoped to one person. Holds the Dashboard Manager's state
+    -- (dashboard.layout, theme.accent): each superadmin arranges and colours their own
+    -- dashboard, so these cannot live in app_settings, which is installation-wide.
+    -- Deleting a user takes their preferences with them.
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      value TEXT,
+      PRIMARY KEY (user_id, key)
+    );
   `);
+
+  // The Dashboard Manager shipped for a few hours storing its state globally, before the
+  // client asked for it per superadmin. Clear the two orphaned rows so nobody reading the
+  // database later mistakes them for live settings. Idempotent, and it deliberately names
+  // the two keys rather than emptying the table: app_settings still holds the AI config.
+  db.prepare("DELETE FROM app_settings WHERE key IN ('dashboard.layout','theme.accent')").run();
 
   // add profile_complete to account_managers for databases created before onboarding existed
   try {

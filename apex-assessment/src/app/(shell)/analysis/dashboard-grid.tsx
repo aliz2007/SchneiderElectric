@@ -115,8 +115,8 @@ export default function DashboardGrid({
               ✥ Arrange dashboard
             </Link>
             <span className="dash-edit-hint">
-              Move, resize or remove the cards below. Superadmins only — everyone sees the
-              arrangement you save.
+              Move, resize or remove the cards below. This is your own dashboard — what you
+              save changes nobody else&apos;s view.
             </span>
           </div>
         )}
@@ -235,14 +235,13 @@ export default function DashboardGrid({
                       className={`dash-tool dash-remove${b.hidden ? " active" : ""}`}
                       onClick={() => setHidden(b.id, !b.hidden)}
                       aria-label={b.hidden ? `Put ${def.label} back` : `Remove ${def.label}`}
-                      title={def.warn ? `${def.warn} Removing this card removes it for everyone.` : "Remove this card for everyone"}
+                      title="Take this card off your own dashboard"
                     >
                       {b.hidden ? "+" : "✕"}
                     </button>
                   )}
                 </div>
               </div>
-              {def.warn && !b.hidden && <div className="dash-warn">{def.warn}</div>}
               <div className="dash-body" aria-hidden={b.hidden}>
                 {blocks[b.id]}
               </div>

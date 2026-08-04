@@ -1001,6 +1001,46 @@ try {
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/10-accent-violet.png` });
 
+  // ---- 13bis. the arrangement and the colour belong to ONE account ----
+  // The whole point of storing these per user: vladimir has by now reordered his cards,
+  // narrowed one, removed the map and gone violet. Nobody else's dashboard may have moved.
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "tmanager");
+  await page.fill("#password", "secret123");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/rate");
+  await page.goto(`${BASE}/analysis`);
+  await page.waitForSelector(".dash-block");
+  {
+    const theirs = await order();
+    // the shipped RELATIVE order, over the blocks an assessor actually receives (no map,
+    // no PDF deck) — vladimir's roster sits two places earlier than this
+    const shipped = ["kpis", "report", "filters", "map", "timeline", "priorities", "heatmap", "roster"]
+      .filter((id) => theirs.includes(id));
+    const sizes = await page.locator(".dash-block").evaluateAll((els) => els.map((e) => e.dataset.size));
+    const accent = await page.evaluate(() => document.documentElement.dataset.accent);
+    theirs.join(",") === shipped.join(",") && sizes.every((z) => z === "full") && accent === "#3dcd58"
+      ? ok("another account is untouched by a superadmin's arrangement and colour")
+      : fail("per-user isolation", `${theirs.join(",")} / ${[...new Set(sizes)].join("+")} / ${accent}`);
+  }
+  // ...and the superadmin's own customisation is still waiting for him
+  await page.click("text=Sign out");
+  await page.waitForURL("**/login");
+  await page.fill("#username", "vladimir");
+  await page.fill("#password", "apex2026");
+  await page.click("button[type=submit]");
+  await page.waitForURL("**/analysis");
+  await page.waitForSelector(".dash-block");
+  {
+    const mine = await order();
+    const accent = await page.evaluate(() => document.documentElement.dataset.accent);
+    const heat = await page.locator('.dash-block[data-block="heatmap"]').getAttribute("data-size");
+    mine.indexOf("roster") === baseline.indexOf("roster") - 2 && accent === "#7c5cff" && heat === "half"
+      ? ok("the superadmin's own arrangement and colour survived the other sign-in")
+      : fail("own settings after switch", `${mine.join(",")} / ${accent} / heat ${heat}`);
+  }
+
   // ---- 13c. reset ----
   await page.goto(`${BASE}/admin/settings`);
   await page.locator('button:has-text("Open Dashboard Manager")').click();

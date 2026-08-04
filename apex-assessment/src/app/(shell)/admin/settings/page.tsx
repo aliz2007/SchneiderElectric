@@ -4,9 +4,9 @@ import { readAccent, readLayout } from "@/lib/dashboard-settings";
 import DashboardManager from "./dashboard-manager";
 
 export default async function SettingsPage() {
-  await requireSuperadmin();
-  const layout = readLayout();
-  const accent = readAccent();
+  const me = await requireSuperadmin();
+  const layout = readLayout(me.id);
+  const accent = readAccent(me.id);
 
   return (
     <div>
@@ -14,15 +14,15 @@ export default async function SettingsPage() {
         <div className="page-kicker">Administration</div>
         <h1 className="page-title">Settings</h1>
         <p className="page-sub">
-          Settings apply to this deployment, not to your own account. What you arrange here is
-          what every signed-in person sees the next time they load the page.
+          These are your own settings. Each superadmin arranges and colours their dashboard
+          the way they want it; nobody else&apos;s view changes when you save.
         </p>
       </div>
 
       <div className="card card-pad">
         <h2 className="card-title">Dashboard Manager</h2>
         <p className="card-sub">
-          Rearrange the Capability Dashboard, repaint the app, or put both back the way they
+          Rearrange your Capability Dashboard, repaint the app, or put both back the way they
           shipped. Cards can be moved, made wider or narrower, and taken off the dashboard
           entirely — a removed card is only hidden, never deleted, so it can always come back.
         </p>

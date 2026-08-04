@@ -37,7 +37,9 @@ export default async function AnalysisPage({
   // Arranging the dashboard is a superadmin act, and the check is here rather than in the
   // grid component: ?edit=1 in an assessor's URL bar has to be inert, not merely unstyled.
   const editing = isAdmin && editRaw === "1";
-  const layout = readLayout();
+  // the arrangement belongs to the person looking; an assessor has none and gets the
+  // shipped one, which is also what a superadmin sees until they change something
+  const layout = readLayout(user.id);
   const track = trackRaw === "Acquisition" || trackRaw === "Saturation" ? trackRaw : undefined;
   const segment = segmentRaw && (SEGMENTS as readonly string[]).includes(segmentRaw) ? segmentRaw : undefined;
   const selectedCapId = capRaw && /^\d+$/.test(capRaw) ? Number(capRaw) : null;
