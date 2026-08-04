@@ -404,6 +404,7 @@ input, select, textarea { font: inherit; }
 /* ---------- buttons ---------- */
 
 .btn {
+  white-space: nowrap;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border-radius: 12px; padding: 10px 18px; font-size: 14px; font-weight: 650;
   border: 1px solid transparent;
@@ -1308,9 +1309,15 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
   transition: color 0.18s var(--ease-out);
 }
 .th-sort a:hover { color: var(--ink); }
-.th-sort .th-arrow { font-size: 9px; opacity: 0.35; }
+.th-sort .th-arrow { display: inline-flex; margin-left: 2px; color: var(--muted); }
+/* both chevrons are drawn; the inactive one stays faint so the control always reads as
+   sortable, and the active one says which way without being clicked first */
+.th-sort .th-arrow path { opacity: 0.3; transition: opacity 0.18s, color 0.18s; }
+.th-sort a:hover .th-arrow path { opacity: 0.55; }
 .th-sort.active a { color: var(--se-green-bright); }
-.th-sort.active .th-arrow { opacity: 1; }
+.th-sort.active .th-arrow { color: var(--se-green-bright); }
+.th-sort.active .th-arrow path { opacity: 0.22; }
+.th-sort .th-arrow path.on { opacity: 1; }
 
 /* account + AM code stacked in one cell */
 .am-account { display: block; }
@@ -1445,12 +1452,53 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
   display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
   background: rgba(255, 255, 255, 0.06); font-size: 12px; color: var(--ink-2);
 }
-/* a soft fade on the right edge, so the cut-off is visibly a cut-off and not the end */
+/* A soft fade on the right edge, so the cut-off reads as a cut-off rather than the end of
+   the data. It must be applied to a WRAPPER of the scroller, never to the scroller itself:
+   an absolutely-positioned child of a scrolling box is laid out against that box's scrollable
+   CONTENT, so `right: 0` pinned it to the far right of the table and it then slid inwards as
+   you scrolled, drawing a grey seam straight down the middle of the columns. */
 .scroll-fade { position: relative; }
 .scroll-fade::after {
-  content: ""; position: absolute; top: 0; bottom: 10px; right: 0; width: 46px;
+  content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 46px;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(13, 20, 36, 0), rgba(13, 20, 36, 0.92));
+  background: linear-gradient(90deg, rgba(var(--card-rgb, 13, 20, 36), 0), rgba(var(--card-rgb, 13, 20, 36), 0.92));
+}
+
+/* Fifteen columns of mostly two-digit numbers. Tighter cells fit several more of them in
+   the window, which is the difference between scrolling and not. */
+.table-compact .table th, .table-compact .table td { padding-left: 9px; padding-right: 9px; }
+.table-compact .table td { font-size: 13.5px; }
+
+/* The name column stays put while the rest scrolls. Fifteen columns will not fit any
+   ordinary window, and once the names have scrolled off there is nothing to tell you whose
+   row you are reading — which is the real reason scrolling this table felt broken.
+   The cell needs an OPAQUE fill: --card is rgba(…, 0.6) and the scrolling columns would
+   otherwise show straight through it. */
+.table-compact .table th:first-child,
+.table-compact .table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: rgb(var(--card-rgb, 13, 20, 36));
+}
+.table-compact .table thead th:first-child { z-index: 3; }
+/* a soft edge, so the join reads as a fold rather than as a crack */
+.table-compact .table th:first-child::after,
+.table-compact .table td:first-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 10px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent);
+}
+/* the row highlight has to reach under the sticky cell too, or hovering splits the row */
+.table-compact .table tr.rowlink:hover td:first-child {
+  background:
+    linear-gradient(rgba(var(--accent-rgb, 61, 205, 88), 0.07), rgba(var(--accent-rgb, 61, 205, 88), 0.07)),
+    rgb(var(--card-rgb, 13, 20, 36));
 }
 
 /* cluster average row inside the training-needs heat map */

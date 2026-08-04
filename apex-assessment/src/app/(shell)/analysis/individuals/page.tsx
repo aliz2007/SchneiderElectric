@@ -158,10 +158,19 @@ export default async function IndividualsPage({
     const active = sort === k;
     const nextDir = active ? (dir === "asc" ? "desc" : "asc") : numeric ? "desc" : "asc";
     return (
-      <th className={`th-sort${active ? " active" : ""}`}>
+      <th className={`th-sort${active ? " active" : ""}`} aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
         <Link href={hrefWith({ sort: k, dir: nextDir })}>
           {label}
-          <span className="th-arrow">{active ? (dir === "asc" ? "▲" : "▼") : "↕"}</span>
+          {/* Drawn, not typed. The old ↕ / ▲ / ▼ characters rendered at whatever size and
+              baseline the platform font chose — at 9px the neutral one was a pair of specks
+              you had to click to find out what it did. Both chevrons are always visible; the
+              one matching the current direction lights up. */}
+          <span className="th-arrow" aria-hidden="true">
+            <svg viewBox="0 0 8 12" width="8" height="12">
+              <path className={active && dir === "asc" ? "on" : ""} d="M1 5 4 2l3 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              <path className={active && dir === "desc" ? "on" : ""} d="M1 7 4 10l3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
         </Link>
       </th>
     );
@@ -212,7 +221,13 @@ export default async function IndividualsPage({
         <div className="scroll-hint">
           <span className="scroll-hint-ico">↔</span> Scroll sideways for the remaining columns
         </div>
-        <div className="hm-scroll scroll-fade">
+        {/* The fade sits on a WRAPPER, never on the scroller. An absolutely-positioned child
+            of a scrolling element is placed against its scrollable CONTENT, so `right: 0` on
+            the scroller itself pinned the fade to the far right of the table and then let it
+            travel with the content — landing as a grey seam down the middle of the columns
+            the moment anybody scrolled. */}
+        <div className="scroll-fade">
+        <div className="hm-scroll table-compact">
           <table className="table">
             <thead>
               <tr>
@@ -305,6 +320,7 @@ export default async function IndividualsPage({
               ))}
             </tbody>
           </table>
+        </div>
         </div>
         {rows.length === 0 && (
           <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "14px 2px 4px" }}>

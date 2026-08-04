@@ -486,6 +486,26 @@ for every export including plain constants, so `cookies().get(<proxy>)` reads no
 no error anywhere — the bar folded and then sprang open on the next page. An e2e check
 asserts the fold survives a navigation.
 
+### Wide tables
+
+Two traps, both hit on Individual Results.
+
+`.scroll-fade` (the soft cut-off at the right edge) must be applied to a WRAPPER of the
+scroller, never to the scroller itself. An absolutely-positioned child of a scrolling box is
+laid out against that box's scrollable CONTENT, so `right: 0` pinned the fade to the far
+right of the *table* — and it then slid inwards as you scrolled, drawing a grey seam straight
+down the middle of the columns and dimming whatever it crossed.
+
+Fifteen columns will not fit any ordinary window, so the first column is `position: sticky`.
+Without it, scrolling right leaves rows of bare numbers with nothing to say whose they are.
+The sticky cell needs an OPAQUE background (`--card` is `rgba(…, 0.6)`, which the scrolling
+columns show straight through) and its own copy of the row-hover tint, or hovering visibly
+splits the row in two.
+
+The sort control is drawn, not typed. `↕ ▲ ▼` render at whatever size and baseline the
+platform font picks; at 9px the neutral one was a pair of specks you had to click to
+discover what they did. Both chevrons are always visible and the active direction lights up.
+
 ### Wide pages
 
 `.main` caps at 1260px to keep a readable measure for prose. A 25-column table has no measure
@@ -817,7 +837,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 158/158 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 160/160 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,

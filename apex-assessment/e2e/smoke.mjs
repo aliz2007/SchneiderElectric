@@ -1155,6 +1155,30 @@ try {
     gap >= 0 && gap < 40
       ? ok(`Individual Results uses the full window (${gap}px to spare)`)
       : fail("wide page", `${gap}px of empty space on the right`);
+    // The name column has to stay put while the rest scrolls, or once the names are gone
+    // there is nothing to say whose row you are reading.
+    {
+      await page.evaluate(() => { document.querySelector(".hm-scroll").scrollLeft = 700; });
+      await page.waitForTimeout(300);
+      const first = await page.locator(".table tbody td:first-child").first().boundingBox();
+      const scroller = await page.locator(".hm-scroll").boundingBox();
+      first && scroller && Math.abs(first.x - scroller.x) < 3
+        ? ok("the name column stays pinned while the table scrolls")
+        : fail("sticky name column", `${Math.round(first?.x ?? -1)} vs ${Math.round(scroller?.x ?? -1)}`);
+      // and the right-edge fade must stay ON the right edge. Placed on the scroller itself
+      // it was laid out against the scrollable CONTENT, so it slid inwards as you scrolled
+      // and drew a grey seam down the middle of the columns.
+      const seam = await page.evaluate(() => {
+        const w = document.querySelector(".scroll-fade");
+        if (!w) return -1;
+        const cs = getComputedStyle(w, "::after");
+        const r = w.getBoundingClientRect();
+        return Math.round(r.right - (parseFloat(cs.right) || 0) - r.right);
+      });
+      seam === 0
+        ? ok("the scroll fade stays on the right edge")
+        : fail("scroll fade", `offset ${seam}px from the edge`);
+    }
   }
   await page.locator(".nav-toggle").click();
   await page.waitForTimeout(600);
