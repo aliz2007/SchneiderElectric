@@ -300,7 +300,7 @@ function QuestionMode({ onQuit }: { onQuit: () => void }) {
 
       // Every entry the pointer is inside, deepest first — a number inside a card should
       // explain the number, not the card it happens to be sitting in.
-      let best: { el: Element; entry: (typeof HELP_ENTRIES)[number]; depth: number } | null = null;
+      let best: { el: Element; answer: { title: string; body: string }; depth: number } | null = null;
       for (const entry of HELP_ENTRIES) {
         let el: Element | null = null;
         try {
@@ -309,15 +309,28 @@ function QuestionMode({ onQuit }: { onQuit: () => void }) {
           continue; // a selector this browser cannot parse
         }
         if (!el) continue;
+        // A resolver returning null is saying "not this one" — fall through to the next entry
+        // rather than answer with something vague about the category it belongs to.
+        let answer: { title: string; body: string } | null = null;
+        try {
+          answer = entry.resolve
+            ? entry.resolve(el)
+            : entry.title && entry.body
+              ? { title: entry.title, body: entry.body }
+              : null;
+        } catch {
+          answer = null; // a resolver must never take the page down
+        }
+        if (!answer) continue;
         let depth = 0;
         for (let n: Element | null = el; n; n = n.parentElement) depth++;
-        if (!best || depth > best.depth) best = { el, entry, depth };
+        if (!best || depth > best.depth) best = { el, answer, depth };
       }
       if (!best) return setHit(null);
       const r = best.el.getBoundingClientRect();
       setHit({
-        title: best.entry.title,
-        body: best.entry.body,
+        title: best.answer.title,
+        body: best.answer.body,
         x: e.clientX,
         y: e.clientY,
         box: { top: r.top, left: r.left, width: r.width, height: r.height },

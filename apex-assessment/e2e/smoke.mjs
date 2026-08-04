@@ -1176,25 +1176,55 @@ try {
   await page.locator(".help-btn").click();
   await page.locator('.help-item:has-text("Question mode")').click();
   await page.waitForSelector(".qm-bar");
+  const answer = async (sel, nth = 0) => {
+    const l = page.locator(sel).nth(nth);
+    await l.scrollIntoViewIfNeeded().catch(() => {});
+    await l.hover({ force: true }).catch(() => {});
+    await page.waitForTimeout(220);
+    return {
+      title: ((await page.locator(".qm-tip-title").textContent()) ?? "").trim(),
+      body: ((await page.locator(".qm-tip-body").textContent()) ?? "").trim(),
+    };
+  };
   {
-    // point at three different kinds of thing and check it says three different things —
-    // one shared fallback answering everything would pass a weaker check
+    // three different kinds of thing, three different answers
     const seen = [];
-    for (const sel of [".kpi-value", "td.cell", ".badge-zone"]) {
-      await page.locator(sel).first().hover();
-      await page.waitForTimeout(350);
-      seen.push(((await page.locator(".qm-tip-title").textContent()) ?? "").trim());
-    }
+    for (const sel of [".kpi-value", "td.cell", ".badge-zone"]) seen.push((await answer(sel)).title);
     new Set(seen).size === 3 && seen.every(Boolean)
-      ? ok(`question mode explains each thing on its own terms (${seen.join(" · ")})`)
+      ? ok(`question mode explains each kind of thing on its own terms (${seen.join(" · ")})`)
       : fail("question answers", seen.join("|"));
-    // the answer has to be about the thing under the pointer, not the card around it
-    await page.locator(".kpi-value").first().hover();
-    await page.waitForTimeout(300);
-    const body = (await page.locator(".qm-tip-body").textContent()) ?? "";
-    body.length > 40 && ((await page.locator(".qm-ring").count()) === 1)
-      ? ok("the explanation is detailed and rings what it is describing")
-      : fail("question detail", `${body.length} chars, ${await page.locator(".qm-ring").count()} rings`);
+
+    // THE point of this feature: two cells of the same TYPE must give different answers.
+    // A registry that only names the category — "this is a heat map cell" — passes every
+    // check above and is worth nothing to somebody pointing at one particular number.
+    const a = await answer(".hm tbody tr:not(.cluster-row):not(.cluster-avg-row) td.cell", 2);
+    const b = await answer(".hm tbody tr:not(.cluster-row):not(.cluster-avg-row) td.cell", 30);
+    a.title !== b.title && a.body !== b.body && /\bin\b/.test(a.title)
+      ? ok(`two heat cells answer differently ("${a.title}" vs "${b.title}")`)
+      : fail("cell specificity", `${a.title} / ${b.title}`);
+    // and it quotes the figure it is describing, not just the category
+    /\d/.test(a.body) && /required|req |short|above/i.test(a.body)
+      ? ok("a cell's answer carries its own figure and what the colour means")
+      : fail("cell body", a.body.slice(0, 120));
+
+    // the five KPI tiles count five different things
+    const k0 = await answer(".kpi-value", 0);
+    const k4 = await answer(".kpi-value", 4);
+    k0.title !== k4.title && k0.body !== k4.body
+      ? ok(`KPI tiles answer per tile ("${k0.title}" vs "${k4.title}")`)
+      : fail("kpi specificity", `${k0.title} / ${k4.title}`);
+
+    // A table cell is explained by its COLUMN. Deliberately the name cell: the Zone cell
+    // holds a badge, and the badge is deeper, so it wins and names the zone instead — which
+    // is the more useful answer and exactly what deepest-match is for.
+    const cell = await answer('.dash-block[data-block="roster"] tbody td', 0);
+    cell.title.toLowerCase() === "account manager" && cell.body.length > 30
+      ? ok("a table cell is explained by the column it sits in")
+      : fail("column answer", `${cell.title}: ${cell.body.slice(0, 80)}`);
+
+    (await page.locator(".qm-ring").count()) === 1
+      ? ok("the thing being explained is ringed where it sits")
+      : fail("ring", `${await page.locator(".qm-ring").count()}`);
   }
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${SHOTS}/12-question-mode.png` });
