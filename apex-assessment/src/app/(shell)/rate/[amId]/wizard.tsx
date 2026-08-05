@@ -337,7 +337,7 @@ export default function Wizard({
               )}
               {allAnswered && incompleteThemes.length > 0 && (
                 <span style={{ fontSize: 13, color: "var(--amber)" }}>
-                  Justify {incompleteThemes.length} more theme{incompleteThemes.length > 1 ? "s" : ""}: {incompleteThemes.join(", ")}
+                  Justify {incompleteThemes.length} more cluster{incompleteThemes.length > 1 ? "s" : ""}: {incompleteThemes.join(", ")}
                 </span>
               )}
             </div>

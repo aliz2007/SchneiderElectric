@@ -89,7 +89,7 @@ export function buildNarrative(input: {
   } else {
     const overallAvg = scored.reduce((a, r) => a + r.weighted!, 0) / Math.max(1, scored.length);
     const overallReq = applicable.reduce((a, r) => a + (r.req ?? 0), 0) / Math.max(1, applicable.length);
-    // strongest / weakest theme by average panel-vs-required gap
+    // strongest / weakest cluster by average panel-vs-required gap
     const clusterGap = clusterOrder
       .map((cl) => {
         const inCl = applicable.filter((r) => r.cluster === cl && r.gap != null);
@@ -116,14 +116,14 @@ export function buildNarrative(input: {
       `Across the ${scored.length} capabilities scored so far, ${first} meets or exceeds the bar on ${atOrAbove} and falls short on ${below}, ` +
       `for an overall average of ${fmt1(overallAvg)} against an expected ${fmt1(overallReq)}. ` +
       (strongest && weakest && strongest.cl !== weakest.cl
-        ? `The strongest theme is ${strongest.cl}; the furthest from the bar is ${weakest.cl}. `
+        ? `The strongest cluster is ${strongest.cl}; the furthest from the bar is ${weakest.cl}. `
         : "") +
       `Comparing lenses, ${tendency}. ` +
       `Scores are weighted ${WEIGHTS_LABEL}, so the read below reflects that combined view rather than any single evaluator.`;
   }
 
   // ---- helpers for cluster-organised prose (same "Cluster: " lead the AI uses,
-  //      so the PDF bolds the theme name either way) ----
+  //      so the PDF bolds the cluster name either way) ----
   const clusterParagraphs = (
     items: Ranked[],
     kind: "strength" | "development"
@@ -180,7 +180,7 @@ export function buildNarrative(input: {
         const noteLenses = notesByCluster.get(cl);
         if (noteLenses?.length) {
           sentences.push(
-            `The written ${noteLenses.length > 1 ? "justifications" : "justification"} from ${joinNames(noteLenses)} on this theme (in the capability detail) ${noteLenses.length > 1 ? "give" : "gives"} the concrete context behind these scores.`
+            `The written ${noteLenses.length > 1 ? "justifications" : "justification"} from ${joinNames(noteLenses)} on this cluster (in the capability detail) ${noteLenses.length > 1 ? "give" : "gives"} the concrete context behind these scores.`
           );
         }
       }
@@ -218,7 +218,7 @@ export function buildNarrative(input: {
   } else if (development.length === 0) {
     developmentText =
       `No capability currently falls below its required level, so there is no pressing capability gap on the ${track} track. ` +
-      `The development conversation can shift from remediation to stretch: deepening the strongest themes, widening executive exposure, and converting at-level capabilities into clear strengths.`;
+      `The development conversation can shift from remediation to stretch: deepening the strongest clusters, widening executive exposure, and converting at-level capabilities into clear strengths.`;
   } else {
     const ordered = [...development].sort((a, b) => ((b.req ?? 0) - b.weighted) - ((a.req ?? 0) - a.weighted));
     const priorities = ordered.slice(0, 3).map((r) => r.name);
@@ -237,9 +237,9 @@ export function buildNarrative(input: {
     const seenL = new Set<string>();
     for (const n of themeNotes) if (!seenL.has(n.lens)) { seenL.add(n.lens); lenses.push(n.lens); }
     commentsText =
-      `${joinNames(lenses)} recorded written justifications on ${clusters.length} of the six ${clusters.length === 1 ? "theme" : "themes"}: ${joinNames(clusters)}. ` +
+      `${joinNames(lenses)} recorded written justifications on ${clusters.length} of the six ${clusters.length === 1 ? "cluster" : "clusters"}: ${joinNames(clusters)}. ` +
       `They are the qualitative backing for the scores above: concrete situations, actions and outcomes rather than numbers. ` +
-      `Each note is reproduced with its theme in the capability detail at the end of this report, and they are the right starting point for the development conversation.`;
+      `Each note is reproduced with its cluster in the capability detail at the end of this report, and they are the right starting point for the development conversation.`;
   }
 
   // ---- definitions of every capability named above ----

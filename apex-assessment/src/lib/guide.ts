@@ -218,7 +218,7 @@ export function buildTour({ isAdmin, hasLens, amId }: TourAudience): TourStep[] 
           route: `/analysis/am/${amId}`,
           selector: ".standing-card",
           title: "One person's standing",
-          body: "Weighted score out of 3. The chart plots each lens per theme against the dashed line, which is what this person's track requires.",
+          body: "Weighted score out of 3. The chart plots each lens per cluster against the dashed line, which is what this person's track requires.",
         },
         {
           id: "detail",
@@ -237,7 +237,7 @@ export function buildTour({ isAdmin, hasLens, amId }: TourAudience): TourStep[] 
       route: "/rate",
       selector: ".main",
       title: "Your assessment",
-      body: "Pick the level that describes what the person does now, not what you want. Each theme also needs one written example.",
+      body: "Pick the level that describes what the person does now, not what you want. Each cluster also needs one written example.",
     });
   }
 
@@ -305,7 +305,7 @@ const NAV: Record<string, string> = {
   individuals: "Every Account Manager in one sortable table, with score, required level and gap.",
   "users & access": "Create evaluators, set their lens, and choose which Account Managers each one can assess.",
   "my assessments": "The people you have been asked to rate, and how far through each one you are.",
-  "my self-assessment": "Your own assessment: 22 capabilities and a written example per theme.",
+  "my self-assessment": "Your own assessment: 22 capabilities and a written example per cluster.",
   "my feedback": "Your results, released once all three assessments are in.",
 };
 
@@ -395,12 +395,12 @@ const CORE_ENTRIES: HelpEntry[] = [
       const col = columnHead(el);
       const { value, sub } = cellParts(el);
       if (!cap && !col) return null;
-      // a cluster-average row carries the theme's name in the row above it, not in its own
-      // header, so say which theme rather than repeating the words "Cluster average"
-      const theme = /cluster average/i.test(cap)
+      // a cluster-average row carries the cluster's name in the row above it, not in its own
+      // header, so say which cluster rather than repeating the words "Cluster average"
+      const cluster = /cluster average/i.test(cap)
         ? clean(el.closest("tr")?.previousElementSibling?.textContent)
         : "";
-      const what = theme ? `${theme} average` : cap;
+      const what = cluster ? `${cluster} average` : cap;
       const where = what && col ? `${what} in ${col}` : what || col;
       if (value === "n/a") {
         return { title: where, body: "No submitted data for this combination, or the capability does not apply to that track." };
@@ -419,11 +419,11 @@ const CORE_ENTRIES: HelpEntry[] = [
   {
     sel: ".hm .cluster-avg-row .hm-rowhead",
     title: "Cluster average",
-    body: "The average across the capabilities in the theme above, so a theme can be judged without adding up its rows.",
+    body: "The average across the capabilities in the cluster above, so a cluster can be judged without adding up its rows.",
   },
   {
     sel: ".hm .cluster-row",
-    resolve: (el) => ({ title: clean(el.textContent), body: "A theme. The capabilities beneath it belong to it, and the row under them is its average." }),
+    resolve: (el) => ({ title: clean(el.textContent), body: "A cluster. The capabilities beneath it belong to it, and the row under them is its average." }),
   },
   {
     sel: ".hm-rowhead",
@@ -508,12 +508,12 @@ const CORE_ENTRIES: HelpEntry[] = [
   {
     sel: ".radar-svg",
     title: "Profile chart",
-    body: "One axis per theme. Thin webs are the three lenses, the thick green web is the weighted score, the dashed outline is the required level. Inside the dashed line is short.",
+    body: "One axis per cluster. Thin webs are the three lenses, the thick green web is the weighted score, the dashed outline is the required level. Inside the dashed line is short.",
   },
   { sel: ".radar-legend", title: "Chart key", body: "Which colour is which lens. The same colours are used as dots in the tables below." },
-  { sel: ".cluster-kicker", resolve: (el) => ({ title: clean(el.textContent), body: "A theme. The capabilities under it belong to it, and the row shows its average against what the track expects." }) },
-  { sel: ".cluster-avg-label", title: "Theme average", body: "The average across this theme's capabilities, and the average level the track requires for them." },
-  { sel: ".theme-note-block", title: "Written justification", body: "The example the rater gave for this theme. Every lens has to supply one before it can submit." },
+  { sel: ".cluster-kicker", resolve: (el) => ({ title: clean(el.textContent), body: "A cluster. The capabilities under it belong to it, and the row shows its average against what the track expects." }) },
+  { sel: ".cluster-avg-label", title: "Cluster average", body: "The average across this cluster's capabilities, and the average level the track requires for them." },
+  { sel: ".theme-note-block", title: "Written justification", body: "The example the rater gave for this cluster. Every lens has to supply one before it can submit." },
   { sel: ".note-lens", resolve: (el) => ({ title: clean(el.textContent), body: "Which of the three raters wrote the note below." }) },
   { sel: ".mini-list li", title: "One capability", body: "The chip is the weighted score, and the note beside it is the level required for this person's track." },
   { sel: ".perception-gap, .badge-amber + strong", title: "Perception gap", body: "The self-rating differs from the weighted score by a level or more. Worth raising in the panel call." },
@@ -572,8 +572,8 @@ const CORE_ENTRIES: HelpEntry[] = [
 
   /* ------------------------------------------------------ assessment --- */
   { sel: ".level-card", resolve: (el) => ({ title: clean(el.querySelector(".lvl-head")?.textContent) || "A level", body: "Pick the description that matches what the person does today. The level their track requires is hidden while you rate so it cannot pull the answer." }) },
-  { sel: ".framework-block, .framework-note", title: "Justification", body: "One concrete example per theme: the situation, what they did, what came of it. This is what the panel call reviews." },
-  { sel: ".framework-caps", title: "What the note must cover", body: "The capabilities in this theme. The example should speak to them, and the one you are rating now is highlighted." },
+  { sel: ".framework-block, .framework-note", title: "Justification", body: "One concrete example per cluster: the situation, what they did, what came of it. This is what the panel call reviews." },
+  { sel: ".framework-caps", title: "What the note must cover", body: "The capabilities in this cluster. The example should speak to them, and the one you are rating now is highlighted." },
   { sel: ".qguide", title: "Question guide", body: "Prompts to put to the person, or to yourself, before choosing a level." },
   { sel: ".wizard-top, .progress", title: "Progress", body: "Answers save as you go, so you can leave and come back. Nothing is visible to anyone else until you submit." },
   { sel: ".dot", title: "One capability", body: "Filled means rated. Click to jump straight to it." },
@@ -701,8 +701,8 @@ export const MORE_ENTRIES: HelpEntry[] = [
   { sel: ".hm thead .hm-rowhead", title: "Capability column", body: "The rows below are capabilities, in rubric order, broken into cluster sections each headed by its own name and average row." },
   { sel: ".hm thead th a[href^=\"/analysis/zone/\"]", title: "Open the zone", body: "Opens that zone's own page: every Account Manager in it, with their weighted score, required level and gap per capability. Superadmin only; assessors see the zone name as plain text." },
   { sel: ".hm tbody tr:not(.cluster-avg-row) th.hm-rowhead", title: "Capability", body: "One of the 22 capabilities. Its required level differs by track, so the four cells in this row are each measured against their own zone's mix of Acquisition and Saturation people." },
-  { sel: ".cluster-row", title: "Cluster", body: "A theme heading spanning the table. The 22 capabilities are grouped into clusters such as Account Strategy & Planning and Commercial & Sales Excellence; the row under it is that cluster's average." },
-  { sel: ".cluster-avg-row", title: "Cluster average", body: "The cluster's own mean per zone, so a theme can be judged without adding its capability rows up by eye. Averaged only over the cells that carry data." },
+  { sel: ".cluster-row", title: "Cluster", body: "A cluster heading spanning the table. The 22 capabilities are grouped into clusters such as Account Strategy & Planning and Commercial & Sales Excellence; the row under it is that cluster's average." },
+  { sel: ".cluster-avg-row", title: "Cluster average", body: "The cluster's own mean per zone, so a cluster can be judged without adding its capability rows up by eye. Averaged only over the cells that carry data." },
   { sel: ".cluster-avg-row th.hm-rowhead", title: "Cluster average", body: "Marks the row as the mean of the capabilities in the cluster above, not a capability of its own." },
   { sel: ".cluster-avg-row td.cell", title: "Cluster average", body: "The mean of this cluster's capability cells for this zone, over those with data, with the mean required level and gap beneath. Same colour bands as any other cell." },
   { sel: ".cell small", title: "Required and gap", body: "The mean required level for this zone at one decimal, then the gap — weighted score minus required — signed, at two decimals. The gap is what drives the cell's colour." },
@@ -754,21 +754,21 @@ export const MORE_ENTRIES: HelpEntry[] = [
   { sel: ".sched-saved", title: "Saved", body: "The server action returned without an error. It clears itself after 2.5 seconds; the page data was revalidated at the same moment." },
   { sel: ".page-head .btn-outline", title: "Export PDF", body: "Fetches /analysis/am/<id>/pdf and downloads it as APEX-Assessment-<name>.pdf. The label reads 'Kimi is writing…' while the AI narrative is being generated, otherwise 'Generating…'." },
   { sel: ".page-head .btn-outline + span", title: "Narrative source", body: "Read from the PDF response headers X-AI-Source and X-AI-Reason. Green means Kimi wrote the narrative; amber means the deterministic generator was used, followed by the reason it fell back." },
-  { sel: ".standing-card", title: "Overall standing", body: "The weighted score, the level this person's track expects, the signed gap between them, and the per-theme radar. Everything further down the page is the detail behind these figures." },
+  { sel: ".standing-card", title: "Overall standing", body: "The weighted score, the level this person's track expects, the signed gap between them, and the per-cluster radar. Everything further down the page is the detail behind these figures." },
   { sel: ".standing-score .kpi-label", title: "Final score", body: "Names the figure below it: the weighted average across the capabilities that apply to this track. It is a level, not a count or a percentage." },
-  { sel: ".standing-outof", title: "Out of 3", body: "The ceiling of the scale. Levels run L1 to L3, so 3.00 is the highest any capability, theme or overall average can reach." },
+  { sel: ".standing-outof", title: "Out of 3", body: "The ceiling of the scale. Levels run L1 to L3, so 3.00 is the highest any capability, cluster or overall average can reach." },
   { sel: ".standing-score .lvl-chip", title: "Gap", body: "Weighted score minus expected average, signed, in level points. Green at or above 0, yellow down to −0.5, orange to −1, red beyond." },
-  { sel: ".standing-radar", title: "Profile area", body: "Holds the per-theme radar. With no submitted assessment there is nothing to plot and a line says so; the chart also needs at least three applicable themes to draw." },
+  { sel: ".standing-radar", title: "Profile area", body: "Holds the per-cluster radar. With no submitted assessment there is nothing to plot and a line says so; the chart also needs at least three applicable clusters to draw." },
   { sel: ".radar-svg polygon[stroke=\"#a78bfa\"], .radar-svg circle[fill=\"#a78bfa\"]", title: "Self web", body: "The Self Assessment, averaged per cluster over that cluster's rated capabilities. Counts 20% toward the weighted score." },
   { sel: ".radar-svg polygon[stroke=\"#7db1ff\"], .radar-svg circle[fill=\"#7db1ff\"]", title: "Manager web", body: "The Manager Assessment, averaged per cluster. At 45% it is the heaviest lens in the weighted score." },
   { sel: ".radar-svg polygon[stroke=\"#e148b8\"], .radar-svg circle[fill=\"#e148b8\"]", title: "APEX Panel web", body: "The panel's ratings, averaged per cluster. Counts 35%. Drawn magenta rather than green so it cannot be mistaken for the Final score web." },
   { sel: ".radar-svg polygon[stroke=\"#4ce26a\"], .radar-svg circle[fill=\"#4ce26a\"]", title: "Final score web", body: "The weighted score per cluster, Self 20% / APEX Panel 35% / Manager 45%. Every strength, development area and gap on this page derives from this web, not the thin ones." },
-  { sel: ".radar-svg polygon[stroke-dasharray=\"5 4\"]", title: "Expected level", body: "The mean required level per cluster for this track, drawn dashed and unfilled so it reads as a target line. Green web inside it is a shortfall on that theme." },
+  { sel: ".radar-svg polygon[stroke-dasharray=\"5 4\"]", title: "Expected level", body: "The mean required level per cluster for this track, drawn dashed and unfilled so it reads as a target line. Green web inside it is a shortfall on that cluster." },
   { sel: ".radar-svg polygon[stroke=\"rgba(255,255,255,0.12)\"]", title: "Level ring", body: "Grid rings at L1, L2 and L3. The centre is 0 and the outer ring is 3, so distance from the centre is linear in level." },
   { sel: ".radar-svg line[stroke=\"rgba(255,255,255,0.1)\"]", title: "Axis", body: "One spoke per plotted cluster, drawn from the centre to that cluster's L3 point. It carries no value of its own." },
   { sel: ".radar-svg text[fill=\"#6b7689\"]", title: "Ring label", body: "Marks which level a grid ring stands for. The scale is the same on every axis." },
-  { sel: ".radar-svg text[fill=\"#c3cdde\"]", title: "Theme", body: "Names the axis. Each point on it is that theme's mean across its capabilities, for whichever web it belongs to." },
-  { sel: ".radar-legend > span", title: "Legend entry", body: "Names one web on the chart above. A web only appears here when at least one theme has a value for it." },
+  { sel: ".radar-svg text[fill=\"#c3cdde\"]", title: "Cluster", body: "Names the axis. Each point on it is that cluster's mean across its capabilities, for whichever web it belongs to." },
+  { sel: ".radar-legend > span", title: "Legend entry", body: "Names one web on the chart above. A web only appears here when at least one cluster has a value for it." },
   { sel: ".mini-list .badge-red", title: "Required level", body: "The level this capability demands on this Account Manager's track. Red because the weighted score sits below it." },
   { sel: ".two-col .card:first-child .mini-list li > span:last-child", title: "Required level", body: "The level this capability demands on this track. The weighted score is strictly above it, which is what put the row in Strengths." },
   { sel: ".mini-list .badge-amber", title: "Overrates", body: "The self rating sits above the weighted score by this many level points. Only differences of a full level or more are listed." },
@@ -785,8 +785,8 @@ export const MORE_ENTRIES: HelpEntry[] = [
   { sel: "td .lvl-chip.lvl-1, td .lvl-chip.lvl-2, td .lvl-chip.lvl-3, td .lvl-chip.lvl-none", title: "Rated level", body: "One rater's level for this capability: L1 Developing, L2 Proficient, L3 Advanced. 'n/a' means that lens has not submitted." },
   { sel: "td .lvl-chip.hm-good, td .lvl-chip.hm-mild, td .lvl-chip.hm-warn, td .lvl-chip.hm-crit", title: "Gap vs required", body: "Weighted score minus required level, signed, in level points. Green at or above 0, yellow to −0.5, orange to −1, red beyond." },
   { sel: "table.table:has(.cluster-kicker) tbody strong", title: "Weighted score", body: "Self 20% / APEX Panel 35% / Manager 45%, re-normalised over the lenses that submitted. Shown to two decimals on purpose: 1.60 and 2.40 both round to L2 but are different answers." },
-  { sel: "td .cluster-kicker", title: "Theme", body: "Names one of the six themes. The capability rows under it belong to it, and the figures to its right are that theme's own averages." },
-  { sel: ".note-text", title: "Justification", body: "The rater's written evidence for this theme: the situation, what the person did and what came of it. It is the text the panel call reviews." },
+  { sel: "td .cluster-kicker", title: "Cluster", body: "Names one of the six clusters. The capability rows under it belong to it, and the figures to its right are that cluster's own averages." },
+  { sel: ".note-text", title: "Justification", body: "The rater's written evidence for this cluster: the situation, what the person did and what came of it. It is the text the panel call reviews." },
   { sel: "form button.btn-outline", title: "Reopen assessment", body: "Sets that assessment back to draft and clears its submitted timestamp, so the evaluator can revise and submit again. Disabled unless the lens is currently submitted." },
   { sel: ".report-row a[href^=\"/analysis/population/pdf\"]", title: "Population PDF", body: "Renders the APEX Population Overview table as a PDF — one row per Account Manager, sorted by zone then name — carrying the search, zone, track, segment and account-type filters set below." },
   { sel: "input.ifilter-search", title: "Search", body: "Case-insensitive substring match against the Account Manager's name, their account and their AM code. Typing writes ?q= into the URL 350 ms after you stop, and the server re-filters." },
@@ -818,10 +818,10 @@ export const MORE_ENTRIES: HelpEntry[] = [
   { sel: ".zone-am-code", title: "AM code", body: "The Account Manager's identifier. Ranking \"By AM code\" sorts the columns on this string, and it is the default order." },
   { sel: ".zone-am-rank", title: "Overall standing", body: "Mean of (weighted score − required level) over this AM's scored, applicable capabilities. Green above zero, red below, grey at zero or with no data. Hidden while ranking by AM code." },
   { sel: ".hm-zone .cluster-avg-row .hm-rowhead", title: "Weighted score · gap", body: "Each Account Manager's overall standing: their mean weighted score across scored, applicable capabilities, and underneath, that mean minus the mean level their track requires." },
-  { sel: ".hm-zone tr.cluster-row", title: "Theme", body: "One of the six APEX themes. The Cluster average row directly beneath it carries its mean, and the capability rows under that belong to it." },
+  { sel: ".hm-zone tr.cluster-row", title: "Cluster", body: "One of the six APEX clusters. The Cluster average row directly beneath it carries its mean, and the capability rows under that belong to it." },
   { sel: ".hm-zone tbody tr:not(.cluster-row):not(.cluster-avg-row) .hm-rowhead", title: "Capability", body: "One of the 22 APEX capabilities. The cells across this row are each Account Manager's weighted score on it, against the level their own track requires. Levels run L1 to L3." },
   { sel: ".hm-zone tbody tr:first-child td.cell:not(.zone-avg-cell)", title: "Overall standing", body: "This Account Manager's mean weighted score across their scored, applicable capabilities, with the difference from their mean required level under it. Colour is that difference." },
-  { sel: ".hm-zone .cluster-avg-row td.cell:not(.zone-avg-cell)", title: "Theme average", body: "This Account Manager's mean weighted score across the capabilities of the theme named above, with that theme's mean required level and the difference underneath." },
+  { sel: ".hm-zone .cluster-avg-row td.cell:not(.zone-avg-cell)", title: "Cluster average", body: "This Account Manager's mean weighted score across the capabilities of the cluster named above, with that cluster's mean required level and the difference underneath." },
   { sel: ".hm-zone tbody tr:not(.cluster-row):not(.cluster-avg-row) td.cell:not(.zone-avg-cell)", title: "Capability score", body: "This Account Manager's weighted score on this capability — Self 20% + APEX Panel 35% + Manager 45%, re-normalised over the lenses that submitted — with the required level and the difference beneath." },
   { sel: ".hm-zone .zone-avg-cell", title: "Zone average", body: "The mean across the Account Manager columns currently shown, so it moves with the track filter. The small line is the mean required level over those same people." },
   { sel: ".wizard-top", title: "Assessment header", body: "Which lens these ratings are stored under, the Account Manager they are filed against, and how many of the 22 capabilities already carry a level." },
@@ -893,7 +893,7 @@ export const MORE_ENTRIES: HelpEntry[] = [
   { sel: ".theme-note-lens", title: "Who wrote it", body: "Which of the three assessments the note underneath came from. Notes are ordered Self, then Manager, then APEX Panel." },
   { sel: ".brand", title: "APEX Assessment", body: "The product mark. APEX rates Strategic Account Managers on 22 capabilities at levels L1 to L3, from three lenses weighted Self 20% / APEX Panel 35% / Manager 45%." },
   { sel: ".brand-mark", title: "SE monogram", body: "A stand-in for the Schneider logo: the real asset sits in public/brand/mark.png and replaces this square when SHOW_LOGO in src/lib/brand.tsx is true. Not clickable." },
-  { sel: ".brand-name", title: "APEX Assessment", body: "The application name. APEX is the capability framework being measured here: 22 capabilities grouped into themes, each required at L1, L2 or L3 depending on the person's track." },
+  { sel: ".brand-name", title: "APEX Assessment", body: "The application name. APEX is the capability framework being measured here: 22 capabilities grouped into clusters, each required at L1, L2 or L3 depending on the person's track." },
   { sel: ".brand-sub", title: "Schneider Electric", body: "The organisation the campaign belongs to. A fixed label, not a filter: it does not change with your role, zone or assignments." },
   { sel: ".nav-section", title: "Menu group", body: "A heading over the links beneath it. Which headings appear depends on your role and whether you carry an assessment lens." },
   { sel: ".avatar", title: "Your initials", body: "The first letter of up to the first two words of your display name, uppercased. Decoration only: it opens nothing and is not a photo upload." },

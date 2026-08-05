@@ -51,7 +51,7 @@ export async function saveThemeNote(amId: number, cluster: string, field: string
   const { assessment } = await guard(amId);
   if (assessment.status === "submitted") throw new Error("Assessment already submitted.");
   const clusters = new Set(listCapabilities().map((c) => c.cluster));
-  if (!clusters.has(cluster)) throw new Error("Invalid theme.");
+  if (!clusters.has(cluster)) throw new Error("Invalid cluster.");
   if (!THEME_FIELDS.includes(field as ThemeField)) throw new Error("Invalid field.");
   saveThemeField(assessment.id, cluster, field as ThemeField, value.trim() === "" ? null : value.trim());
 }
@@ -64,7 +64,7 @@ export async function submit(amId: number) {
   // every theme must be justified with one note before the assessment can be submitted
   const missing = unjustifiedThemes(assessment.id);
   if (missing.length > 0) {
-    throw new Error(`Add a justification for every theme first. Still missing: ${missing.join(", ")}.`);
+    throw new Error(`Add a justification for every cluster first. Still missing: ${missing.join(", ")}.`);
   }
   submitAssessment(assessment.id, user.id);
   redirect("/rate?done=1");

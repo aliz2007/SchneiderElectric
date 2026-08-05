@@ -214,7 +214,7 @@ export function getThemeNotesFull(assessmentId: number): ThemeNoteFull[] {
 
 /** Save one field of a theme's justification (Manager/Panel `note`, or a self framework field). */
 export function saveThemeField(assessmentId: number, cluster: string, field: ThemeField, value: string | null) {
-  if (!THEME_FIELDS.includes(field)) throw new Error("Invalid theme field.");
+  if (!THEME_FIELDS.includes(field)) throw new Error("Invalid cluster field.");
   const db = getDb();
   const v = value && value.trim() !== "" ? value.trim() : null;
   db.prepare(

@@ -267,7 +267,7 @@ export default async function AmAnalysisPage({ params }: { params: Promise<{ id:
       <div className="card card-pad" style={{ marginBottom: 20 }}>
         <h2 className="card-title">Capability detail · three lenses, weighted vs required</h2>
         <p className="card-sub" style={{ marginTop: -2, marginBottom: 10 }}>
-          Weighted score = {WEIGHTS_LABEL}. Theme justifications appear under each theme.
+          Weighted score = {WEIGHTS_LABEL}. Justifications appear under each cluster.
           {overallWeighted != null && overallRequired != null && (
             <>
               {" "}Overall <strong>{fmt(overallWeighted, 2)}</strong> vs expected{" "}
