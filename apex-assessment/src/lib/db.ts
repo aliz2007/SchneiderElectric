@@ -109,8 +109,8 @@ function migrate(db: Database.Database) {
       value TEXT
     );
 
-    -- The same idea, scoped to one person. Holds the Dashboard Manager's state
-    -- (dashboard.layout, theme.accent): each superadmin arranges and colours their own
+    -- The same idea, scoped to one person. Holds the dashboard's arrangement and colours
+    -- (dashboard.layout, theme.colors): each superadmin arranges and colours their own
     -- dashboard, so these cannot live in app_settings, which is installation-wide.
     -- Deleting a user takes their preferences with them.
     CREATE TABLE IF NOT EXISTS user_settings (
@@ -121,7 +121,7 @@ function migrate(db: Database.Database) {
     );
   `);
 
-  // The Dashboard Manager shipped for a few hours storing its state globally, before the
+  // Arranging the dashboard shipped for a few hours storing its state globally, before the
   // client asked for it per superadmin. Clear the two orphaned rows so nobody reading the
   // database later mistakes them for live settings. Idempotent, and it deliberately names
   // the two keys rather than emptying the table: app_settings still holds the AI config.

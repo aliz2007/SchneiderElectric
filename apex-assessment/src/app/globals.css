@@ -1,7 +1,8 @@
 /* ============================================================
    APEX Assessment — design system v3 "thermal"
    Deep-navy premium dark theme. Glass, glow and motion.
-   Schneider green (#3DCD58) is the hero accent; the Dashboard Manager can repaint it.
+   Schneider green (#3DCD58) is the hero accent; a superadmin can repaint it (see the
+   Colour panel on the dashboard's edit bar).
    ============================================================ */
 
 :root {

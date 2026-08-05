@@ -1,6 +1,6 @@
 "use client";
 
-import Icon from "../nav-icon";
+import Icon, { Caret } from "../nav-icon";
 
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -59,15 +59,7 @@ export default function FilterBar({
         <Icon name="filter" size={15} />
         Filters
         {activeCount > 0 && <span className="filter-badge">{activeCount}</span>}
-        <svg
-          className={`filter-caret${open ? " open" : ""}`}
-          viewBox="0 0 12 12"
-          width="11"
-          height="11"
-          aria-hidden="true"
-        >
-          <path d="M3 4.5 6 7.5l3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
+        <Caret open={open} />
       </button>
 
       {open && (

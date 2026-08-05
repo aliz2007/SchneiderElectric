@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Icon, { Caret } from "@/app/(shell)/nav-icon";
 import { saveSchedule } from "./actions";
 
 /**
@@ -33,13 +34,14 @@ export default function ScheduleEditor({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        <span className="filter-toggle-ico"></span> Assessment schedule
+        <Icon name="calendar" size={15} />
+        Assessment schedule
         {hasAny && (
           <span className="filter-badge">
             {(selfDeadline ? 1 : 0) + (managerDeadline ? 1 : 0) + (panelDatetime ? 1 : 0)}
           </span>
         )}
-        <span className="filter-caret">{open ? "▲" : "▼"}</span>
+        <Caret open={open} />
       </button>
 
       {open && (

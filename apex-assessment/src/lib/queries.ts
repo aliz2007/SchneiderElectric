@@ -327,7 +327,7 @@ export function setSetting(key: string, value: string | null) {
 
 /**
  * Per-user settings. Same shape as the app-wide store above, but keyed by person: the
- * Dashboard Manager lets each superadmin arrange and colour their OWN dashboard, so its
+ * dashboard's edit mode lets each superadmin arrange and colour their OWN dashboard, so its
  * state cannot sit in a single installation-wide row.
  */
 export function getUserSetting(userId: number, key: string): string | null {

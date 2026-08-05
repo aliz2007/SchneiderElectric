@@ -1248,15 +1248,34 @@ try {
   await page.locator(".help-btn").click();
   await page.locator('.help-item:has-text("Question mode")').click();
   await page.waitForSelector(".qm-bar");
-  const answer = async (sel, nth = 0) => {
+  // Hover something and read what question mode says about it.
+  //
+  // The card is one element that is rewritten in place, so a hover that lands on nothing
+  // leaves the PREVIOUS answer on screen. Reading it blind meant a check could pass on a
+  // stale card — a missing selector once came back as the answer to the question before it.
+  // So: refuse to hover a selector that is not there, and wait for the card to actually
+  // change before reading it.
+  const answer = async (sel, nth = 0, position) => {
+    const count = await page.locator(sel).count();
+    if (count <= nth) return { title: `«no ${sel}[${nth}] on this page»`, body: "" };
+    const before = await page.evaluate(() => document.querySelector(".qm-tip-title")?.textContent ?? "");
     const l = page.locator(sel).nth(nth);
     await l.scrollIntoViewIfNeeded().catch(() => {});
-    await l.hover({ force: true }).catch(() => {});
-    await page.waitForTimeout(220);
-    return {
-      title: ((await page.locator(".qm-tip-title").textContent()) ?? "").trim(),
-      body: ((await page.locator(".qm-tip-body").textContent()) ?? "").trim(),
-    };
+    await l.hover({ force: true, ...(position ? { position } : {}) }).catch(() => {});
+    await page
+      .waitForFunction(
+        (prev) => {
+          const e = document.querySelector(".qm-tip-title");
+          return e !== null && e.textContent !== prev;
+        },
+        before,
+        { timeout: 1500 }
+      )
+      .catch(() => {}); // an answer identical to the last one is legitimate; read it below
+    return await page.evaluate(() => ({
+      title: (document.querySelector(".qm-tip-title")?.textContent ?? "").trim(),
+      body: (document.querySelector(".qm-tip-body")?.textContent ?? "").trim(),
+    }));
   };
   {
     // three different kinds of thing, three different answers
@@ -1279,12 +1298,22 @@ try {
       ? ok("a cell's answer carries its own figure and what the colour means")
       : fail("cell body", a.body.slice(0, 120));
 
-    // the five KPI tiles count five different things
-    const k0 = await answer(".kpi-value", 0);
-    const k4 = await answer(".kpi-value", 4);
-    k0.title !== k4.title && k0.body !== k4.body
+    // The five KPI tiles count five different things. Hovered near the left edge on purpose:
+    // the "/ 25" and "/ 3" hanging off the figure are a deeper match and answer for
+    // themselves, so a centre hover would test those instead of the tiles.
+    const k0 = await answer(".kpi-value", 0, { x: 4, y: 8 });
+    const k4 = await answer(".kpi-value", 4, { x: 4, y: 8 });
+    k0.title !== k4.title && k0.body !== k4.body && /completion/i.test(k0.title) && /maturity/i.test(k4.title)
       ? ok(`KPI tiles answer per tile ("${k0.title}" vs "${k4.title}")`)
       : fail("kpi specificity", `${k0.title} / ${k4.title}`);
+    // and the little "/ n" is not one answer either: a headcount on the count tiles, the top
+    // of the level scale on the last
+    // (four spans, not five: Campaign completion is a percentage and has none)
+    const s0 = await answer(".kpi-value span", 0);
+    const s3 = await answer(".kpi-value span", 3);
+    s0.title !== s3.title && /out of/i.test(s0.title) && /scale/i.test(s3.title)
+      ? ok(`the "/ n" answers per tile too ("${s0.title}" vs "${s3.title}")`)
+      : fail("kpi denominator", `${s0.title} / ${s3.title}`);
     // asserted while the pointer is still resting on something
     (await page.locator(".qm-ring").count()) === 1
       ? ok("the thing being explained is ringed where it sits")
@@ -1299,6 +1328,22 @@ try {
     cell.title.toLowerCase() === "weighted" && /20%|35%|45%/.test(cell.body)
       ? ok("a figure in a table is explained by the column it sits in")
       : fail("column answer", `${cell.title}: ${cell.body.slice(0, 80)}`);
+
+    // Filters, Assessment schedule and Account details are ONE styled control reused three
+    // times. Keyed on the class, all three answered "Filters", which is the same failure as
+    // answering "a table cell" — right about the markup, useless to the reader.
+    await page.goto(`${BASE}/analysis`);
+    await page.waitForSelector(".dash-block");
+    const filt = await answer(".filter-toggle");
+    await page.goto(`${BASE}/analysis/am/1`);
+    await page.waitForSelector(".sched .filter-toggle");
+    const sched = await answer(".sched .filter-toggle", 0);
+    const acct = await answer(".sched .filter-toggle", 1);
+    new Set([filt.title, sched.title, acct.title]).size === 3 &&
+    /schedule/i.test(sched.title) && /account/i.test(acct.title)
+      ? ok(`one control, three answers (${filt.title} · ${sched.title} · ${acct.title})`)
+      : fail("disclosure answers", [filt.title, sched.title, acct.title].join(" | "));
+
     await page.goto(`${BASE}/analysis`);
     await page.waitForSelector(".dash-block");
 

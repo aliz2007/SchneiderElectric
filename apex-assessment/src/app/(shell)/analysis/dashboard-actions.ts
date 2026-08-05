@@ -6,14 +6,12 @@ import { parseColors, parseLayout } from "@/lib/dashboard-layout";
 import { writeColors, writeLayout } from "@/lib/dashboard-settings";
 
 /**
- * Both values belong to one person, but they are read on more than one path, so a write has
- * to invalidate all of them — not just the page the form was posted from. The dashboard is
- * the point of the exercise; the settings page shows the same state back; the colours are
- * applied by the ROOT layout, which every page inherits.
+ * Both values belong to one person and are read on more than one path, so a write has to
+ * invalidate all of them — not just the page the form was posted from.
  */
 function revalidateEverything() {
   revalidatePath("/analysis");
-  revalidatePath("/admin/settings");
+  // the colours are applied by the ROOT layout, so every page inherits them
   revalidatePath("/", "layout");
 }
 

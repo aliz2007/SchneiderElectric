@@ -6,7 +6,7 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-08-04.
+Last updated: 2026-08-05.
 
 ---
 
@@ -20,6 +20,30 @@ Last updated: 2026-08-04.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
+- Most recent additions (2026-08-05, fourth batch): the app got a customisation layer, a
+  help layer, and a round of fixes for both. In rough order of how much of the codebase each
+  one touches:
+  1. **Arranging the dashboard in place** (superadmin, per account). A 34px wrench at the top
+     left of the DASHBOARD turns that page editable: drag cards to reorder, pull a right edge
+     to resize, × to take one off, Colour / Reset / Cancel / Save in a sticky bar. Switch it
+     off and the page freezes back into something you read and click. There is no separate
+     editor and no Settings page — an earlier version had both and the client rejected them
+     (§ Arranging the dashboard).
+  2. **Colour, one part at a time** — accent, menu bar, background, cards — from the same
+     toolbar. Result colours (green = at or above required) and lens colours are frozen and
+     can never follow a brand choice.
+  3. **Help** (`?` top right, every page): **Tutorial mode** walks the whole app in order,
+     spotlighting each part and crossing pages on its own; **Question mode** is a toggle that
+     explains whatever the pointer rests on, per instance rather than per category
+     (§ Help).
+  4. **The menu bar folds away** (§ Folding the menu away), and **data pages use the whole
+     window** instead of scrolling inside a 1260px cap (§ Wide pages).
+  5. **UI refinement, not redesign**: the `▦ ☰ ⚙ ✎ ★ 📅 🏷` characters became a drawn icon
+     set (`nav-icon.tsx`); 36 selectors came off font-weight 750/800; glass went on the
+     surfaces that float (popovers, banners) and NOT on the sidebar or the 500-cell heat
+     table; `prefers-reduced-transparency` is honoured.
+  6. **Fixes to all of the above**, each with a test — see § Traps, which is the shortest
+     useful read in this file if you are about to touch the CSS.
 - Most recent additions (2026-08-04, third batch): three points raised in chat.
   1. **APEX Panel is no longer a second green.** The perception radar drew the APEX Panel
      web in Schneider green (`#3dcd58`) next to the Final score web in bright green
@@ -296,8 +320,8 @@ rubric, so only the questions were added.
 
 ### Assessment scheduling & windows
 
-Three per-AM dates, set by superadmins from the **individual page** ("📅 Assessment schedule"
-toggle opening native date / datetime pickers — `schedule-editor.tsx` + `saveSchedule`):
+Three per-AM dates, set by superadmins from the **individual page** (the "Assessment
+schedule" toggle, opening native date / datetime pickers — `schedule-editor.tsx` + `saveSchedule`):
 
 - `self_deadline` (date): the assessed person can self-assess up to and including that day;
   after it, their own assessment locks. Added 2026-08-03 at the client's request, so the
@@ -310,8 +334,8 @@ toggle opening native date / datetime pickers — `schedule-editor.tsx` + `saveS
   during/after the call still works), then it locks.
 
 Locks are decided by `assessmentLock(am, lens)` in `queries.ts` and enforced in EVERY rate
-server action (`guard()`), not just the UI — the wizard renders read-only with a 🔒 banner
-when closed, and shows a 📅 info banner (deadline / call date) while the window is open.
+server action (`guard()`), not just the UI — the wizard renders read-only with a locked
+banner when closed, and an info banner (deadline / call date) while the window is open.
 Clearing a date in the editor removes its limit.
 
 ### Access scope (what a Manager or Panel member can reach)
@@ -431,8 +455,10 @@ invisible to anyone who has ever arranged theirs.
 
 ### Help: the tour and question mode
 
-A question mark sits beside the menu-fold button in the top-left corner cluster
-(`.corner-tools`), on every page. It opens a two-item menu.
+A question mark sits in the **top-right** corner (`.help-corner`), on every page. It started
+next to the menu-fold button on the left and covered the page kicker — the green "Analysis"
+line — and it has no relationship to the menu edge anyway: it is about the page, not about
+the navigation. It opens a two-item menu.
 
 **Tutorial mode** walks the app once, in order: it dims everything except the part it is
 explaining, says what that part is for, and waits to be told to continue. It crosses pages
@@ -461,6 +487,11 @@ table cell is explained by its column heading, in every table in the app. A reso
 returning null means "not this one", so the lookup falls through instead of answering
 vaguely. There is no fallback for "a card" or "a table" — silence beats naming the kind of
 thing somebody is already looking at.
+
+That principle extends to reused CLASSES, not just reused shapes. `.filter-toggle` styles
+three unrelated buttons (Filters, Assessment schedule, Account details) and `.kpi-value span`
+is a headcount on four tiles and the top of the level scale on the fifth. Both are resolved by
+what the element says, not by the class it is styled with.
 
 **Both read `src/lib/guide.ts`**, which is the single place the app describes itself. Two
 copies of an explanation drift apart the first time a figure changes meaning. The tour is
@@ -511,8 +542,9 @@ discover what they did. Both chevrons are always visible and the active directio
 `.main` caps at 1260px to keep a readable measure for prose. A 25-column table has no measure
 to protect, so that cap only pushed content into a horizontal scroller while the right of the
 window sat empty. Data pages opt out with `page-wide` on their root element
-(`.main:has(> .page-wide) { max-width: none; }`): the dashboard, Individual Results, the zone
-benchmark and Settings. The rating wizard, login and onboarding keep the cap.
+(`.main:has(> .page-wide) { max-width: none; }`): the dashboard, Individual Results and the
+zone benchmark. The rating wizard, login, onboarding, an individual's page and Users & Access
+keep the cap — they are read as prose, not scanned as a grid.
 
 ### Hard product rules (enforced server-side — keep them)
 
@@ -553,6 +585,79 @@ benchmark and Settings. The rating wizard, login and onboarding keep the cap.
 - No other external services. Analytics read **submitted** assessments only; drafts stay
   private to their author.
 
+### Traps
+
+Every one of these cost real time and every one is now covered by a test. If you are about to
+touch the CSS or the shell, read this first.
+
+1. **`"use client"` poisons plain exports for the server.** A module marked `"use client"`
+   hands the server a client-reference proxy for EVERY export, constants included. The
+   sidebar-fold cookie name lived in the client component that writes it, so the layout was
+   calling `cookies().get(<proxy>)` and reading nothing — with no error anywhere. The bar
+   folded, then sprang open on the next navigation. Shared constants belong in a plain module
+   (`src/lib/nav-cookie.ts`).
+
+2. **`body::before` covers `body`.** The page background is a full-viewport pseudo-element at
+   `z-index: -2`, so `background: var(--bg)` on `body` is invisible except in the scrollbar
+   gutter. Changing the background colour appeared to do nothing but recolour "a bar on the
+   right of the screen". The gradient's three stops (`--bg-hi`, `--bg`, `--bg-lo`) now move
+   together.
+
+3. **An absolutely-positioned child of a SCROLLING box is laid out against its content, not
+   its viewport.** The right-edge fade on Individual Results was applied to the scroller
+   itself, so `right: 0` pinned it to the far right of a 1,964px table; it then slid inwards
+   as you scrolled and drew a grey seam down the middle of the columns, dimming whichever one
+   it crossed. Fades and edge treatments go on a WRAPPER.
+
+4. **A token defined in `:root` is not the same as a token that only exists when chosen.**
+   The first version of the colour feature defined `--accent*` in `:root` with DERIVED values.
+   That silently moved about twenty greens and every ink on a filled surface across the whole
+   app, because the derived values were not the hand-picked originals. `globals.css` now
+   defines no `--accent*` at all; each rule carries its own original colour as the `var()`
+   fallback and `themeVars()` returns nothing for a part nobody chose. A default install is
+   therefore byte-identical to before the feature existed, and an e2e check asserts no
+   override is injected. **If you edit that file, resolve the fallbacks by hand and diff.**
+
+5. **One token has to reach every surface of its kind.** `--card` originally tinted only the
+   handful of elements that happened to read it; the map, the popovers, the toolbars and the
+   sticky table column kept their own hardcoded navy. The result looked like random
+   rectangles changing colour. All 23 panel surfaces now derive from `--card-rgb` at their
+   own alpha.
+
+6. **`preventDefault()` on `pointerdown` does not stop a native HTML5 drag.** Pressing the
+   card resize grip started a drag of the draggable card underneath, which swallowed the
+   pointermove stream so the edge never followed the mouse. `draggable` has to come OFF the
+   card for the duration of the resize.
+
+7. **`backdrop-filter` inside `backdrop-filter` is a second offscreen composite for no visual
+   gain**, and it creates a containing block for fixed/absolute descendants. `.card` already
+   blurs, so its children get a specular edge instead. The sidebar is never blurred: it is
+   `position: sticky` at `height: 100vh` with a 38-second aurora animating behind it.
+
+8. **A drag is unreachable from a keyboard and unreliable under a harness.** Everything
+   draggable in this app also moves on arrow keys — the card name tag steps a card past its
+   neighbours, the resize grip steps through the allowed widths — and the e2e suite drives
+   the keyboard path for determinism plus one real mouse drag to prove dragging itself works.
+
+9. **Sticky table columns need an opaque fill and their own hover state.** `--card` is
+   `rgba(…, 0.6)`; the scrolling columns show straight through it. And without a copy of the
+   row-hover tint on the sticky cell, hovering visibly splits the row in two at the seam.
+
+10. **Explanations keyed to CSS selectors rot silently.** A renamed class loses its help text
+    with nothing failing. The e2e suite asserts a sample of the registered selectors still
+    matches something on a page that contains it.
+
+11. **A class is not a meaning.** `.filter-toggle` styles three different buttons — Filters,
+    Assessment schedule, Account details — so a `sel`-keyed entry answered "Filters" for all
+    three. When one class covers several things, key the entry off what the element SAYS with
+    a `resolve()`, and return `null` for anything it does not recognise so the lookup falls
+    through instead of answering confidently and wrongly.
+
+12. **Question mode rewrites one card in place, so a test can read a stale answer.** The e2e
+    helper originally hovered, waited 220ms and read `.qm-tip-title`. A hover onto a selector
+    that was not on that page left the PREVIOUS answer sitting there and the check passed on
+    it. It now refuses a selector it cannot find and waits for the card's text to CHANGE.
+
 ### Data model (all tables in `src/lib/db.ts`)
 
 - `users` (id, username unique nocase, password_hash, display_name, role
@@ -560,9 +665,10 @@ benchmark and Settings. The rating wizard, login and onboarding keep the cap.
 - `sessions` (token PK, user_id, expires_at).
 - `account_managers` (id, code unique, name, account, zone ['MEA'|'SAM'|'India'|'Pacific'],
   track ['Acquisition'|'Saturation'], profile_complete, segment [one of `SEGMENTS`; seeded on
-  the roster and backfilled by migration, so effectively always set], manager_deadline
-  [YYYY-MM-DD or null], panel_datetime [YYYY-MM-DDTHH:MM or null] — the assessment windows,
-  see §2).
+  the roster and backfilled by migration, so effectively always set], self_deadline and
+  manager_deadline [YYYY-MM-DD or null], panel_datetime [YYYY-MM-DDTHH:MM or null] — the
+  three assessment windows, see §2 — plus account_type and perf_ytd, the account tier and
+  the year-to-date performance figure, both set per person on their individual page).
 - `capabilities` (id, ord, name, cluster, src, req_acq, req_sat, l1, l2, l3).
 - `assignments` (user_id, am_id) — which AMs a user is linked to. For self assessors this is
   the one AM that IS them; for manager/panel it is who they evaluate. PK (user_id, am_id).
@@ -584,9 +690,15 @@ benchmark and Settings. The rating wizard, login and onboarding keep the cap.
   outcome). The Kimi API key is HARDCODED in `ai-narrative.ts` (`EMBEDDED_KEY`), not stored
   here; there is no in-app AI settings card anymore.
 - `user_settings` (user_id + key PK, value, cascade on user delete) — the same idea scoped to
-  one person. Holds the Dashboard Manager's two keys, `dashboard.layout` and `theme.accent`,
-  because each superadmin arranges and colours their own dashboard (see § Dashboard Manager).
-  Read/written only through `getUserSetting` / `setUserSetting` in `queries.ts`.
+  one person, cascading on user delete. Holds exactly two keys, both JSON and both written
+  only by the dashboard's own toolbar:
+    - `dashboard.layout` — `[{ id, size, hidden }]`, the card order, widths and which cards
+      are switched off.
+    - `theme.colors` — `{ accent?, sidebar?, bg?, card? }`, only the parts actually chosen.
+      An absent key means "shipped default", which is why nothing is written when a part is
+      cleared (see § Arranging the dashboard for why that distinction matters).
+  Read/written only through `getUserSetting` / `setUserSetting` in `queries.ts`, wrapped by
+  `src/lib/dashboard-settings.ts`.
 
 A self-assessor is always linked to exactly ONE Account Manager (themselves).
 `setAssignments` enforces this (it caps a self user's assignments to one), and both the
@@ -597,6 +709,10 @@ lens rather than a multi-checkbox.
 
 - **Login** (`/login`): superadmin lands on `/analysis`, assessors on `/rate`.
   Seeded superadmin: `vladimir` / `apex2026`.
+- **Onboarding** (`/onboarding`, self-assessors only): a one-time profile form — name, account,
+  zone, track, segment — shown before a self-assessor's first rating and skipped forever after
+  (`am.profile_complete`). Any other lens is redirected to `/rate`; a self-assessor with no AM
+  linked is too, and the `/rate` banner explains why.
 - **Rating** (`/rate`, `/rate/[amId]`):
   - Manager / APEX Panel assessors build their task list by typing a name (self-assign), or
     the admin pre-assigns. One evaluator per AM per lens (enforced).
@@ -609,9 +725,9 @@ lens rather than a multi-checkbox.
     level cards; keyboard shortcuts (1/2/3 to rate, arrows to move), 700 ms debounced
     autosave, progress dots, a review screen, then submit which locks the assessment.
     Required levels are never sent to the client. Superadmin can reopen a submitted
-    assessment from the individual analysis page. **Assessment windows** apply per lens: a
-    📅 banner shows the manager deadline / panel call while open, and past the window the
-    wizard goes read-only with a 🔒 banner (see §2 Assessment scheduling; server-enforced).
+    assessment from the individual analysis page. **Assessment windows** apply per lens: an
+    info banner shows the manager deadline / panel call while open, and past the window the
+    wizard goes read-only with a locked banner (see §2 Assessment scheduling; server-enforced).
   - **Per-cluster justification (mandatory)**: below the level cards, each capability screen
     shows the justification block for that capability's cluster — one required note, headed
     `Justification · <cluster>` with an italic lead, a numbered line per capability the note
@@ -623,12 +739,16 @@ lens rather than a multi-checkbox.
     per cluster, and **Submit is disabled** until every capability is rated AND every cluster is
     justified; the server re-checks with `unjustifiedThemes()` and rejects an early submit.
 - **Analysis**:
-  - `/analysis` (any signed-in user): completion KPIs including "Avg APEX maturity" shown as
-    a rounded level (L1/L2/L3) with the exact average in the sub-note; an interactive
-    geographic zone performance map (superadmin only — it carries per-AM data); a recommended
-    training focus; and a capability x zone heat map (avg APEX Panel score minus required
-    level).
-  - **Centralized Filters window** (`filter-bar.tsx`): one togglable "☰ Filters" button opens
+  - `/analysis` (any signed-in user): completion KPIs, ending with **"Avg weighted maturity"**
+    — the weighted average to two decimals over 3, and under it `vs <expected> expected` plus a
+    signed gap chip coloured by `gapClass()`, because the score on its own does not read as
+    good or bad. Then an interactive geographic zone performance map (superadmin only — it
+    carries per-AM data); a campaign timeline; a recommended training focus; a capability x
+    zone heat map (avg APEX Panel score minus required level); and the roster.
+    Every one of those is a **block** the reader can rearrange — see §3 Arranging the
+    dashboard. Blocks the reader may not see are never built, so an assessor's dashboard
+    closes up where the map would have been rather than leaving a hole.
+  - **Centralized Filters window** (`filter-bar.tsx`): one togglable **Filters** button opens
     a panel with **Track** (All / Acquisition / Saturation), **Segment** (All + the four
     segments) and, for superadmins, the **map Capability** filter. All three drive URL search
     params (`track`, `segment`, `cap`), so the server re-scopes the zone map, training focus,
@@ -642,14 +762,17 @@ lens rather than a multi-checkbox.
     one that shipped raw floats once.
   - `/analysis/individuals` + `/analysis/am/[id]` (superadmin): the list carries a **search
     bar** (name / account / AM code, debounced) and **Zone / Track / Segment filters** —
-    URL-param driven (`filters.tsx`), with a "Showing N of 25" note and Clear all. Per person:
+    URL-param driven (`filters.tsx`), with a "Showing N of M Account Managers" note and Clear
+    all. The list is a **wide page** (`page-wide`, §3 Wide pages) with a **sticky name column**
+    and a drawn sort chevron on every sortable head. Per person:
     Self vs Manager vs Panel per
     capability, gap-to-required, **strengths (panel STRICTLY above required)**, **development
     areas (panel BELOW required — all of them, uncapped)**, perception gaps (|self - panel| >=
     1), and the theme justifications shown under each theme inside the capability detail,
     which also carries an **Avg column** — the UNROUNDED three-lens mean (e.g. 2.3), because
-    rounding would make a 1.6 and a 2.4 read as the same level. An **Export PDF** button and
-    the **📅 Assessment schedule** editor (manager deadline + panel call) live in the header.
+    rounding would make a 1.6 and a 2.4 read as the same level. An **Export PDF** button, the
+    **Assessment schedule** editor (self / manager deadline + panel call) and the **Account
+    details** editor (account type + Perf YTD) live in the header.
     (A capability merely AT required is on the baseline — never a strength.)
   - **My Feedback** (`/feedback`, self-assessors only): the assessed person's own report —
     strengths, development areas, self-vs-panel perception gaps, a three-lens capability table
@@ -692,6 +815,20 @@ lens rather than a multi-checkbox.
     assessments with plausible submitted scores for the dashboards; replaces existing
     ratings), and **Clear all ratings**.
   - There is NO in-app AI settings card: the Kimi key is hardcoded (see §6).
+  - There is no `/admin/settings` route at all. It existed for one afternoon, held the first
+    version of the Dashboard Manager, and was removed when that became a wrench on the
+    dashboard itself. If you find a link to it, it is dead.
+- **Everywhere (the shell,** `src/app/(shell)/layout.tsx`**)**:
+  - The **left menu** folds away with the chevron at its foot (`sidebar-toggle.tsx`). The
+    choice is a cookie, read on the server, so a folded bar stays folded through a navigation
+    instead of flashing open (see §3 Folding the menu away).
+  - The **question mark, top right** (`help-tools.tsx`) opens two modes: **Tutorial**, a guided
+    walk that crosses pages, and **Question mode**, which explains whatever the pointer rests
+    on. Both read one registry, `src/lib/guide.ts` (see §3 Help).
+  - The **wrench, top left of the dashboard** (`dashboard-grid.tsx`, superadmin only) turns the
+    dashboard editable in place, and the palette next to it recolours the app. Both are saved
+    per user (see §3 Arranging the dashboard).
+  - The **APEX Assistant** floats bottom right on every page (see §6b).
 
 ## 5. The PDF narrative (deterministic)
 
@@ -792,6 +929,11 @@ src/lib/auth.ts              scrypt hashing + session token
 src/lib/report-narrative.ts  deterministic strengths/weaknesses prose + capability definitions
 src/lib/ai-narrative.ts      optional Kimi (Moonshot) feedback, with graceful fallback
 src/lib/pdf-report.tsx       @react-pdf report (cover / overview / narrative + detail in one flow)
+src/lib/pdf-dashboard.tsx    @react-pdf population deck (IO global / zone / segment / track radars)
+src/lib/pdf-population.tsx   @react-pdf Population Overview table (landscape)
+src/lib/pdf-group-radar.tsx  the shared grid radar both population decks draw with
+src/lib/pdf-kit.tsx          shared @react-pdf page furniture (styles, header, footer)
+src/lib/brand.tsx            the Schneider mark, drawn once for the app and the PDFs
 src/lib/heat.ts              heat-map colour helpers
 src/app/login/               login page + action
 src/lib/chat-data.ts         role-scoped live snapshot for the APEX Assistant chatbot
@@ -837,7 +979,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 160/160 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 162/162 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -846,7 +988,15 @@ segment badge), PDF export, zone view, assessor creation and confidentiality, th
 wizard, the mandatory per-cluster justification note for BOTH the Manager (walking every
 cluster) and the self-assessor (the guided concrete-example prompt), justification end-to-end
 (wizard -> analysis -> PDF), the self-assessor direct landing, onboarding (now incl. segment),
-the test sandbox, and account deletion.
+the test sandbox, account deletion, arranging and recolouring the dashboard, folding the menu
+away, and the guided tour and question mode.
+
+**The run is not idempotent — delete the DB and restart the server between runs.** The suite
+creates users, deletes one, loads the demo dataset and saves layouts and colours, so a second
+run against the same database fails on setup steps that are already done. The `rm -f` line
+above is part of the recipe, not a nicety, and it has to happen while the server is STOPPED:
+deleting the file under a running process leaves it holding an unlinked inode and the fresh
+database is never created.
 
 Three checks exist because a specific bug got shipped once, so do not delete them lightly:
 
@@ -875,9 +1025,9 @@ Two more that exist because the assertion, not the feature, was once wrong:
   must name both ends of the ramp. This is the whole point of the relative shading; an
   absolute ramp passes every other check while painting the map one flat green.
 
-Four more from the Dashboard Manager (section 13), all written to assert the RESULT rather
-than the control that was clicked, because a layout editor whose state never reaches the page
-is the failure this feature invites:
+Four from arranging and recolouring the dashboard (sections 13–13b), all written to assert the
+RESULT rather than the control that was clicked, because an editor whose state never reaches
+the page is the failure this feature invites:
 
 - **radar web colours** are read off the RENDERED elements — the legend swatches, then the
   polygon strokes — and the two are compared to each other. Recolouring only the legend, or
@@ -897,6 +1047,46 @@ is the failure this feature invites:
   `rgba(61, 205, 88, 0.22)` and the APEX Panel dot must still be magenta. Without this, the
   natural implementation of "repaint the app" also repaints the legend, and the heat map
   starts reporting a different answer per setting.
+
+Six more, each written against a bug the user reported in words, so the check speaks the same
+language they did:
+
+- **the background reaches the layer that paints** (13b) — `--bg` is set and then
+  `getComputedStyle(document.body, "::before").backgroundImage` is searched for the chosen
+  triple. `body::before` sits at `z-index: -2` and covers `body` completely, so setting `--bg`
+  alone recoloured nothing anybody could see except the scrollbar gutter — the user's "it just
+  changed the color of a bar on the right of the screen". A check on the variable passes for
+  that bug; a check on the painted layer does not.
+- **the card colour reaches every panel** (13b) — `.card`, `.map-card` and `.nav-toggle` are
+  read together and ALL THREE must carry the chosen triple. Only two elements read `--card`
+  originally, so the first version recoloured a couple of surfaces and left the rest navy:
+  "it starts coloring random rectangles that aren't windows". Asserting on one element passes
+  that bug too.
+- **it all belongs to one account** (13c) — a second superadmin signs in and must see the
+  shipped order and the shipped green. Layout and colours are rows in `user_settings`, and the
+  obvious global implementation passes every other check in this section.
+- **arranging is done on the real page** (13) — after a move, the reordered dashboard is read
+  back with its cards still full: `.dash-block[data-block="heatmap"] table.hm`,
+  `[data-block="map"] .map-card`, five `.kpi-value`s. The first version of this feature was a
+  separate screen of grey placeholders, which is precisely what the user rejected.
+- **the sticky name column and the fade** (13e) — the table is scrolled 700px, then the first
+  cell's x is compared to the scroller's x, and `.scroll-fade::after` must sit at offset 0 from
+  the right edge. That second one is the "rift": placed on the scrolling element, the fade was
+  laid out against the 1,964px CONTENT, so it slid inwards and drew a grey seam down the middle
+  of the columns. Both are geometry checks, because both bugs looked fine in the CSS.
+- **question mode is specific** (14b) — two heat cells at different indices must give
+  DIFFERENT titles and different bodies, and the body must contain a figure and say what the
+  colour means. A registry that answers "this is a heat map cell" passes every other check in
+  section 14 and is worth nothing to somebody pointing at one particular number: "a card, a
+  page, navigation, literally no added value". Same shape for the KPI tiles.
+
+And one that guards the guide itself:
+
+- **selector health** (end of 14) — every selector the guide leans on (`.kpi-value`,
+  `td.cell`, `.lvl-chip`, `.badge-zone`, `.filter-toggle`, `.wrench`, `.nav-toggle`, `.tl`, …)
+  must still match something on a page that definitely contains it. `src/lib/guide.ts` is keyed
+  to CSS selectors, so a class rename orphans an explanation silently — question mode simply
+  falls through to a vaguer answer, and nothing anywhere fails.
 
 Run `MOONSHOT_ENABLED=0` so the AI is off and the run stays hermetic (deterministic
 narrative, the chatbot returns its fixed "turned off" reply, no external call). The e2e header
@@ -1064,10 +1254,15 @@ model; the sections above give the mechanics.
 4. Drill in: **Individuals → an AM** for the three-lens comparison, strengths (strictly above
    required), development areas (all below), perception gaps, the unrounded Avg column and the
    per-theme justifications; **Export PDF** for the written report (Kimi-written when
-   reachable, deterministic otherwise). Set the **📅 Assessment schedule** here — the
-   manager's deadline and the APEX Panel call date/time — and reopen a submitted assessment
+   reachable, deterministic otherwise). Set the **Assessment schedule** here — the self and
+   manager deadlines and the APEX Panel call date/time — and reopen a submitted assessment
    if someone needs to edit it.
 5. Ask the **APEX Assistant** (floating bubble) free-form questions over the full live data.
+6. Make the dashboard their own: the **wrench** at its top left turns the page editable in
+   place — drag a card to reorder, drag its right edge to resize, hide what they never read —
+   and the **Colour** button next to it repaints the accent, the menu bar, the background or
+   the cards. Save keeps it, Cancel drops it, Reset returns to the shipped dashboard. It is
+   theirs alone: another superadmin still sees the shipped arrangement in Schneider green.
 
 **B. Self-assessor (the KAM being assessed)**
 1. Sign in. If their profile is not yet complete → **`/onboarding`**: name, account, region,
@@ -1090,8 +1285,24 @@ model; the sections above give the mechanics.
    pre-assigned them). One evaluator per AM per lens.
 2. **`/rate/[amId]`**: each capability screen offers the two lens-specific **Question Guide**
    interview prompts; rate the 22 capabilities and write ONE **mandatory justification note**
-   per theme. A 📅 banner shows the manager's deadline / the panel's call date while the
+   per theme. An info banner shows the manager's deadline / the panel's call date while the
    window is open; past it the wizard locks read-only (server-enforced). Review → **Submit**
    (blocked until every theme has a note); the assessment locks.
 3. They can view the shared dashboard, but never other evaluators' scores or individual
    results (those stay superadmin-only). The Assistant is fed only their own scoped data.
+
+**D. Anyone who does not know what they are looking at**
+
+Every page carries a **question mark, top right**, with two ways in:
+
+1. **Tutorial mode** opens on a welcome card and then walks the app one part at a time,
+   dimming everything except the thing it is describing and waiting to be told to continue.
+   It crosses pages on its own — dashboard, individuals, an individual, the rating wizard —
+   and the walk is cut to what this reader can actually reach, so an assessor is never shown a
+   spotlight on a page that would redirect them. Skip or Escape ends it; a finished tour stays
+   finished.
+2. **Question mode** stays on until it is turned off, including across navigations, and
+   explains whatever the pointer is resting on: not "this is a heat map cell" but *"Account
+   Management in Pacific — Weighted 2.18 — req 3.0 · -0.82. Orange: short by half a level to a
+   full level."* Both modes read one registry, `src/lib/guide.ts`, so they can never disagree
+   about what a number means.

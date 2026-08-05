@@ -309,6 +309,27 @@ const NAV: Record<string, string> = {
   "my feedback": "Your results, released once all three assessments are in.",
 };
 
+/**
+ * The three buttons that share `.filter-toggle`, keyed by what each one says.
+ *
+ * They are one visual control reused three times, which is right for the CSS and wrong for
+ * an explanation: "Filters" is a useless answer to somebody pointing at the schedule editor.
+ */
+const DISCLOSURE: Record<string, { title: string; body: string }> = {
+  filters: {
+    title: "Filters",
+    body: "Track, segment and capability. Whatever you pick scopes every card on the page and the PDF download. The selections live in the URL, so opening or closing this panel applies nothing on its own.",
+  },
+  "assessment schedule": {
+    title: "Assessment schedule",
+    body: "Three dates for this person: the self deadline, the manager deadline and the APEX Panel call. Each one closes its own lens past that day, enforced server-side, not just hidden in the wizard. The badge counts how many are set.",
+  },
+  "account details": {
+    title: "Account details",
+    body: "Account type and Perf YTD for this person's account. Both are commercial attributes rather than assessment data: they feed the Population Overview table and its PDF, and never affect a score.",
+  },
+};
+
 const label = (el: Element, sel: string) => clean(el.closest(".kpi")?.querySelector(sel)?.textContent).toLowerCase();
 
 /** What each field of a form is asking for, keyed by its visible label. */
@@ -519,6 +540,10 @@ const CORE_ENTRIES: HelpEntry[] = [
   { sel: ".tl-item", title: "One scheduled assessment", body: "Whose it is and when it falls. Click to open their analysis." },
 
   /* -------------------------------------------------------- controls --- */
+  // Three different buttons share .filter-toggle, so answer by what the button says rather
+  // than by the class it happens to be styled with — a reader hovering "Assessment schedule"
+  // is not asking about filters.
+  { sel: ".filter-toggle", resolve: (el) => DISCLOSURE[clean(el.textContent).replace(/\d+$/, "").trim().toLowerCase()] ?? null },
   { sel: ".filter-toggle, .filter-panel", title: "Filters", body: "Track, segment and capability. Whatever you pick scopes every card on the page and the PDF download." },
   { sel: ".filter-badge", title: "Filters applied", body: "How many filters are currently narrowing the page." },
   { sel: ".wrench", title: "Arrange the dashboard", body: "Drag cards to reorder, pull a right edge to resize, × to take one off, Colour to repaint the app. Your view only." },
@@ -591,7 +616,19 @@ const CORE_ENTRIES: HelpEntry[] = [
 export const MORE_ENTRIES: HelpEntry[] = [
   { sel: ".dash-block[data-block=\"kpis\"]", title: "Campaign KPIs", body: "Five tiles: completion, one submission count per lens, and the population's weighted maturity. These figures ignore the Filters card — they always cover the whole roster." },
   { sel: ".kpi-label", title: "Tile name", body: "Names what this tile counts. The four count tiles are submissions; the last is a score out of 3, not a count." },
-  { sel: ".kpi-value span", title: "Out of", body: "The total this figure is measured against." },
+  // The same little "/ n" means two different things depending on the tile it hangs off:
+  // a headcount on the four submission tiles, the top of the level scale on the last one.
+  {
+    sel: ".kpi-value span",
+    resolve: (el) => {
+      const name = clean(el.closest(".kpi")?.querySelector(".kpi-label")?.textContent);
+      const total = clean(el.textContent).replace(/^\/\s*/, "");
+      if (!name) return null;
+      return total === "3"
+        ? { title: "Top of the scale", body: "APEX levels run 1 to 3, so the weighted average is read against 3. It is not a count of anything." }
+        : { title: `Out of ${total}`, body: `Every Account Manager currently in view — what "${name}" is counted against. It moves with the track and segment filters.` };
+    },
+  },
   { sel: ".kpi-bench-chip", title: "Gap to expected", body: "Weighted average minus expected average, two decimals, signed. Green at or above expected, amber within half a level below, orange up to a level, red more than a level short." },
   { sel: ".dash-block[data-block=\"report\"]", title: "PDF deck", body: "Builds the Capability Dashboard as a PDF on the server. Superadmin only — the card is never sent to anyone else." },
   { sel: ".report-title", title: "Deck name", body: "The title the generated PDF carries. It is the population deck, not one person's report — individual reports are downloaded from each Account Manager's own page." },

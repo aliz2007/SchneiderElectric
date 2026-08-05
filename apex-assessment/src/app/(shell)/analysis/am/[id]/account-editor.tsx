@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Icon, { Caret } from "@/app/(shell)/nav-icon";
 import { ACCOUNT_TYPES, PERF_YTD_HELP, PERF_YTD_LABEL, PERF_YTD_SUFFIX } from "@/lib/seed-data";
 import { saveAccountDetails } from "./actions";
 
@@ -31,9 +32,10 @@ export default function AccountEditor({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        <span className="filter-toggle-ico">️</span> Account details
+        <Icon name="tag" size={15} />
+        Account details
         {filled > 0 && <span className="filter-badge">{filled}</span>}
-        <span className="filter-caret">{open ? "▲" : "▼"}</span>
+        <Caret open={open} />
       </button>
 
       {open && (

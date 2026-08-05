@@ -8,7 +8,7 @@
  * set finally looks like one family.
  *
  * `currentColor` throughout, so an icon inherits whatever the nav link or button is doing —
- * including the accent, once the Dashboard Manager has repainted it.
+ * including the accent, once a superadmin has repainted it from the dashboard.
  */
 
 export type IconName =
@@ -118,6 +118,25 @@ export default function Icon({
       strokeLinejoin="round"
     >
       {PATHS[name]}
+    </svg>
+  );
+}
+
+/**
+ * The chevron on a disclosure button. One definition, because the three buttons that use it
+ * (Filters, Assessment schedule, Account details) sat next to each other on the same page
+ * with two of them drawn and one still typing a ▼.
+ */
+export function Caret({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`filter-caret${open ? " open" : ""}`}
+      viewBox="0 0 12 12"
+      width="11"
+      height="11"
+      aria-hidden="true"
+    >
+      <path d="M3 4.5 6 7.5l3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }

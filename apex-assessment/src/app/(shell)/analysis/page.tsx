@@ -135,8 +135,8 @@ export default async function AnalysisPage({
   //
   // A card that does not apply to this reader is simply absent from the map. The grid skips
   // any id it was not given, so an assessor's dashboard closes up where the map would have
-  // been instead of leaving a hole, and the Dashboard Manager cannot be used to reveal a
-  // block that was never built.
+  // been instead of leaving a hole, and edit mode cannot be used to reveal a block that
+  // was never built.
   const blocks: Partial<Record<BlockId, ReactNode>> = {};
 
   blocks.kpis = (

@@ -1,5 +1,5 @@
 /**
- * Dashboard layout & app accent — the state behind the superadmin Dashboard Manager.
+ * Dashboard layout & app accent — the state behind the dashboard's edit mode (the wrench).
  *
  * Both live in the `user_settings` table, keyed by person: each superadmin arranges and
  * colours their OWN dashboard. Nothing here is installation-wide, so saving an arrangement
@@ -66,8 +66,8 @@ export type BlockDef = {
 };
 
 /**
- * The shipped dashboard, in shipped order. Everybody starts here, and "Reset" in the
- * Dashboard Manager restores exactly this — which is why the defaults live in one place
+ * The shipped dashboard, in shipped order. Everybody starts here, and "Reset" on the edit
+ * bar restores exactly this — which is why the defaults live in one place
  * rather than being spread across the page.
  *
  * Adding a block here is enough to make it appear for everyone: a stored layout that
@@ -176,7 +176,7 @@ export const isDefaultLayout = (layout: DashboardLayout): boolean => {
  *   - it names a block that no longer exists          → that entry is dropped
  *   - it is missing a block that has since shipped    → appended at its default index
  * The last one is the important one. Without it, adding a card to the dashboard would
- * make it invisible on every deployment that had ever touched the Dashboard Manager.
+ * make it invisible for everyone who had ever arranged their dashboard.
  */
 export function parseLayout(raw: string | null): DashboardLayout {
   if (!raw) return defaultLayout();

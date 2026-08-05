@@ -1,5 +1,5 @@
 /**
- * Reading and writing the Dashboard Manager's state.
+ * Reading and writing the dashboard's arrangement and colours.
  *
  * PER USER. Each superadmin arranges and colours their own dashboard; nothing here is
  * installation-wide. That is why every function takes a `userId` and why the rows live in
@@ -8,7 +8,7 @@
  *
  * `userId` is nullable throughout because the sign-in screen has no session yet. Whoever
  * has not chosen (or cannot choose) gets the shipped defaults, which is also what an
- * assessor gets: the Dashboard Manager is superadmin-only, so they have nothing stored.
+ * assessor gets: arranging and colouring is superadmin-only, so they have nothing stored.
  *
  * Split out from ./dashboard-layout so that module stays importable from client
  * components: this one touches better-sqlite3 through queries.ts, and anything that pulls
