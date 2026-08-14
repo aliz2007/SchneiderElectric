@@ -6,7 +6,26 @@ an AI picking this up cold, read this file top to bottom first; it describes the
 the data model, every feature, the architecture, how to run and test, and the decisions
 behind it all.
 
-Last updated: 2026-08-05.
+Last updated: 2026-08-14.
+
+### Start here (if you are picking this up cold)
+
+1. Read **§1** for what shipped most recently, then **§2b** (weighted scoring) and **§3 Traps**.
+   Those three are where a newcomer gets something wrong.
+2. Run it: `cd apex-assessment && npm install && npm run dev` → `localhost:3010`, sign in
+   `vladimir` / `apex2026`, then **Users & Access → Load demo dataset** so the dashboards have
+   data. §8.
+3. Before you change anything, get a green baseline: §9. The suite needs a **fresh database and
+   a stopped server** — that is not a nicety, see §9.
+4. Never rename an identifier because it says "theme" (§2 Per-cluster justification), never
+   define an `--accent*` token in `:root` (§3 Traps #4), and never round a weighted score
+   (§2b).
+5. §12 lists decisions the client already made. Do not re-propose what is in there.
+6. Everything is on `claude/self-assessor-assessment-notes-en8uo1`. Commit and push there.
+
+There are also two sales documents in `docs/` — `PITCH.md` (what the app does, part by part)
+and `CALL-SCRIPT.md` (a 30-minute walkthrough script). They are written for the client, not
+for you, but they are the shortest description of what every feature is *for*.
 
 ---
 
@@ -20,6 +39,26 @@ Last updated: 2026-08-05.
   current check count).
 - Everything described below is implemented and pushed unless a line explicitly says it is
   not built yet (see §11 Open items).
+- Most recent additions (2026-08-14, fifth batch): vocabulary and a set of small things the
+  handoff audit turned up. Nothing structural.
+  1. **"Cluster", never "theme", in anything a user reads.** The review screen's
+     "Justify 3 more themes", the server's refusal on an early submit, the note under the
+     capability detail, the PDF narrative and ~40 of question mode's explanations all said
+     theme. **The code still says theme on purpose** — see § Per-cluster justification for the
+     rule, because this is the single easiest thing for a newcomer to "fix" and break.
+  2. **Question mode answers per BUTTON, not per class.** `.filter-toggle` styles three
+     unrelated controls (Filters, Assessment schedule, Account details) and answered "Filters"
+     for all three; the `/ n` beside a KPI figure is a headcount on four tiles and the top of
+     the level scale on the fifth. Both now resolve on what the element says (§ Traps #11).
+  3. **The e2e helper for question mode could read a stale answer** — it hovered, waited, and
+     read a card that had not changed. It now refuses a selector it cannot find and waits for
+     the text to change (§ Traps #12). This is what caught (2).
+  4. **Leftovers from the emoji strip**: "Assessment schedule" and "Account details" still had
+     the empty `<span>`s their emoji were deleted from, and typed a `▲/▼` next to a Filters
+     button that had already moved to a drawn chevron. One shared `Caret` in `nav-icon.tsx` now.
+  5. **Two client-facing documents** in `docs/`: `PITCH.md` and `CALL-SCRIPT.md`.
+  6. The handoff itself was audited against the code, section by section — §4, §7, §9 and §14
+     had drifted, and § Traps was extended to twelve entries.
 - Most recent additions (2026-08-05, fourth batch): the app got a customisation layer, a
   help layer, and a round of fixes for both. In rough order of how much of the codebase each
   one touches:
@@ -126,7 +165,7 @@ Last updated: 2026-08-05.
   `Self 20% + APEX Panel 35% + Manager 45%`, and that weighted decimal drives every average,
   gap, strength, development area, heat map, KPI, chatbot answer and PDF figure in the app
   (see §2b). Also: the PDF radar gained a **fourth, emphasised "weighted average" web** (the
-  three lens webs are now thin), a **per-theme table** (weighted / expected / gap) under it,
+  three lens webs are now thin), a **per-cluster table** (weighted / expected / gap) under it,
   **decimal gaps** throughout, the detail table's APEX column renamed **Panel**, and the
   headline grade is now a **continuous colour gradient** by distance from expected
   (red → orange → amber → light green → deep green).
@@ -144,12 +183,12 @@ Last updated: 2026-08-05.
   server-enforced lockout once the day has passed and an "upcoming assessment" banner for
   the assessed person); an **unrounded Avg column** (e.g. 2.3) on the capability detail
   (page + PDF); the PDF perception section replaced by a **spider chart of perception by
-  theme** (Self / Manager / Panel webs); and a **big colored overall grade /3** under the
+  cluster** (Self / Manager / Panel webs); and a **big colored overall grade /3** under the
   CONFIDENTIAL pill on the PDF's overview page (red below the expected overall, green
   at/above, expected score printed beneath).
 - Earlier (2026-07-23): fictional demo roster names (legal); the self-assessor justification
-  as **one mandatory concrete-example note per theme** (guided prompt — replaced an earlier
-  five-question variant). Earlier (2026-07-22): mandatory one-note-per-theme justification
+  as **one mandatory concrete-example note per cluster** (guided prompt — replaced an earlier
+  five-question variant). Earlier (2026-07-22): mandatory one-note-per-cluster justification
   for every lens; the **business Segment** attribute + filter, shown on individual pages;
   the **centralized Filters window** (Track + Segment + map Capability); the **My Feedback**
   tab (released once all three lenses submit); strengths/development redefined strictly
@@ -179,7 +218,7 @@ Definitions". That is why the PDF's capability definitions reuse those anchors.
 
 ### The assessment model
 
-- **22 capabilities** in **6 clusters** (a.k.a. themes), each with written **L1 / L2 / L3
+- **22 capabilities** in **6 clusters**, each with written **L1 / L2 / L3
   behavioural anchors**. Levels are numeric: L1 Developing = 1, L2 Proficient = 2,
   L3 Advanced = 3. Full anchor texts live in `src/lib/seed-data.ts`.
 - The 6 clusters: Account Strategy & Planning, Commercial & Sales Excellence, Executive &
@@ -220,7 +259,7 @@ under the level cards and required before the assessment can be submitted:
   taken, results, impact — and, where relevant, how this could be replicated." It is one note,
   not five fields. (An earlier iteration split this into five separate framework questions;
   that was reverted to a single note at the user's request.)
-- **Manager / APEX Panel** write a free justification note per theme.
+- **Manager / APEX Panel** write a free justification note per cluster.
 
 **The block names its cluster and lists what the note must cover.** It is headed
 `Justification - <cluster>`, then an italic lead, then ONE NUMBERED LINE PER CAPABILITY in
@@ -241,6 +280,18 @@ example"; the client's note was that it was too much text and that the two visib
 were near-identical. The lead now carries the guidance once, the list carries the scope, and
 the placeholder carries only the structure. An e2e check asserts the placeholder does not
 repeat the lead's wording.
+
+**Vocabulary, and the trap inside it.** The client says **cluster**. Every string a user can
+read says cluster — the wizard, the review screen's "Justify 3 more clusters", the server's
+refusal on an early submit, the capability detail, the PDF narrative, question mode, the
+assistant's system prompt. The word "theme" was purged from user-visible copy on 2026-08-14
+and an e2e check asserts the justification kicker never says it.
+
+**The CODE still says theme, deliberately.** The table is `theme_notes`, the helpers are
+`themeJustificationText` / `unjustifiedThemes` / `saveThemeField`, the CSS class is
+`.theme-note-block`, the radar file is `theme-radar.tsx`. Renaming any of those is a database
+migration and a mass rename for zero user-visible gain — **do not "fix" them.** The rule is
+simply: identifiers keep the old word, anything a human reads says cluster.
 
 All of these live in the `theme_notes.note` column (one row per assessment per cluster).
 `themeJustificationText(row)` returns that note; it still falls back to the legacy five
@@ -265,7 +316,7 @@ That weighted value — a DECIMAL, never rounded to a level — is the canonical
   required · at-required = baseline (neither). **Perception gap** = |self − weighted| >= 1.
 - The zone heat map, training priorities, zone map colouring, the dashboard's
   "Avg weighted maturity" KPI, the individual "Weighted" column, the PDF's headline grade,
-  radar and per-theme table, the deterministic narrative and both AI prompts all use it.
+  radar and per-cluster table, the deterministic narrative and both AI prompts all use it.
 - Individual lens levels are still shown (Self / Manager / Panel columns, the radar's three
   thin webs) — they are the inputs, not the verdict.
 
@@ -561,8 +612,8 @@ keep the cap — they are read as prose, not scanned as a grid.
    submitted (nothing about anyone else is exposed). Full audit in § Access scope.
 4. The app is the system of record. Rubric + roster were seeded once from the Excel; all
    ratings are created in the app. The Excel is retired.
-5. Every theme must be justified before an assessment can be submitted: every lens writes one
-   note per theme (self-assessors from a guided prompt). Enforced server-side in
+5. Every cluster must be justified before an assessment can be submitted: every lens writes one
+   note per cluster (self-assessors from a guided prompt). Enforced server-side in
    `unjustifiedThemes()` (called by `submit`).
 6. Assessment windows are enforced server-side (`assessmentLock` in every rate action):
    past the manager deadline / panel-call day, that lens can no longer rate, justify or
@@ -621,7 +672,7 @@ touch the CSS or the shell, read this first.
 5. **One token has to reach every surface of its kind.** `--card` originally tinted only the
    handful of elements that happened to read it; the map, the popovers, the toolbars and the
    sticky table column kept their own hardcoded navy. The result looked like random
-   rectangles changing colour. All 23 panel surfaces now derive from `--card-rgb` at their
+   rectangles changing colour. All 27 panel surfaces now derive from `--card-rgb` at their
    own alpha.
 
 6. **`preventDefault()` on `pointerdown` does not stop a native HTML5 drag.** Pressing the
@@ -676,9 +727,9 @@ touch the CSS or the shell, read this first.
   submitted_at). **UNIQUE (am_id, lens)** — one assessment per AM per lens.
 - `ratings` (assessment_id, capability_id, level [1|2|3|null], note). PK (assessment_id,
   capability_id). NOTE: the per-capability `note` column still exists but is no longer
-  written by the wizard; notes are now per-theme (see `theme_notes`).
+  written by the wizard; notes are now per-cluster (see `theme_notes`).
 - `theme_notes` (assessment_id, cluster, note, situation, actions, results, impact,
-  replication). PK (assessment_id, cluster). ONE row per theme per assessment. Every lens now
+  replication). PK (assessment_id, cluster). ONE row per cluster per assessment. Every lens now
   fills `note` (self-assessors from a guided prompt, Manager/Panel free text). The five
   framework columns (situation/actions/results/impact/replication) are LEGACY — kept so any
   data saved during the brief five-question iteration still reads back, but no longer written.
@@ -768,7 +819,7 @@ lens rather than a multi-checkbox.
     Self vs Manager vs Panel per
     capability, gap-to-required, **strengths (panel STRICTLY above required)**, **development
     areas (panel BELOW required — all of them, uncapped)**, perception gaps (|self - panel| >=
-    1), and the theme justifications shown under each theme inside the capability detail,
+    1), and the cluster justifications shown under each cluster inside the capability detail,
     which also carries an **Avg column** — the UNROUNDED three-lens mean (e.g. 2.3), because
     rounding would make a 1.6 and a 2.4 read as the same level. An **Export PDF** button, the
     **Assessment schedule** editor (self / manager deadline + panel call) and the **Account
@@ -776,7 +827,7 @@ lens rather than a multi-checkbox.
     (A capability merely AT required is on the baseline — never a strength.)
   - **My Feedback** (`/feedback`, self-assessors only): the assessed person's own report —
     strengths, development areas, self-vs-panel perception gaps, a three-lens capability table
-    with the theme justifications, and a **Download PDF** (the same PDF as the admin export).
+    with the cluster justifications, and a **Download PDF** (the same PDF as the admin export).
     Gated by `allLensesSubmitted(am.id)`: until Self + Manager + APEX Panel have all submitted
     it shows a status checklist instead. The nav tab only appears for a linked self-assessor.
 - **PDF report** (`GET /analysis/am/[id]/pdf`, superadmin-only): a styled 4-page report
@@ -793,7 +844,7 @@ lens rather than a multi-checkbox.
   **per-cluster table** headed `Cluster capability / Score / Average score expected / Gap`
   (decimals). The radar block is skipped when nothing has been submitted yet; (3) the
   narrative (strengths/weaknesses prose + a definition of every capability it names) followed
-  in the SAME page flow by (4) the capability-detail table with theme notes, the **Panel**
+  in the SAME page flow by (4) the capability-detail table with cluster notes, the **Panel**
   column (formerly "APEX"), the **Score** column (formerly "Weighted") and a **decimal Gap**.
   Narrative and detail deliberately share one `<Page>`: when they were separate, a narrative
   that ran two lines long stranded an almost-empty page between them.
@@ -837,12 +888,12 @@ always the fallback for the AI path — so it has to read like real feedback, no
 produces roughly 500 words:
 
 - **summary** — capability counts vs the bar, the unrounded overall average vs the expected
-  overall, the strongest and weakest theme (by average gap), and whether the person tends to
+  overall, the strongest and weakest cluster (by average gap), and whether the person tends to
   over- or under-rate themselves against the panel.
 - **strengths / development** — organised BY CLUSTER, one paragraph each, using the same
   `"Cluster Name: …"` lead as the AI path (the PDF bolds that lead, see `ClusterNarrative`).
   Each paragraph names its capabilities with levels, brings in the manager and self views as
-  corroboration or divergence, flags the widest gap, and points at that theme's written
+  corroboration or divergence, flags the widest gap, and points at that cluster's written
   justification. Development closes with an ordered priority list for the development plan.
 - **comments** — what the evaluators wrote justifications on and how to use them (only when
   notes exist).
@@ -863,7 +914,7 @@ a hard fallback:
 - Sections are `{strengths, development, comments}`. Strengths and development are organised
   BY CAPABILITY CLUSTER: one tight paragraph per cluster, led by the exact cluster name and
   a colon (the PDF bolds that lead — see `ClusterNarrative` in `pdf-report.tsx`). `comments`
-  is a single paragraph synthesising the evaluators' theme justifications, and is empty
+  is a single paragraph synthesising the evaluators' cluster justifications, and is empty
   (section hidden) when none exist. The model is prompted (see `SYSTEM_PROMPT`) to ground
   every statement in the provided data, never quote the rubric definitions, cover every
   qualifying capability, and be substantial: the prompt asks for roughly 500–700 words, four
@@ -908,13 +959,13 @@ users ask quick questions over the live data ("which skill gaps repeat most in I
 - `src/lib/chat-data.ts` — `buildChatSnapshot(viewer)` rebuilds a fresh JSON snapshot of
   the database on EVERY question, so answers always reflect current data.
 - ACCESS MIRRORS THE APP (hard rule): a superadmin's snapshot has everything (all lenses,
-  required levels, gaps, theme justifications, segment, users and assignments). An assessor's
+  required levels, gaps, cluster justifications, segment, users and assignments). An assessor's
   snapshot contains ONLY their own work (their assigned people, their own ratings and
   justifications, drafts included) plus the dashboard's completion counts; required levels and
   other evaluators' scores are ABSENT from the payload, so the model cannot leak what it never
   receives. The system prompt also instructs the restricted variant to refuse such questions.
 - The prompt is kept in step with the model: it explains segment as a dimension, and that
-  per-theme justifications are one note per lens — a self-assessor's guided concrete example, or
+  per-cluster justifications are one note per lens — a self-assessor's guided concrete example, or
   a manager/panel free note — to be quoted as evidence for "why" questions and never fabricated.
 - Uses `kimiChat()` in `ai-narrative.ts` — same hardcoded key, same model auto-fallback.
 
@@ -923,7 +974,7 @@ users ask quick questions over the live data ("which skill gaps repeat most in I
 ```
 src/lib/seed-data.ts         rubric (22 caps, L1/L2/L3 anchors) + 25-AM roster (1:1 from Excel)
 src/lib/db.ts                schema + auto-seed (all 7 tables)
-src/lib/queries.ts           all data access + analysis math (zoneHeatmap, trainingPriorities, theme notes)
+src/lib/queries.ts           all data access + analysis math (zoneHeatmap, trainingPriorities, cluster notes)
 src/lib/session.ts           getCurrentUser / requireUser / requireSuperadmin, cookie sessions
 src/lib/auth.ts              scrypt hashing + session token
 src/lib/report-narrative.ts  deterministic strengths/weaknesses prose + capability definitions
@@ -937,7 +988,7 @@ src/lib/brand.tsx            the Schneider mark, drawn once for the app and the 
 src/lib/heat.ts              heat-map colour helpers
 src/app/login/               login page + action
 src/lib/chat-data.ts         role-scoped live snapshot for the APEX Assistant chatbot
-src/app/(shell)/rate/        rating list + wizard (framework/notes) + actions (ratings, theme fields, submit)
+src/app/(shell)/rate/        rating list + wizard (framework/notes) + actions (ratings, cluster fields, submit)
 src/app/(shell)/analysis/    dashboard, filter-bar, zone-map, zone view, individuals, am/[id], am/[id]/pdf
 src/app/(shell)/feedback/    My Feedback tab (self-assessor's own report + PDF download)
 src/app/(shell)/onboarding/  new self-assessor profile form (name/account/zone/track/segment)
@@ -961,6 +1012,17 @@ e2e/smoke.mjs                Playwright smoke suite (see §9 for the check count
 .env.example                 optional AI overrides (the key itself is hardcoded, not in env)
 ```
 
+Outside `apex-assessment/`:
+
+```
+HANDOFF.md                   this file — the only document you need to continue the project
+README.md                    short repo readme
+demo.bat                     double-click Windows launcher (see §13)
+docs/PITCH.md                client-facing: what the app does, part by part, and why
+docs/CALL-SCRIPT.md          client-facing: a 30-minute walkthrough script for a video call
+docs/source-materials/       the client's brief, feedback notes and the original Excel (§2)
+```
+
 ## 8. How to run
 
 ```bash
@@ -979,7 +1041,7 @@ dataset from Users & Access; to practise assessing, use Create test sandbox.
 npm run build                                    # production build + full type check
 rm -f data/apex.db data/apex.db-shm data/apex.db-wal   # fresh DB
 MOONSHOT_ENABLED=0 npm run start -- -p 3111       # production server, AI off (hermetic)
-node e2e/smoke.mjs                                # in a second shell — currently 162/162 (weighted scoring verified separately)
+node e2e/smoke.mjs                                # in a second shell — currently 163/163 (weighted scoring verified separately)
 ```
 
 The suite drives the real UI with Playwright: login, wrong-password, demo load, dashboard,
@@ -1080,8 +1142,12 @@ language they did:
   section 14 and is worth nothing to somebody pointing at one particular number: "a card, a
   page, navigation, literally no added value". Same shape for the KPI tiles.
 
-And one that guards the guide itself:
+And two that guard the guide and the vocabulary:
 
+- **nobody says "theme"** (14c) — four pages are loaded and their RENDERED text is searched for
+  the word. A source grep cannot do this job: the code says theme on purpose (`theme_notes`,
+  `themeJustificationText`, `.theme-note-block`), so the only honest test is what a reader
+  actually sees. If this fails, some copy regressed — not the schema.
 - **selector health** (end of 14) — every selector the guide leans on (`.kpi-value`,
   `td.cell`, `.lvl-chip`, `.badge-zone`, `.filter-toggle`, `.wrench`, `.nav-toggle`, `.tl`, …)
   must still match something on a page that definitely contains it. `src/lib/guide.ts` is keyed
@@ -1221,17 +1287,18 @@ env var before putting the app on the open internet.
   class names) + `fx.tsx`; keep class names and visible text labels stable so `e2e/smoke.mjs`
   keeps passing, and rerun the suite after any redesign.
 - Current branch `claude/self-assessor-assessment-notes-en8uo1` added, in order: self-assessor
-  direct landing, per-theme notes (wizard + analysis + PDF), the 4-page PDF (cover + narrative
+  direct landing, per-cluster notes (wizard + analysis + PDF), the 4-page PDF (cover + narrative
   + definitions), the deterministic narrative and the optional Kimi integration, the lens-aware
   create-user form, the test sandbox, user account deletion, the dev port move to 3010, the
-  "Avg APEX maturity" KPI as a rounded level, this repo's README, the floating APEX Assistant
+  "Avg APEX maturity" KPI as a rounded level (since replaced by the decimal + its
+  benchmark and gap chip), this repo's README, the floating APEX Assistant
   chatbot (role-scoped), uniform-per-region zone colouring, the zone-benchmark AM names + track
   ranking, the strict strengths/development redefinition, the My Feedback tab, the Segment
   attribute + filter and centralized Filters window, fictional demo roster names (legal), the
-  single guided concrete-example self-justification note per theme (which replaced a brief
+  single guided concrete-example self-justification note per cluster (which replaced a brief
   five-question variant), and — most recently — the per-lens Question Guide in the wizard,
   assessment scheduling with server-enforced windows, the unrounded Avg column, the
-  perception-by-theme spider chart, and the big colored overall grade on the PDF cover.
+  perception-by-cluster spider chart, and the big colored overall grade on the PDF cover.
 - `demo.bat` (repo root) is a double-click Windows launcher: installs Node LTS via winget if
   missing, downloads a branch zip, runs `npm ci` + `npm run build` when the zip changed, then
   `npm start -- -p 3000` and opens the browser. If you change which branch the demo ships,
@@ -1253,7 +1320,7 @@ model; the sections above give the mechanics.
    map — all re-scope together from the filter URL params.
 4. Drill in: **Individuals → an AM** for the three-lens comparison, strengths (strictly above
    required), development areas (all below), perception gaps, the unrounded Avg column and the
-   per-theme justifications; **Export PDF** for the written report (Kimi-written when
+   per-cluster justifications; **Export PDF** for the written report (Kimi-written when
    reachable, deterministic otherwise). Set the **Assessment schedule** here — the self and
    manager deadlines and the APEX Panel call date/time — and reopen a submitted assessment
    if someone needs to edit it.
@@ -1270,11 +1337,11 @@ model; the sections above give the mechanics.
 2. **`/rate/[their AM]`** opens directly (no picking anyone else; `/rate` just redirects here).
    If a panel call is scheduled, an **Upcoming assessment** banner shows its date and time.
    For each of the 22 capabilities they reflect on the two **Question Guide** prompts and pick
-   L1/L2/L3 (required levels are hidden), and for each of the 6 themes they write **one
+   L1/L2/L3 (required levels are hidden), and for each of the 6 clusters they write **one
    concrete-example justification note** from the guided prompt (situation, actions, results,
    impact, and where relevant replication) — mandatory. Everything autosaves.
-3. The review screen shows a completion badge per theme; **Submit** unlocks only once all 22
-   are rated and all 6 themes are fully answered, then the assessment locks.
+3. The review screen shows a completion badge per cluster; **Submit** unlocks only once all 22
+   are rated and all 6 clusters are fully answered, then the assessment locks.
 4. Once their Manager and the APEX Panel have also submitted, a **My Feedback** tab appears:
    their strengths, development areas, self-vs-panel perception gaps, the three-lens table with
    everyone's justifications, and a **Download PDF**. They can also use the Assistant, but it
@@ -1285,9 +1352,9 @@ model; the sections above give the mechanics.
    pre-assigned them). One evaluator per AM per lens.
 2. **`/rate/[amId]`**: each capability screen offers the two lens-specific **Question Guide**
    interview prompts; rate the 22 capabilities and write ONE **mandatory justification note**
-   per theme. An info banner shows the manager's deadline / the panel's call date while the
+   per cluster. An info banner shows the manager's deadline / the panel's call date while the
    window is open; past it the wizard locks read-only (server-enforced). Review → **Submit**
-   (blocked until every theme has a note); the assessment locks.
+   (blocked until every cluster has a note); the assessment locks.
 3. They can view the shared dashboard, but never other evaluators' scores or individual
    results (those stay superadmin-only). The Assistant is fed only their own scoped data.
 
@@ -1297,9 +1364,10 @@ Every page carries a **question mark, top right**, with two ways in:
 
 1. **Tutorial mode** opens on a welcome card and then walks the app one part at a time,
    dimming everything except the thing it is describing and waiting to be told to continue.
-   It crosses pages on its own — dashboard, individuals, an individual, the rating wizard —
-   and the walk is cut to what this reader can actually reach, so an assessor is never shown a
-   spotlight on a page that would redirect them. Skip or Escape ends it; a finished tour stays
+   It crosses pages on its own — for a superadmin that is the dashboard, Individual Results
+   and one individual's page (14 steps, 3 pages); somebody who also rates gets a step on their
+   own assessment. The walk is cut to what this reader can actually reach, so an assessor is
+   never shown a spotlight on a page that would redirect them. Skip or Escape ends it; a finished tour stays
    finished.
 2. **Question mode** stays on until it is turned off, including across navigations, and
    explains whatever the pointer is resting on: not "this is a heat map cell" but *"Account

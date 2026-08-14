@@ -1377,6 +1377,26 @@ try {
       ? ok(`every guide selector still matches (${must.length} checked)`)
       : fail("orphaned guide selectors", missing.join(" "));
   }
+
+  // ---- 14c. the client's word is "cluster", never "theme" ----
+  // The code still says theme on purpose — theme_notes, themeJustificationText, the
+  // .theme-note-block class — so a grep of the source cannot guard this. Read the RENDERED
+  // text of the pages that carry the word instead, and check what question mode says about
+  // the elements most likely to regress.
+  {
+    const pages = ["/analysis", "/analysis/individuals", "/analysis/am/1", "/analysis/zone/MEA"];
+    const offenders = [];
+    for (const path of pages) {
+      await page.goto(`${BASE}${path}`);
+      await page.waitForSelector(".page-title");
+      const text = await page.evaluate(() => document.body.innerText);
+      const hit = text.match(/.{0,40}\bthemes?\b.{0,40}/i);
+      if (hit) offenders.push(`${path}: …${hit[0].replace(/\s+/g, " ")}…`);
+    }
+    offenders.length === 0
+      ? ok(`no page says "theme" out loud (${pages.length} pages read)`)
+      : fail("theme leaked into visible copy", offenders.join(" | "));
+  }
 } catch (e) {
   fail("UNEXPECTED", e.message?.slice(0, 300));
   await page.screenshot({ path: `${SHOTS}/error.png` }).catch(() => {});
